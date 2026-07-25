@@ -3,10 +3,20 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY index.html vite.config.js ./
+COPY public ./public
 COPY src ./src
 RUN npm run build
 
 FROM node:22-alpine
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="Ambient Ops" \
+      org.opencontainers.image.description="LAN operations display and metrics aggregator" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/gaofeng21cn/ambient-ops"
 ENV NODE_ENV=production PORT=8787 DATA_DIR=/data
 WORKDIR /app
 COPY package*.json ./

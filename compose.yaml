@@ -1,7 +1,7 @@
 services:
   ambient-ops:
     build: .
-    container_name: ambient-ops
+    image: ${AMBIENT_OPS_IMAGE:-ambient-ops:local}
     restart: unless-stopped
     init: true
     read_only: true
