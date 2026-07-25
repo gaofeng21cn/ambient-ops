@@ -13,4 +13,8 @@ final class ServiceSelectionPolicy {
         }
         return rememberedInstanceId.equals(candidateInstanceId);
     }
+
+    static boolean shouldMarkPageHealthy(String currentEndpoint, String finishedUrl) {
+        return currentEndpoint != null && currentEndpoint.equals(finishedUrl);
+    }
 }

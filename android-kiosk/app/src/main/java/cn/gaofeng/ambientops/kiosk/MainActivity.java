@@ -91,7 +91,7 @@ public final class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (currentEndpoint != null && url != null && url.startsWith("http")) {
+                if (ServiceSelectionPolicy.shouldMarkPageHealthy(currentEndpoint, url)) {
                     pageLoaded = true;
                     handler.removeCallbacks(retry);
                     preferences.edit().putString(PREF_ENDPOINT, url).apply();

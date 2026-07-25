@@ -30,4 +30,24 @@ public final class ServiceSelectionPolicyTest {
     public void firstHealthyDiscoveryIsAcceptedWithoutRememberedInstance() {
         assertTrue(ServiceSelectionPolicy.shouldAccept(null, "home-ops", true));
     }
+
+    @Test
+    public void currentEndpointCompletionMarksPageHealthy() {
+        assertTrue(
+            ServiceSelectionPolicy.shouldMarkPageHealthy(
+                "http://192.168.1.10:8791/display/overview",
+                "http://192.168.1.10:8791/display/overview"
+            )
+        );
+    }
+
+    @Test
+    public void staleEndpointCompletionDoesNotMarkNewEndpointHealthy() {
+        assertFalse(
+            ServiceSelectionPolicy.shouldMarkPageHealthy(
+                "http://192.168.1.11:8791/display/overview",
+                "http://192.168.1.10:8791/display/overview"
+            )
+        );
+    }
 }
