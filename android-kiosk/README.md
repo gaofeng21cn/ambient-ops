@@ -44,6 +44,18 @@ Keep those values in the local secret store or CI secret manager. Do not commit
 the keystore, passwords, or a populated properties file. The signed APK is
 written to `app/build/outputs/apk/release/app-release.apk`.
 
+On the production Mac, the signing password can remain in Keychain under
+`cn.gaofeng.ambient-ops.android-signing` and the keystore can remain at
+`~/Library/Application Support/Ambient Ops/android-signing/ambient-ops-release.p12`.
+The repository helper reads those local values without printing them:
+
+```bash
+./scripts/build-signed-release-macos.sh
+```
+
+Back up the keystore and its password together in the owner's encrypted secret
+store. Losing either one makes future in-place Android updates impossible.
+
 ## Install and update
 
 USB is needed only for installation and diagnostics, not for normal operation:
