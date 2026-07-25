@@ -3,28 +3,58 @@ services:
     build: .
     container_name: ambient-ops
     restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
-      - "8787:8787"
+      - "${AMBIENT_OPS_PORT:-8787}:8787"
     environment:
       PORT: "8787"
       DATA_DIR: /data
       DEMO_MODE: ${DEMO_MODE:-true}
       SITE_NAME: ${SITE_NAME:-Ambient Ops}
       DISPLAY_TIME_ZONE: ${DISPLAY_TIME_ZONE:-Asia/Shanghai}
-      AGENT_PUSH_TOKEN: ${AGENT_PUSH_TOKEN}
+      DISCOVERY_ENABLED: ${DISCOVERY_ENABLED:-false}
+      INSTANCE_ID: ${INSTANCE_ID:-}
+      AGENT_PUSH_TOKEN_FILE: /run/secrets/agent_push_token
       UNIFI_BASE_URL: ${UNIFI_BASE_URL:-}
       UNIFI_SITE: ${UNIFI_SITE:-default}
-      UNIFI_API_KEY: ${UNIFI_API_KEY:-}
+      UNIFI_API_KEY_FILE: /run/secrets/unifi_api_key
       UNIFI_ALLOW_SELF_SIGNED: ${UNIFI_ALLOW_SELF_SIGNED:-false}
       UNIFI_CA_FILE: ${UNIFI_CA_FILE:-}
-      UNIFI_POLL_MS: ${UNIFI_POLL_MS:-3000}
+      UNIFI_POLL_MS: ${UNIFI_POLL_MS:-250}
+      UNIFI_RATE_WINDOW_MS: ${UNIFI_RATE_WINDOW_MS:-2000}
+      UNIFI_SNMP_HOST: ${UNIFI_SNMP_HOST:-}
+      UNIFI_SNMP_PORT: ${UNIFI_SNMP_PORT:-161}
+      UNIFI_SNMP_USER: ${UNIFI_SNMP_USER:-}
+      UNIFI_SNMP_AUTH_PASSWORD_FILE: /run/secrets/unifi_snmp_auth_password
+      UNIFI_SNMP_PRIV_PASSWORD_FILE: /run/secrets/unifi_snmp_priv_password
+      UNIFI_SNMP_AUTH_PROTOCOL: ${UNIFI_SNMP_AUTH_PROTOCOL:-sha}
+      UNIFI_SNMP_PRIV_PROTOCOL: ${UNIFI_SNMP_PRIV_PROTOCOL:-aes}
+      UNIFI_SNMP_INTERFACES: ${UNIFI_SNMP_INTERFACES:-}
+      UNIFI_SNMP_TIMEOUT_MS: ${UNIFI_SNMP_TIMEOUT_MS:-3000}
       LIVE_AFTER_SECONDS: ${LIVE_AFTER_SECONDS:-30}
       STALE_AFTER_SECONDS: ${STALE_AFTER_SECONDS:-300}
       HA_ENABLED: ${HA_ENABLED:-false}
       HA_BASE_URL: ${HA_BASE_URL:-}
-      HA_TOKEN: ${HA_TOKEN:-}
+      HA_TOKEN_FILE: /run/secrets/ha_token
       HA_ENTITY_PREFIX: ${HA_ENTITY_PREFIX:-ambient_ops}
       HA_SYNC_MS: ${HA_SYNC_MS:-30000}
       HA_TIMEOUT_MS: ${HA_TIMEOUT_MS:-5000}
     volumes:
-      - ./data:/data
+      - ambient_ops_data:/data
+      - ./secrets:/run/secrets:ro
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/healthz"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  ambient_ops_data:

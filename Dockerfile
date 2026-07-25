@@ -13,6 +13,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY server ./server
 COPY --from=build /app/dist ./dist
+RUN mkdir -p /data && chown node:node /data
+USER node
 VOLUME ["/data"]
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

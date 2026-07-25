@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  Bird,
   Bot,
+  ChevronDown,
   ChevronRight,
   Expand,
   Gauge,
@@ -10,12 +12,34 @@ import {
   LayoutDashboard,
   Monitor,
   Network,
+  Pin,
+  Radio,
   Server,
   WifiOff,
 } from "lucide-react";
+import {
+  scaledTrafficY,
+  smoothTrafficPath,
+  smoothTrafficValues,
+  trafficScale,
+} from "./traffic-chart.mjs";
 
-const VIEWS = ["overview", "network", "machines"];
-const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines" };
+const VIEWS = ["overview", "network", "machines", "pet"];
+const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", pet: "Pet" };
+const PET_ANIMATIONS = {
+  idle: { row: 0, frames: 6, interval: 620 },
+  failed: { row: 5, frames: 8, interval: 480 },
+  waiting: { row: 6, frames: 6, interval: 420 },
+  running: { row: 7, frames: 6, interval: 180 },
+  review: { row: 8, frames: 6, interval: 320 },
+};
+const PET_STATE_LABELS = {
+  idle: "IDLE",
+  failed: "OFFLINE",
+  waiting: "WAITING",
+  running: "WORKING",
+  review: "REVIEWING",
+};
 const EMPTY_STATUS = {
   site: { name: "Ambient Ops", timeZone: "Asia/Shanghai" },
   generatedAt: new Date().toISOString(),
@@ -49,13 +73,16 @@ function useStatus() {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const next = await response.json();
         if (stopped) return;
-        setStatus(next);
+        setStatus((current) => {
+          const merged = mergeStatusHistory(current, next);
+          localStorage.setItem("home-status-last", JSON.stringify(merged));
+          return merged;
+        });
         setConnection("live");
-        localStorage.setItem("home-status-last", JSON.stringify(next));
       } catch {
         if (!stopped) setConnection("stale");
       } finally {
-        if (!stopped) timer = setTimeout(refresh, 2000);
+        if (!stopped) timer = setTimeout(refresh, 250);
       }
     };
     refresh();
@@ -67,21 +94,41 @@ function useStatus() {
 
 function Dashboard({ status, connection }) {
   const [view, setView] = useState(initialView);
-  const [selectedMachineId, setSelectedMachineId] = useState(status.machines[0]?.machineId || null);
+  const [selectedMachineId, setSelectedMachineId] = useState(
+    () => localStorage.getItem("ambient-ops-machine-id") || status.machines[0]?.machineId || null,
+  );
+  const [machineFollowMode, setMachineFollowMode] = useState(
+    () => localStorage.getItem("ambient-ops-machine-mode") === "fixed" ? "fixed" : "auto",
+  );
   const pointerStart = useRef(null);
-  const selectedMachine = status.machines.find((machine) => machine.machineId === selectedMachineId) || status.machines[0];
+  const autoMachine = [...status.machines].sort((a, b) => {
+    if (a.status === "live" && b.status !== "live") return -1;
+    if (a.status !== "live" && b.status === "live") return 1;
+    return new Date(b.generatedAt).valueOf() - new Date(a.generatedAt).valueOf();
+  })[0];
+  const fixedMachine = status.machines.find((machine) => machine.machineId === selectedMachineId);
+  const selectedMachine = machineFollowMode === "auto"
+    ? autoMachine
+    : fixedMachine || autoMachine;
 
   useEffect(() => {
     const next = `/display/${view}`;
     if (location.pathname !== next) history.replaceState(null, "", next);
   }, [view]);
 
+  useEffect(() => {
+    if (selectedMachine?.machineId) {
+      localStorage.setItem("ambient-ops-machine-id", selectedMachine.machineId);
+    }
+    localStorage.setItem("ambient-ops-machine-mode", machineFollowMode);
+  }, [machineFollowMode, selectedMachine?.machineId]);
+
   const switchBy = useCallback((offset) => {
     setView((current) => VIEWS[(VIEWS.indexOf(current) + offset + VIEWS.length) % VIEWS.length]);
   }, []);
 
   const onPointerDown = (event) => {
-    if (event.target.closest("button")) return;
+    if (event.target.closest("button, select, input, a")) return;
     pointerStart.current = { x: event.clientX, y: event.clientY };
   };
   const onPointerUp = (event) => {
@@ -94,7 +141,12 @@ function Dashboard({ status, connection }) {
 
   const goToMachine = (machineId) => {
     setSelectedMachineId(machineId);
+    setMachineFollowMode("fixed");
     setView("machines");
+  };
+  const selectMachine = (machineId) => {
+    setSelectedMachineId(machineId);
+    setMachineFollowMode("fixed");
   };
 
   return (
@@ -107,7 +159,16 @@ function Dashboard({ status, connection }) {
           <MachinesView
             machines={status.machines}
             selected={selectedMachine}
-            onSelect={setSelectedMachineId}
+            onSelect={selectMachine}
+          />
+        ) : null}
+        {view === "pet" ? (
+          <PetView
+            machines={status.machines}
+            selected={selectedMachine}
+            followMode={machineFollowMode}
+            onFollowMode={setMachineFollowMode}
+            onSelect={selectMachine}
           />
         ) : null}
       </main>
@@ -155,7 +216,7 @@ function Overview({ status, onMachine, onAllMachines }) {
         <div className="right-column">
           <Panel className="codex-panel" title="Codex" icon={Bot} action={<StatusLabel status={status.codex.status} />}>
             <CodexSummary codex={status.codex} />
-            <Sparkline values={status.machines.map((machine) => machine.oneMinute.tps)} color="green" compact />
+            <Sparkline values={status.codex.tpsHistory?.map((sample) => sample.tps) || []} color="green" compact />
           </Panel>
           <Panel className="machine-panel" title={`Machines (${status.machines.length})`} icon={Monitor} action={<button className="panel-link" type="button" onClick={onAllMachines}>All <ChevronRight size={20} /></button>}>
             <MachineList machines={status.machines} onMachine={onMachine} />
@@ -208,26 +269,34 @@ function DeviceStat({ label, value, unit, accent = "" }) {
 function AirViewChart({ points = [], allowSampleData = false }) {
   const chartId = useId().replace(/:/g, "");
   const fillId = `${chartId}-airview-fill`;
+  const glowId = `${chartId}-airview-glow`;
   const data = trafficData(points, allowSampleData);
   if (data.length === 0) return <div className="airview-empty">Waiting for WAN samples</div>;
-  const max = Math.max(100, ...data.flatMap((point) => [point.downloadMbps || 0, point.uploadMbps || 0]));
-  const downloadValues = data.map((point) => point.downloadMbps || 0);
-  const uploadValues = data.map((point) => point.uploadMbps || 0);
-  const download = stepLinePoints(downloadValues, max);
-  const upload = stepLinePoints(uploadValues, max);
-  const lastDownloadY = scaledY(downloadValues.at(-1), max, 100);
-  const lastUploadY = scaledY(uploadValues.at(-1), max, 100);
+  const downloadValues = smoothTrafficValues(data.map((point) => point.downloadMbps || 0));
+  const uploadValues = smoothTrafficValues(data.map((point) => point.uploadMbps || 0));
+  const max = trafficScale([downloadValues, uploadValues]);
+  const download = smoothTrafficPath(downloadValues, max, 1000, 100);
+  const upload = smoothTrafficPath(uploadValues, max, 1000, 100);
+  const lastDownloadY = scaledTrafficY(downloadValues.at(-1), max, 100);
+  const lastUploadY = scaledTrafficY(uploadValues.at(-1), max, 100);
   return (
     <svg className="airview-chart" viewBox="0 0 1000 100" preserveAspectRatio="none" role="img" aria-label="Live WAN throughput">
       <defs>
         <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38bdf8" stopOpacity=".24" /><stop offset="1" stopColor="#38bdf8" stopOpacity=".04" /></linearGradient>
+        <filter id={glowId} x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2.5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
       </defs>
+      <g className="airview-grid"><line x1="0" y1="25" x2="1000" y2="25" /><line x1="0" y1="50" x2="1000" y2="50" /><line x1="0" y1="75" x2="1000" y2="75" /></g>
       <line className="airview-baseline" x1="0" y1="99" x2="1000" y2="99" />
-      <polygon fill={`url(#${fillId})`} points={`0,100 ${download} 1000,100`} />
-      <polyline className="airview-download" points={download} />
-      <polyline className="airview-upload" points={upload} />
-      <circle className="airview-dot download" cx="1000" cy={lastDownloadY} r="4" />
-      <circle className="airview-dot upload" cx="1000" cy={lastUploadY} r="3" />
+      <path className="airview-fill" fill={`url(#${fillId})`} d={`${download} L 1000 100 L 0 100 Z`} />
+      <path className="airview-download" d={download} />
+      <path className="airview-upload" d={upload} />
+      <line className="airview-cursor" x1="998" y1="0" x2="998" y2="100" />
+      <g className="airview-live-edge" filter={`url(#${glowId})`}>
+        <circle className="airview-halo download" cx="998" cy={lastDownloadY} r="7" />
+        <circle className="airview-dot download" cx="998" cy={lastDownloadY} r="3.2" />
+        <circle className="airview-halo upload" cx="998" cy={lastUploadY} r="5.5" />
+        <circle className="airview-dot upload" cx="998" cy={lastUploadY} r="2.5" />
+      </g>
     </svg>
   );
 }
@@ -243,7 +312,7 @@ function NetworkView({ network }) {
           <div className="network-facts">
             <Fact label="Connected clients" value={network.clients ?? "--"} />
             <Fact label="Gateway latency" value={network.latencyMs == null ? "--" : `${network.latencyMs} ms`} />
-            <Fact label="Data source" value={network.source === "unifi" ? "UniFi Gateway" : network.source === "demo" ? "Demonstration" : "Unconfigured"} />
+            <Fact label="Data source" value={network.source === "unifi" ? "UniFi Gateway" : network.source === "unifi-snmp-v3" ? "UniFi SNMPv3" : network.source === "demo" ? "Demonstration" : "Unconfigured"} />
             <Fact label="Last update" value={formatAge(network.updatedAt)} />
           </div>
         </section>
@@ -308,8 +377,151 @@ function DeviceMachinesView({ machines, selected, onSelect }) {
           <DeviceStat label="SESSIONS" value={selected.activeSessions} />
         </div>
       </div>
-      <MachineTrendChart values={sparkValues(selected.oneMinute.tps)} />
+      <MachineTrendChart values={selected.tpsHistory?.map((sample) => sample.tps) || []} />
     </section>
+  );
+}
+
+function PetView({ machines, selected, followMode, onFollowMode, onSelect }) {
+  if (!selected) return <section className="pet-view"><EmptyState /></section>;
+  const pet = selected.pet;
+  return (
+    <section className={`pet-view ${pet ? "" : "pet-unconfigured"}`}>
+      <div className="pet-stage">
+        <PetMachineControl
+          machines={machines}
+          selected={selected}
+          followMode={followMode}
+          onFollowMode={onFollowMode}
+          onSelect={onSelect}
+        />
+        {pet ? (
+          <>
+            <PetSprite pet={pet} machineName={selected.machineName} />
+            <div className="pet-identity">
+              <strong>{pet.displayName}</strong>
+              <span>{PET_STATE_LABELS[pet.state] || pet.state.toUpperCase()}</span>
+            </div>
+            <div className="pet-trend" aria-hidden="true">
+              <MachineTrendChart values={selected.tpsHistory?.map((sample) => sample.tps) || []} />
+            </div>
+          </>
+        ) : (
+          <div className="pet-empty">
+            <Bird size={58} />
+            <strong>No pet configured</strong>
+            <span>{selected.machineName}</span>
+          </div>
+        )}
+      </div>
+      <div className="pet-metrics">
+        <div className="pet-primary-metric">
+          <span>1 MINUTE</span>
+          <div><strong>{formatTps(selected.oneMinute.tps)}</strong><small>TPS</small></div>
+        </div>
+        <div className="pet-secondary-metrics">
+          <PetTokenStat
+            label="INPUT"
+            value={formatTps(selected.oneMinute.inputTokens / 60)}
+            unit="TPS"
+            detail={`CACHE ${selected.cachePercent || 0}%`}
+          />
+          <PetTokenStat
+            label="OUTPUT"
+            value={formatTps(selected.oneMinute.outputTokens / 60)}
+            unit="TPS"
+            detail={`REASON ${formatTps(selected.oneMinute.reasoningOutputTokens / 60)} TPS`}
+          />
+          <PetTokenStat label="SESSIONS" value={selected.activeSessions} />
+        </div>
+        <div className="pet-host-status">
+          <StatusLabel status={selected.status} age={selected.ageSeconds} />
+          <span>{selected.platform} · {formatAge(selected.generatedAt)}</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PetTokenStat({ label, value, unit, detail }) {
+  return (
+    <div className="pet-token-stat">
+      <div className="pet-token-label">
+        <span>{label}</span>
+        {detail ? <small>{detail}</small> : null}
+      </div>
+      <div className="pet-token-value">
+        <strong>{value}</strong>
+        {unit ? <small>{unit}</small> : null}
+      </div>
+    </div>
+  );
+}
+
+function PetMachineControl({ machines, selected, followMode, onFollowMode, onSelect }) {
+  if (machines.length <= 1) {
+    return (
+      <div className="pet-machine-label">
+        <i className={selected.status} />
+        <strong>{selected.machineName}</strong>
+      </div>
+    );
+  }
+  const auto = followMode === "auto";
+  return (
+    <div className="pet-machine-control">
+      <button
+        type="button"
+        className={auto ? "active" : ""}
+        onClick={() => onFollowMode(auto ? "fixed" : "auto")}
+        aria-label={auto ? "Fix selected machine" : "Automatically follow active machine"}
+        title={auto ? "Auto follow" : "Fixed machine"}
+      >
+        {auto ? <Radio size={19} /> : <Pin size={19} />}
+      </button>
+      <label>
+        <select
+          aria-label="Pet host"
+          value={selected.machineId}
+          onChange={(event) => onSelect(event.target.value)}
+        >
+          {machines.map((machine) => (
+            <option key={machine.machineId} value={machine.machineId}>
+              {machine.machineName}
+            </option>
+          ))}
+        </select>
+        <ChevronDown size={17} />
+      </label>
+    </div>
+  );
+}
+
+function PetSprite({ pet, machineName }) {
+  const animation = PET_ANIMATIONS[pet.state] || PET_ANIMATIONS.idle;
+  const reduceMotion = useMemo(
+    () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+    [],
+  );
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    setFrame(0);
+    if (reduceMotion) return undefined;
+    const timer = setInterval(() => {
+      setFrame((current) => (current + 1) % animation.frames);
+    }, animation.interval);
+    return () => clearInterval(timer);
+  }, [animation.frames, animation.interval, pet.state, reduceMotion]);
+  return (
+    <div
+      className={`pet-sprite ${pet.state}`}
+      role="img"
+      aria-label={`${pet.displayName} on ${machineName}, ${PET_STATE_LABELS[pet.state] || pet.state}`}
+      style={{
+        backgroundImage: `url(/pets/${encodeURIComponent(pet.id)}/spritesheet.webp)`,
+        backgroundPosition: `${frame * 100 / 7}% ${animation.row * 100 / 8}%`,
+      }}
+    />
   );
 }
 
@@ -354,7 +566,7 @@ function MachineDetail({ machine }) {
         <TokenBar label="Output" value={machine.oneMinute.outputTokens} max={machine.oneMinute.inputTokens} color="violet" />
         <TokenBar label="Reasoning" value={machine.oneMinute.reasoningOutputTokens} max={machine.oneMinute.inputTokens} color="amber" />
       </div>
-      <Sparkline values={sparkValues(machine.oneMinute.tps)} color="green" />
+      <Sparkline values={machine.tpsHistory?.map((sample) => sample.tps) || []} color="green" />
       {machine.error ? <div className="machine-error">{machine.error}</div> : null}
     </>
   );
@@ -392,7 +604,7 @@ function MachineList({ machines, onMachine, selectedId, expanded = false }) {
             <Icon className="machine-icon" size={expanded ? 30 : 28} />
             <div className="machine-identity"><strong>{machine.machineName}</strong>{expanded ? <span>{machine.platform} · {formatAge(machine.generatedAt)}</span> : null}</div>
             <span className="machine-tps">{formatTps(machine.oneMinute.tps)} TPS</span>
-            <Sparkline values={sparkValues(machine.oneMinute.tps)} color="green" mini />
+            <Sparkline values={machine.tpsHistory?.map((sample) => sample.tps) || []} color="green" mini />
             <StatusLabel status={machine.status} age={machine.ageSeconds} compact />
             <ChevronRight className="row-chevron" size={22} />
           </button>
@@ -442,9 +654,13 @@ function TrafficChart({ points = [], detailed = false, allowSampleData = false }
   if (data.length === 0) {
     return <div className={`traffic-chart chart-empty ${detailed ? "detailed" : ""}`}><Activity size={32} /><strong>Waiting for WAN samples</strong><span>The last known values will appear here when the gateway reports data.</span></div>;
   }
-  const max = Math.max(100, ...data.flatMap((point) => [point.downloadMbps || 0, point.uploadMbps || 0]));
-  const download = linePoints(data.map((point) => point.downloadMbps || 0), max);
-  const upload = linePoints(data.map((point) => point.uploadMbps || 0), max);
+  const downloadValues = smoothTrafficValues(data.map((point) => point.downloadMbps || 0));
+  const uploadValues = smoothTrafficValues(data.map((point) => point.uploadMbps || 0));
+  const max = trafficScale([downloadValues, uploadValues]);
+  const download = smoothTrafficPath(downloadValues, max);
+  const upload = smoothTrafficPath(uploadValues, max);
+  const lastDownloadY = scaledTrafficY(downloadValues.at(-1), max, 300);
+  const lastUploadY = scaledTrafficY(uploadValues.at(-1), max, 300);
   const windowSeconds = historyWindowSeconds(data);
   return (
     <div className={`traffic-chart ${detailed ? "detailed" : ""}`}>
@@ -455,10 +671,13 @@ function TrafficChart({ points = [], detailed = false, allowSampleData = false }
           <linearGradient id={uploadFillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38d891" stopOpacity=".18" /><stop offset="1" stopColor="#38d891" stopOpacity="0" /></linearGradient>
         </defs>
         <g className="grid-lines"><line x1="0" y1="0" x2="1000" y2="0" /><line x1="0" y1="150" x2="1000" y2="150" /><line x1="0" y1="299" x2="1000" y2="299" />{[0, 200, 400, 600, 800, 1000].map((x) => <line key={x} x1={x} y1="0" x2={x} y2="300" />)}</g>
-        <polygon className="download-fill" fill={`url(#${downloadFillId})`} points={`0,300 ${download} 1000,300`} />
-        <polygon className="upload-fill" fill={`url(#${uploadFillId})`} points={`0,300 ${upload} 1000,300`} />
-        <polyline className="download-line" points={download} />
-        <polyline className="upload-line" points={upload} />
+        <path className="download-fill" fill={`url(#${downloadFillId})`} d={`${download} L 1000 300 L 0 300 Z`} />
+        <path className="upload-fill" fill={`url(#${uploadFillId})`} d={`${upload} L 1000 300 L 0 300 Z`} />
+        <path className="download-line" d={download} />
+        <path className="upload-line" d={upload} />
+        <line className="traffic-cursor" x1="998" y1="0" x2="998" y2="300" />
+        <circle className="traffic-dot download" cx="998" cy={lastDownloadY} r="5" />
+        <circle className="traffic-dot upload" cx="998" cy={lastUploadY} r="4" />
       </svg>
       <div className="time-labels"><span>-{windowSeconds}s</span><span>-{Math.round(windowSeconds / 2)}s</span><span>0s</span></div>
     </div>
@@ -484,19 +703,6 @@ function linePoints(values, max, width = 1000, height = 300) {
   }).join(" ");
 }
 
-function stepLinePoints(values, max, width = 1000, height = 100) {
-  return values.flatMap((value, index) => {
-    const x = values.length === 1 ? 0 : index * width / (values.length - 1);
-    const y = scaledY(value, max, height);
-    if (index === 0) return [`${x.toFixed(1)},${y.toFixed(1)}`];
-    return [`${x.toFixed(1)},${scaledY(values[index - 1], max, height).toFixed(1)}`, `${x.toFixed(1)},${y.toFixed(1)}`];
-  }).join(" ");
-}
-
-function scaledY(value, max, height) {
-  return height - Math.min(height, Math.max(0, Number(value || 0) / max * height * 0.88));
-}
-
 function trafficData(points, allowSampleData) {
   if (points.length > 1) return points;
   if (!allowSampleData) return [];
@@ -514,7 +720,7 @@ function historyWindowSeconds(points = []) {
       return Math.max(1, Math.round((last - first) / 1000));
     }
   }
-  return Math.max(60, points.length * 3);
+  return Math.max(1, points.length - 1);
 }
 
 function BottomNav({ view, setView, status, connection }) {
@@ -522,6 +728,7 @@ function BottomNav({ view, setView, status, connection }) {
     ["overview", LayoutDashboard],
     ["network", Globe2],
     ["machines", Monitor],
+    ["pet", Bird],
   ];
   return (
     <nav className="bottom-nav">
@@ -534,6 +741,7 @@ function BottomNav({ view, setView, status, connection }) {
 }
 
 function FullscreenButton() {
+  if (navigator.userAgent.includes("AmbientOpsKiosk/")) return null;
   const enter = async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -586,6 +794,26 @@ function useClock(interval = 1000) {
   return now;
 }
 
+function mergeStatusHistory(previous, next) {
+  const previousMachines = new Map((previous?.machines || []).map((machine) => [machine.machineId, machine]));
+  const machines = (next.machines || []).map((machine) => {
+    const prior = previousMachines.get(machine.machineId);
+    const history = Array.isArray(prior?.tpsHistory) ? [...prior.tpsHistory] : [];
+    const sample = { at: machine.generatedAt, tps: Number(machine.oneMinute?.tps || 0) };
+    if (!history.length || history.at(-1).at !== sample.at) history.push(sample);
+    return { ...machine, tpsHistory: history.slice(-60) };
+  });
+  const codexHistory = Array.isArray(previous?.codex?.tpsHistory)
+    ? [...previous.codex.tpsHistory]
+    : [];
+  codexHistory.push({ at: next.generatedAt, tps: Number(next.codex?.oneMinuteTps || 0) });
+  return {
+    ...next,
+    codex: { ...next.codex, tpsHistory: codexHistory.slice(-120) },
+    machines,
+  };
+}
+
 function machineIcon(platform = "") {
   const lower = platform.toLowerCase();
   if (lower.includes("server") || lower.includes("linux")) return Server;
@@ -593,12 +821,8 @@ function machineIcon(platform = "") {
   return Laptop;
 }
 
-function sparkValues(center) {
-  return Array.from({ length: 24 }, (_, index) => Math.max(0, center * (0.88 + Math.sin(index * 1.7 + center) * 0.06 + (index % 5) * 0.012)));
-}
-
 function formatMetric(value) {
-  return Number.isFinite(Number(value)) ? Number(value).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "--";
+  return Number.isFinite(Number(value)) ? Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--";
 }
 
 function formatTps(value) {

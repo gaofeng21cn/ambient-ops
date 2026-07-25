@@ -6,6 +6,9 @@ dist/
 .DS_Store
 data/
 .codegraph/
+android-kiosk/.gradle/
+android-kiosk/local.properties
+android-kiosk/**/build/
 *.log
 *.pem
 *.key

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>cn.gaofeng.ambient-ops.codex-tps-agent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/gaofeng/Library/Application Support/Ambient Ops/runtime/current/bin/codex-tps-agent</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>CODEX_HOME</key>
+    <string>/Users/gaofeng/.codex</string>
+    <key>CODEX_TPS_AMBIENT_URL</key>
+    <string>http://127.0.0.1:8791</string>
+    <key>CODEX_TPS_AMBIENT_TOKEN_KEYCHAIN_SERVICE</key>
+    <string>cn.gaofeng.ambient-ops.agent-push</string>
+    <key>CODEX_TPS_KEYCHAIN_ACCOUNT</key>
+    <string>gaofeng</string>
+    <key>CODEX_TPS_MACHINE_ID</key>
+    <string>primary-mac</string>
+    <key>CODEX_TPS_MACHINE_NAME</key>
+    <string>Primary Mac</string>
+    <key>CODEX_TPS_PLATFORM</key>
+    <string>macOS</string>
+    <key>CODEX_TPS_PUSH_INTERVAL</key>
+    <string>10</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/Users/gaofeng/Library/Application Support/Ambient Ops/logs/codex-tps-agent.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/gaofeng/Library/Application Support/Ambient Ops/logs/codex-tps-agent.err.log</string>
+</dict>
+</plist>

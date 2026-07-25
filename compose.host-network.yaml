@@ -1,0 +1,6 @@
+services:
+  ambient-ops:
+    network_mode: host
+    ports: !reset []
+    environment:
+      DISCOVERY_ENABLED: "true"

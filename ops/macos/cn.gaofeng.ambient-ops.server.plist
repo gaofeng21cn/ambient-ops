@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>cn.gaofeng.ambient-ops.server</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/gaofeng/Library/Application Support/Ambient Ops/runtime/current/server/server.mjs</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/gaofeng/Library/Application Support/Ambient Ops/runtime/current</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PORT</key>
+    <string>8791</string>
+    <key>DATA_DIR</key>
+    <string>/Users/gaofeng/Library/Application Support/Ambient Ops/data</string>
+    <key>DEMO_MODE</key>
+    <string>false</string>
+    <key>SITE_NAME</key>
+    <string>Gaofeng Home</string>
+    <key>DISPLAY_TIME_ZONE</key>
+    <string>Asia/Shanghai</string>
+    <key>AGENT_PUSH_TOKEN_KEYCHAIN_SERVICE</key>
+    <string>cn.gaofeng.ambient-ops.agent-push</string>
+    <key>KEYCHAIN_ACCOUNT</key>
+    <string>gaofeng</string>
+    <key>UNIFI_SNMP_HOST</key>
+    <string>192.168.1.1</string>
+    <key>UNIFI_SNMP_PORT</key>
+    <string>161</string>
+    <key>UNIFI_SNMP_USER</key>
+    <string>gaofeng</string>
+    <key>UNIFI_SNMP_PASSWORD_KEYCHAIN_SERVICE</key>
+    <string>cn.gaofeng.ambient-ops.unifi-snmp-v3</string>
+    <key>UNIFI_SNMP_AUTH_PROTOCOL</key>
+    <string>sha</string>
+    <key>UNIFI_SNMP_PRIV_PROTOCOL</key>
+    <string>aes</string>
+    <key>UNIFI_SNMP_INTERFACES</key>
+    <string>23,3</string>
+    <key>UNIFI_SNMP_TIMEOUT_MS</key>
+    <string>3000</string>
+    <key>UNIFI_POLL_MS</key>
+    <string>250</string>
+    <key>UNIFI_RATE_WINDOW_MS</key>
+    <string>2000</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/Users/gaofeng/Library/Application Support/Ambient Ops/logs/server.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/gaofeng/Library/Application Support/Ambient Ops/logs/server.err.log</string>
+</dict>
+</plist>

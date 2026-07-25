@@ -5,12 +5,16 @@ It is not hardened as a directly internet-facing service.
 
 ## Secrets
 
-- Store `UNIFI_API_KEY` and `AGENT_PUSH_TOKEN` only in the deployment `.env` or
-  the container platform's secret store.
+- Store `UNIFI_API_KEY`, SNMPv3 passwords, `HA_TOKEN`, and `AGENT_PUSH_TOKEN`
+  as files under the ignored `secrets/` directory or in the container
+  platform's secret store. Compose passes only `/run/secrets/*` paths through
+  the environment, not the secret values.
+- A direct macOS deployment may set the corresponding Keychain service names
+  instead of putting secret values in environment variables.
 - Never place secrets in frontend JavaScript, URLs, screenshots, or Git.
 - The display browser needs no credential because it reads normalized status
   from the local server.
-- Use a dedicated read-only UniFi API key with the smallest available scope.
+- Prefer SNMPv3 `authPriv` or a dedicated read-only UniFi API key with the smallest available scope.
 
 ## Network Boundary
 

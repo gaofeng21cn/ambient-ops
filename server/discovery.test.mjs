@@ -1,0 +1,67 @@
+import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import {
+  createDiscoveryPublisher,
+  normalizeInstanceId,
+  resolveInstanceId,
+} from "./discovery.mjs";
+
+test("persists a stable generated discovery instance id", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ambient-ops-discovery-"));
+  const first = await resolveInstanceId(dataDir);
+  const second = await resolveInstanceId(dataDir);
+
+  assert.match(first, /^ao-[a-f0-9]{16}$/);
+  assert.equal(second, first);
+});
+
+test("accepts only DNS-SD-safe configured instance ids", () => {
+  assert.equal(normalizeInstanceId("Home-Ops.1"), "home-ops.1");
+  assert.equal(normalizeInstanceId("../unsafe"), "");
+  assert.equal(normalizeInstanceId("contains spaces"), "");
+});
+
+test("publishes the shared Ambient Ops discovery contract", async () => {
+  let published;
+  let destroyed = false;
+  const bonjour = {
+    publish(options) {
+      published = options;
+      return { stop() {} };
+    },
+    unpublishAll(callback) {
+      callback();
+    },
+    destroy() {
+      destroyed = true;
+    },
+  };
+  const publisher = createDiscoveryPublisher({
+    instanceId: "home-ops",
+    name: "Gaofeng Home",
+    port: 8791,
+    version: "0.1.0",
+    bonjour,
+  });
+
+  publisher.start();
+  assert.deepEqual(published, {
+    name: "Gaofeng Home",
+    type: "ambient-ops",
+    protocol: "tcp",
+    port: 8791,
+    txt: {
+      id: "home-ops",
+      name: "Gaofeng Home",
+      path: "/display/overview",
+      api: "/api/status",
+      protocol: "1",
+      version: "0.1.0",
+    },
+  });
+  await publisher.stop();
+  assert.equal(destroyed, true);
+});

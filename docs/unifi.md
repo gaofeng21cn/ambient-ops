@@ -1,7 +1,40 @@
 # UniFi Setup
 
-Ambient Ops polls the UniFi Network health endpoint with a dedicated API key.
-It does not need an administrator password in the container.
+Ambient Ops can read WAN throughput with SNMPv3 or the UniFi Network API.
+SNMPv3 is preferred when it is already enabled because it avoids a controller
+API credential and exposes standard 64-bit interface counters.
+
+## SNMPv3
+
+Enable SNMPv3 `authPriv` in UniFi Network and configure the existing username,
+authentication password, privacy password, and WAN interface names or indexes:
+
+```dotenv
+DEMO_MODE=false
+UNIFI_SNMP_HOST=192.168.1.1
+UNIFI_SNMP_USER=<snmp-v3-user>
+UNIFI_SNMP_AUTH_PASSWORD=<private-password>
+UNIFI_SNMP_PRIV_PASSWORD=<private-password>
+UNIFI_SNMP_AUTH_PROTOCOL=sha
+UNIFI_SNMP_PRIV_PROTOCOL=aes
+UNIFI_SNMP_INTERFACES=<wan-interface>,<wan2-interface>
+UNIFI_POLL_MS=250
+UNIFI_RATE_WINDOW_MS=2000
+```
+
+The collector reads IF-MIB `ifHCInOctets` and `ifHCOutOctets` four times per
+second. Each displayed value is calculated from the real counter delta over a
+rolling two-second window. This preserves the 4 Hz display cadence while
+covering the roughly one-second counter refresh and its observed timing jitter,
+instead of showing zero readings followed by a spike. Multiple selected WAN
+interfaces are summed, and the display keeps roughly 75 seconds of real samples. Use
+`snmpwalk` against `ifName` and `ifAlias` to discover the exact selectors; do
+not guess an interface from its position in the table.
+
+Keep SNMP UDP/161 reachable only from the trusted LAN or the monitoring host.
+Passwords stay in private deployment configuration and never reach the display.
+
+## Network API
 
 ## Create a dedicated API key
 

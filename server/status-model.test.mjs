@@ -13,6 +13,42 @@ test("normalizes a machine snapshot without retaining unknown content", () => {
   assert.equal(snapshot.prompt, undefined);
 });
 
+test("normalizes only supported host pet fields", () => {
+  const snapshot = normalizeSnapshot("mac", {
+    generatedAt: "2026-07-25T00:00:00.000Z",
+    pet: {
+      id: "Ledger-Owl",
+      displayName: "Ledger Owl",
+      spriteVersionNumber: 1,
+      assetHash: "a".repeat(64),
+      state: "running",
+      stateSince: "2026-07-24T23:59:50.000Z",
+      prompt: "must not be retained",
+    },
+  }, new Date("2026-07-25T00:00:01.000Z"));
+
+  assert.deepEqual(snapshot.pet, {
+    id: "ledger-owl",
+    displayName: "Ledger Owl",
+    spriteVersionNumber: 1,
+    assetHash: "a".repeat(64),
+    state: "running",
+    stateSince: "2026-07-24T23:59:50.000Z",
+  });
+  assert.equal(snapshot.pet.prompt, undefined);
+});
+
+test("rejects invalid pet identity and clamps unsupported state", () => {
+  const invalid = normalizeSnapshot("mac", { pet: { id: "../owl" } });
+  const fallback = normalizeSnapshot("mac", {
+    pet: { id: "ledger-owl", state: "unknown", assetHash: "not-a-hash" },
+  });
+
+  assert.equal(invalid.pet, null);
+  assert.equal(fallback.pet.state, "idle");
+  assert.equal(fallback.pet.assetHash, null);
+});
+
 test("freshness moves from live through stale to error", () => {
   const snapshot = normalizeSnapshot("mac", { generatedAt: "2026-07-25T00:00:00.000Z" });
   assert.equal(freshness(snapshot, new Date("2026-07-25T00:00:20.000Z"), 30, 300).status, "live");
@@ -32,7 +68,7 @@ test("dashboard aggregates machine throughput", () => {
   assert.equal(dashboard.codex.activeSessions, 5);
 });
 
-test("an expired machine stays visible but does not degrade live aggregate", () => {
+test("an expired machine is retired from the dashboard and aggregate", () => {
   const now = new Date("2026-07-25T00:10:00.000Z");
   const machines = new Map([
     ["live", normalizeSnapshot("live", { generatedAt: now, oneMinute: { tps: 20 } }, now)],
@@ -41,7 +77,38 @@ test("an expired machine stays visible but does not degrade live aggregate", () 
   const dashboard = buildDashboard({ machines, network: { status: "live", updatedAt: now }, history: [], demo: false }, { now, liveAfterSeconds: 30, staleAfterSeconds: 300 });
   assert.equal(dashboard.codex.status, "live");
   assert.equal(dashboard.codex.oneMinuteTps, 20);
-  assert.equal(dashboard.machines.length, 2);
+  assert.equal(dashboard.machines.length, 1);
+});
+
+test("a stale duplicate stays visible but is excluded from aggregate TPS", () => {
+  const now = new Date("2026-07-25T00:01:00.000Z");
+  const machines = new Map([
+    ["live", normalizeSnapshot("live", { generatedAt: now, oneMinute: { tps: 20 } }, now)],
+    ["stale", normalizeSnapshot("stale", { generatedAt: "2026-07-25T00:00:20.000Z", oneMinute: { tps: 999 } }, now)],
+  ]);
+  const dashboard = buildDashboard(
+    { machines, network: { status: "live", updatedAt: now }, history: [], demo: false },
+    { now, liveAfterSeconds: 30, staleAfterSeconds: 300 },
+  );
+  assert.equal(dashboard.machines.find((machine) => machine.machineId === "stale").status, "stale");
+  assert.equal(dashboard.codex.oneMinuteTps, 20);
+});
+
+test("projects a host pet to waiting when its machine is stale", () => {
+  const now = new Date("2026-07-25T00:01:00.000Z");
+  const machines = new Map([
+    ["stale", normalizeSnapshot("stale", {
+      generatedAt: "2026-07-25T00:00:20.000Z",
+      pet: { id: "ledger-owl", state: "running" },
+    }, now)],
+  ]);
+  const dashboard = buildDashboard(
+    { machines, network: { status: "live", updatedAt: now }, history: [], demo: false },
+    { now, liveAfterSeconds: 30, staleAfterSeconds: 300 },
+  );
+
+  assert.equal(dashboard.machines[0].status, "stale");
+  assert.equal(dashboard.machines[0].pet.state, "waiting");
 });
 
 test("network status ages from live to stale to error", () => {

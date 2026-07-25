@@ -1,4 +1,5 @@
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const PET_STATES = new Set(["idle", "running", "waiting", "review", "failed"]);
 
 export function normalizeSnapshot(machineId, payload, receivedAt = new Date()) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -23,6 +24,7 @@ export function normalizeSnapshot(machineId, payload, receivedAt = new Date()) {
     oneMinute: normalizeWindow(oneMinute),
     fiveMinutes: normalizeWindow(fiveMinutes),
     activeSessions: Math.max(0, finite(payload.activeSessions)),
+    pet: normalizePet(payload.pet, safeGeneratedAt),
   };
 }
 
@@ -34,6 +36,26 @@ function normalizeWindow(window) {
     cachedInputTokens: Math.max(0, finite(window.cachedInputTokens)),
     reasoningOutputTokens: Math.max(0, finite(window.reasoningOutputTokens)),
     requests: Math.max(0, finite(window.requests)),
+  };
+}
+
+function normalizePet(pet, generatedAt) {
+  if (!pet || typeof pet !== "object" || Array.isArray(pet)) return null;
+  const id = String(pet.id || "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._-]{0,79}$/.test(id)) return null;
+  const state = PET_STATES.has(pet.state) ? pet.state : "idle";
+  const candidateStateSince = new Date(pet.stateSince || generatedAt);
+  const stateSince = Number.isNaN(candidateStateSince.valueOf())
+    ? generatedAt
+    : candidateStateSince;
+  const assetHash = String(pet.assetHash || "").trim().toLowerCase();
+  return {
+    id,
+    displayName: String(pet.displayName || id).slice(0, 80),
+    spriteVersionNumber: Math.max(1, Math.trunc(finite(pet.spriteVersionNumber, 1))),
+    assetHash: /^[a-f0-9]{64}$/.test(assetHash) ? assetHash : null,
+    state,
+    stateSince: stateSince.toISOString(),
   };
 }
 
@@ -59,10 +81,20 @@ export function buildDashboard({ machines, network, history, demo }, options = {
     const cachePercent = totalInput > 0
       ? Math.round((snapshot.oneMinute.cachedInputTokens / totalInput) * 100)
       : 0;
-    return { ...snapshot, ...current, cachePercent };
-  }).sort((a, b) => b.oneMinute.tps - a.oneMinute.tps);
+    const pet = snapshot.pet
+      ? {
+          ...snapshot.pet,
+          state: current.status === "live"
+            ? snapshot.pet.state
+            : current.status === "stale" ? "waiting" : "failed",
+        }
+      : null;
+    return { ...snapshot, ...current, cachePercent, pet };
+  })
+    .filter((machine) => machine.ageSeconds <= staleAfterSeconds)
+    .sort((a, b) => b.oneMinute.tps - a.oneMinute.tps);
 
-  const aggregateMachines = renderedMachines.filter((machine) => machine.status !== "error");
+  const aggregateMachines = renderedMachines.filter((machine) => machine.status === "live");
   let oneMinuteTps = 0;
   let fiveMinuteTps = 0;
   let activeSessions = 0;

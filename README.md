@@ -39,8 +39,8 @@ docker compose up --build -d
 Open `http://<server-address>:8787/display/overview`.
 
 `DEMO_MODE=true` produces clearly marked demonstration data without contacting
-external systems. For live operation, set `DEMO_MODE=false`, configure the
-UniFi variables, and restart the container.
+external systems. For live operation, set `DEMO_MODE=false`, configure either
+the UniFi SNMPv3 or Network API variables, and restart the container.
 
 For a Synology deployment, UniFi API key creation, strict TLS options, and the
 optional Home Assistant bridge, see:
@@ -48,6 +48,11 @@ optional Home Assistant bridge, see:
 - [`docs/deployment-synology.md`](docs/deployment-synology.md)
 - [`docs/unifi.md`](docs/unifi.md)
 - [`docs/home-assistant.md`](docs/home-assistant.md)
+
+The HTC 5G Hub uses the dedicated native WebView application in
+[`android-kiosk`](android-kiosk/README.md), rather than a manually fullscreened
+Chrome tab. The Mac login runtime and recovery model are documented in
+[`docs/macos-htc-kiosk.md`](docs/macos-htc-kiosk.md).
 
 ## Deployment Model
 

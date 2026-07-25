@@ -8,13 +8,17 @@ serves the web app; the display device only opens a URL.
 1. Copy or clone the repository into a persistent NAS folder, for example
    `/volume1/docker/ambient-ops`.
 2. Copy `.env.example` to `.env` in that folder.
-3. Generate a long random push token and set `AGENT_PUSH_TOKEN`.
-4. Keep `.env`, `data/`, certificates, and Compose overrides outside Git.
+3. Create `secrets/agent_push_token` containing a long random push token.
+4. Put SNMPv3 credentials in `secrets/unifi_snmp_auth_password` and
+   `secrets/unifi_snmp_priv_password`.
+5. Keep `.env`, `secrets/`, certificates, and Compose overrides outside Git.
 
 Example token generation:
 
 ```bash
-openssl rand -hex 32
+mkdir -p secrets
+umask 077
+openssl rand -hex 32 > secrets/agent_push_token
 ```
 
 ## Start with Container Manager
@@ -25,7 +29,7 @@ The equivalent SSH command is:
 
 ```bash
 cd /volume1/docker/ambient-ops
-docker compose up --build -d
+docker compose -f compose.yaml -f compose.host-network.yaml up --build -d
 docker compose ps
 curl http://127.0.0.1:8787/healthz
 ```
@@ -39,13 +43,18 @@ Open these LAN URLs after the health check succeeds:
 
 ## Move from demo to live data
 
-Set `DEMO_MODE=false`, configure the UniFi variables described in
+Set `DEMO_MODE=false`, configure the non-secret UniFi variables described in
 [`unifi.md`](unifi.md), and restart the project. Configure machine agents with
-the NAS URL and the same `AGENT_PUSH_TOKEN`.
+the NAS URL and the token stored in `secrets/agent_push_token`.
 
-The default bind mount `./data:/data` retains normalized last values and WAN
-history across container replacement. Back up this folder only if retaining
-short status history matters; it contains no prompt or response content.
+The named volume `ambient_ops_data` retains normalized last values, the stable
+discovery instance ID, and WAN history across container replacement. Back up
+this volume only if retaining short status history matters; it contains no
+prompt or response content.
+
+`compose.host-network.yaml` is required on Linux/Synology so Bonjour/mDNS
+announcements reach the physical LAN. The base Compose file uses a published
+TCP port and disables discovery, which is suitable for Docker Desktop testing.
 
 ## Platform compatibility
 
