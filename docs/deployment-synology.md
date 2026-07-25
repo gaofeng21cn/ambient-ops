@@ -11,13 +11,32 @@ an existing Mac-to-NAS cutover. This page describes the target installation.
 - Synology Container Manager or Docker Compose over SSH
 - A persistent project directory, for example
   `/volume1/docker/ambient-ops`
-- UDP/161 access from the NAS to the UniFi gateway
+- UDP/161 access from the NAS to the qualified SNMPv3 router
 - TCP/8787 access from trusted LAN clients to the NAS
+- UDP/5353 multicast on the client LAN
 - Host networking for Bonjour/mDNS publication to the physical LAN
+- A Compose implementation that accepts the `!reset` tag used by the
+  host-network override
 
 The Dockerfile uses the multi-platform official `node:22-alpine` base. Building
 on the NAS selects the native architecture. Registry releases for both Intel
 and ARM Synology models must use a multi-platform manifest.
+
+Check the exact Compose merge before copying any secrets:
+
+```bash
+docker compose -f compose.yaml -f compose.host-network.yaml config --quiet
+```
+
+If Synology Container Manager rejects `!reset`, update it or install a
+compatible Compose v2 CLI. A base-only container can serve HTTP but cannot
+prove physical-LAN mDNS discovery.
+
+The commands below use the Compose CLI over Synology SSH because this preserves
+the repository's two-file merge exactly. Container Manager may still be used to
+observe and restart the resulting container. If a DSM UI release supports the
+same multi-file project definition, compare its rendered configuration with
+the CLI output before treating it as equivalent.
 
 ## Prepare configuration
 
@@ -31,6 +50,10 @@ chmod 700 secrets
 umask 077
 openssl rand -hex 32 > secrets/agent_push_token
 ```
+
+For a fresh installation, generate a new token as above. For a migration, copy
+the existing token instead; changing it makes every Codex TPS agent fail with
+HTTP 401 until its Keychain item is updated.
 
 Set at least:
 
@@ -57,9 +80,29 @@ If the same password is configured for authentication and privacy, both files
 may contain the same value. The application trims surrounding whitespace when
 reading secret files.
 
+The container runs as UID/GID 1000. After writing every secret, make that user
+the bind-directory owner while retaining owner-only modes:
+
+```bash
+sudo chown -R 1000:1000 secrets
+sudo chmod 700 secrets
+sudo chmod 600 secrets/*
+```
+
+Do not solve a permission failure with mode 644. Readability must be granted to
+the container user without making credentials available to unrelated host
+users.
+
 `INSTANCE_ID` identifies the logical installation, not the host. Keep it stable
 when the service moves to another address or port. The Android kiosk remembers
 this ID and can follow its new mDNS endpoint.
+
+Before copying the reviewed commit to production, run the repository-owned
+isolated gate on a Docker development/build host:
+
+```bash
+./ops/docker/smoke-test.sh
+```
 
 ## Stage without LAN discovery
 
@@ -99,7 +142,8 @@ state, and short history across container replacement.
 
 Host networking removes the published-port mapping and publishes
 `_ambient-ops._tcp.local` directly to the LAN. The Compose service listens on
-TCP/8787 in this mode.
+TCP/8787 in this mode. Allow TCP/8787 and LAN mDNS in DSM Firewall without
+exposing them to WAN interfaces.
 
 ## Validate persistence
 
@@ -130,6 +174,40 @@ docker compose -p ambient-ops \
 After the acceptance checks pass, reboot the NAS once and repeat the health,
 API, discovery, HTC, and Codex TPS readbacks. `restart: unless-stopped` is not
 proof until the service has returned after a real daemon/host restart.
+
+Codex TPS needs the exact `secrets/agent_push_token` value in the Mac Keychain
+service `cn.gaofeng.ambient-ops.agent-push`. Enable aggregate sending and
+auto-discovery in the app. The Android kiosk must load through Wi-Fi discovery
+with `adb reverse --list` empty. The root [`README`](../README.md) contains the
+complete agent and APK installation commands.
+
+## Upgrade and rollback
+
+Pin and record source commits. Qualify the new commit with
+`./ops/docker/smoke-test.sh`, then recreate the service with both Compose files:
+
+```bash
+docker compose -p ambient-ops \
+  -f compose.yaml \
+  -f compose.host-network.yaml \
+  up --build -d
+```
+
+Repeat live network/Codex, mDNS, HTC, and reboot readbacks. To roll back, switch
+the checkout to the recorded prior commit and run the same command. Keep
+`.env`, `secrets`, `INSTANCE_ID`, and the named volume unchanged. Never use
+`down -v` during an upgrade or rollback.
+
+Inspect failures with:
+
+```bash
+docker compose -p ambient-ops \
+  -f compose.yaml \
+  -f compose.host-network.yaml \
+  logs --tail=200 ambient-ops
+curl -fsS http://127.0.0.1:8787/healthz
+curl -fsS http://127.0.0.1:8787/api/status
+```
 
 ## URLs
 

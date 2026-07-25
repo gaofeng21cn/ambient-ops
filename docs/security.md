@@ -38,6 +38,11 @@ last two are optional fallbacks/integrations. Protect the local `secrets`
 directory with owner-only permissions and never commit `.env`, secret files,
 certificates, logs, screenshots, or data exports.
 
+On native Linux/Synology the image runs as UID/GID 1000. The bind-mounted
+`secrets` directory and files should therefore be owned by 1000 with modes 700
+and 600 respectively. Docker Desktop may translate ownership. Do not make
+secret files world-readable to work around a host/container UID mismatch.
+
 The macOS runtime stores credentials in Keychain and puts only Keychain service
 names in its LaunchAgent plist. Do not replace this with raw plist environment
 values.
