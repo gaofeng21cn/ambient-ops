@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
+import { hostname as systemHostname } from "node:os";
 import { Bonjour } from "bonjour-service";
 
 export const DISCOVERY_SERVICE_TYPE = "ambient-ops";
@@ -29,6 +30,7 @@ export function createDiscoveryPublisher({
   enabled = true,
   instanceId,
   name,
+  host,
   port,
   displayPath = "/display/overview",
   apiPath = "/api/status",
@@ -42,6 +44,7 @@ export function createDiscoveryPublisher({
       if (!enabled || service) return;
       service = bonjour.publish({
         name: String(name || "Ambient Ops").slice(0, 63),
+        host: normalizeDiscoveryHost(host),
         type: DISCOVERY_SERVICE_TYPE,
         protocol: "tcp",
         port,
@@ -62,6 +65,23 @@ export function createDiscoveryPublisher({
       bonjour.destroy();
     },
   };
+}
+
+export function normalizeDiscoveryHost(value, fallback = systemHostname()) {
+  const explicitHost = validDiscoveryHost(value);
+  const fallbackHost = validDiscoveryHost(fallback);
+  const safeHost = explicitHost || fallbackHost || "ambient-ops";
+  return safeHost.toLowerCase().endsWith(".local") ? safeHost : `${safeHost}.local`;
+}
+
+function validDiscoveryHost(value) {
+  const candidate = String(value || "").trim().replace(/\.+$/, "");
+  const labels = candidate.split(".");
+  return labels.every(
+    (label) => label.length > 0
+      && label.length <= 63
+      && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(label),
+  ) ? candidate : "";
 }
 
 export function normalizeInstanceId(value) {

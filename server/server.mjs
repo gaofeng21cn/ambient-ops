@@ -197,6 +197,7 @@ const discovery = createDiscoveryPublisher({
   enabled: config.discoveryEnabled,
   instanceId,
   name: config.siteName,
+  host: process.env.DISCOVERY_HOST || "",
   port: config.port,
   version: packageMetadata.version,
 });

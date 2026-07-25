@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   createDiscoveryPublisher,
+  normalizeDiscoveryHost,
   normalizeInstanceId,
   resolveInstanceId,
 } from "./discovery.mjs";
@@ -22,6 +23,12 @@ test("accepts only DNS-SD-safe configured instance ids", () => {
   assert.equal(normalizeInstanceId("Home-Ops.1"), "home-ops.1");
   assert.equal(normalizeInstanceId("../unsafe"), "");
   assert.equal(normalizeInstanceId("contains spaces"), "");
+});
+
+test("publishes a resolvable local discovery hostname", () => {
+  assert.equal(normalizeDiscoveryHost("ambient-nas"), "ambient-nas.local");
+  assert.equal(normalizeDiscoveryHost("ambient-nas.local."), "ambient-nas.local");
+  assert.equal(normalizeDiscoveryHost("invalid host", "fallback-nas"), "fallback-nas.local");
 });
 
 test("publishes the shared Ambient Ops discovery contract", async () => {
@@ -42,6 +49,7 @@ test("publishes the shared Ambient Ops discovery contract", async () => {
   const publisher = createDiscoveryPublisher({
     instanceId: "home-ops",
     name: "Gaofeng Home",
+    host: "ambient-nas",
     port: 8791,
     version: "0.1.0",
     bonjour,
@@ -50,6 +58,7 @@ test("publishes the shared Ambient Ops discovery contract", async () => {
   publisher.start();
   assert.deepEqual(published, {
     name: "Gaofeng Home",
+    host: "ambient-nas.local",
     type: "ambient-ops",
     protocol: "tcp",
     port: 8791,
