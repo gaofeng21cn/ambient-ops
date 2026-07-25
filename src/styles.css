@@ -33,6 +33,7 @@ button { font: inherit; letter-spacing: 0; }
 .icon-button:active, .icon-button:focus-visible { color: var(--text); border-color: var(--line); background: var(--surface); }
 .view-stage { min-height: 0; padding: 14px 0; overflow: hidden; }
 
+.device-overview, .device-network-view, .device-machines-view { display: none; }
 .overview-grid { height: 100%; display: grid; grid-template-columns: minmax(0, 1.33fr) minmax(420px, 1fr); gap: 14px; }
 .right-column { min-height: 0; display: grid; grid-template-rows: minmax(230px, .88fr) minmax(250px, 1.12fr); gap: 14px; }
 .panel { min-width: 0; min-height: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
@@ -69,8 +70,6 @@ button { font: inherit; letter-spacing: 0; }
 .download-line, .upload-line, .sparkline polyline { fill: none; stroke-width: 3; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
 .download-line { stroke: var(--blue); }
 .upload-line { stroke: var(--green); }
-.download-fill { fill: url(#downloadFill); }
-.upload-fill { fill: url(#uploadFill); }
 .axis-labels { position: absolute; left: 0; top: 8px; bottom: 22px; display: flex; flex-direction: column; justify-content: space-between; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .time-labels { position: absolute; left: 45px; right: 0; bottom: 0; display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
 .chart-legend { display: flex; align-items: center; gap: 34px; padding: 2px 38px 16px; color: #dce0e5; font-size: 14px; }
@@ -233,6 +232,20 @@ button { font: inherit; letter-spacing: 0; }
 }
 
 @media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  :root {
+    color-scheme: dark;
+    --bg: #0c0f12;
+    --surface: #111519;
+    --surface-raised: #171c21;
+    --line: #282e34;
+    --line-soft: #20262c;
+    --text: #e6e9ed;
+    --muted: #9da5af;
+    --blue: #3897ff;
+    --green: #25d06f;
+    --amber: #f59e0b;
+    --violet: #b264eb;
+  }
   html, body {
     height: 100dvh;
     min-height: 0;
@@ -241,35 +254,217 @@ button { font: inherit; letter-spacing: 0; }
   .app-shell {
     height: 100dvh;
     min-height: 0;
-    grid-template-rows: 42px minmax(0, 1fr) 50px;
-    padding: 0 6px 6px;
+    grid-template-rows: 38px minmax(0, 1fr) 44px;
+    padding: 0 5px 5px;
     overflow: hidden;
   }
   .top-header {
     grid-template-columns: 1fr auto;
   }
-  .top-header time { font-size: 16px; }
+  .top-header time { font-size: 17px; }
   .top-header h1, .source-label { display: none; }
   .header-status { gap: 8px; }
-  .mode-label { padding: 2px 5px; font-size: 9px; }
+  .mode-label { padding: 2px 5px; color: #aeb6c0; border-color: #4b5561; font-size: 9px; }
   .divider { height: 20px; }
   .icon-button { width: 30px; height: 30px; }
   .icon-button svg { width: 17px; height: 17px; }
 
   .view-stage {
     min-height: 0;
-    padding: 6px 0;
+    padding: 5px 0;
     overflow: hidden;
   }
-  .overview-grid {
+  .device-overview,
+  .device-network-view,
+  .device-machines-view {
     height: 100%;
-    grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-    gap: 6px;
+    min-height: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
   }
-  .right-column {
-    grid-template-rows: minmax(0, .9fr) minmax(0, 1.1fr);
+  .device-overview {
+    display: grid;
+    grid-template-rows: 76px minmax(0, 1fr) 54px;
+  }
+  .device-primary-metrics,
+  .device-network-metrics {
+    display: grid;
+    border-bottom: 1px solid var(--line);
+  }
+  .device-primary-metrics { grid-template-columns: 1fr 1fr 1.13fr; }
+  .device-network-metrics { grid-template-columns: 1fr 1fr; }
+  .device-metric {
+    min-width: 0;
+    display: grid;
+    align-content: center;
+    padding: 7px 18px;
+    border-right: 1px solid var(--line);
+  }
+  .device-metric:last-child { border-right: 0; }
+  .device-metric > span {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 620;
+    text-transform: uppercase;
+  }
+  .device-metric > div {
+    display: flex;
+    align-items: baseline;
     gap: 6px;
+    margin-top: 4px;
+    min-width: 0;
+  }
+  .device-metric strong {
+    color: var(--text);
+    font-size: 42px;
+    line-height: .9;
+    font-weight: 610;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .device-metric small {
+    color: #c3c9d0;
+    font-size: 11px;
+  }
+  .device-metric.download > span,
+  .device-metric.download strong { color: #38bdf8; }
+  .device-metric.upload > span,
+  .device-metric.upload strong { color: var(--violet); }
+  .device-metric.codex > span,
+  .device-metric.codex strong { color: var(--green); }
+  .device-airview {
+    min-height: 0;
+    padding: 7px 14px 5px;
+  }
+  .airview-chart { display: block; width: 100%; height: 100%; overflow: visible; }
+  .airview-baseline { stroke: #2b3239; stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .airview-download,
+  .airview-upload {
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+    vector-effect: non-scaling-stroke;
+  }
+  .airview-download { stroke: #38bdf8; }
+  .airview-upload { stroke: var(--violet); }
+  .airview-dot { transform-box: fill-box; transform-origin: center; animation: airview-pulse 1.8s ease-in-out infinite; }
+  .airview-dot.download { fill: #38bdf8; }
+  .airview-dot.upload { fill: var(--violet); animation-delay: -.9s; }
+  .airview-empty { height: 100%; display: grid; place-items: center; color: var(--muted); font-size: 11px; }
+  .device-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-top: 1px solid var(--line-soft);
+    background: #101419;
+  }
+  .device-stat {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 18px;
+    border-right: 1px solid var(--line-soft);
+  }
+  .device-stat:last-child { border-right: 0; }
+  .device-stat > span { color: var(--muted); font-size: 11px; font-weight: 600; }
+  .device-stat > div { display: flex; align-items: baseline; gap: 3px; }
+  .device-stat strong { color: #e4e8ec; font-size: 25px; font-weight: 570; white-space: nowrap; }
+  .device-stat small { color: var(--muted); font-size: 11px; }
+  .device-stat strong.blue { color: var(--blue); }
+  .device-stat strong.green { color: var(--green); }
+  .device-stat strong.amber { color: var(--amber); }
+
+  .device-network-view {
+    display: grid;
+    grid-template-rows: 88px minmax(0, 1fr) 56px;
+  }
+  .device-network-view .device-metric { padding-left: 22px; }
+  .device-network-view .device-metric > span { font-size: 12px; }
+  .device-network-view .device-metric strong { font-size: 54px; }
+  .network-airview { padding: 9px 14px 5px; }
+  .network-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .network-summary .device-stat { padding: 0 24px; }
+  .network-summary .device-stat > span { font-size: 12px; }
+  .network-summary .device-stat strong { font-size: 30px; }
+  .network-summary .device-stat small { font-size: 12px; }
+
+  .device-machines-view {
+    display: grid;
+    grid-template-rows: 40px 112px minmax(0, 1fr);
+    gap: 0;
+  }
+  .device-machine-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-bottom: 1px solid var(--line);
+  }
+  .device-machine-tabs button {
+    position: relative;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 8px;
+    overflow: hidden;
+    border: 0;
+    border-right: 1px solid var(--line-soft);
+    color: var(--muted);
+    background: transparent;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .device-machine-tabs button:last-child { border-right: 0; }
+  .device-machine-tabs button.selected { color: var(--text); background: #141a1f; }
+  .device-machine-tabs button.selected::after { content: ""; position: absolute; left: 15%; right: 15%; bottom: 0; height: 2px; background: var(--green); }
+  .device-machine-tabs i { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--muted); }
+  .device-machine-tabs i.live { background: var(--green); }
+  .device-machine-tabs i.stale { background: var(--amber); }
+  .device-machine-tabs i.error { background: var(--red); }
+  .device-machine-body {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+  }
+  .device-machine-primary {
+    min-width: 0;
+    display: grid;
+    align-content: center;
+    padding: 7px 22px;
+    border-right: 1px solid var(--line);
+  }
+  .device-machine-primary > span { color: var(--muted); font-size: 12px; font-weight: 600; }
+  .machine-tps-primary { padding: 0; border: 0; }
+  .machine-tps-primary > span { display: none; }
+  .machine-tps-primary > div { margin-top: 9px; }
+  .machine-tps-primary strong { font-size: 52px; }
+  .machine-tps-primary small { font-size: 13px; }
+  .device-machine-secondary {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+  }
+  .device-machine-secondary .device-stat {
+    padding: 0 18px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .device-machine-secondary .device-stat:last-child { border-bottom: 0; }
+  .device-machine-secondary .device-stat > span { font-size: 11px; }
+  .device-machine-secondary .device-stat strong { font-size: 23px; }
+  .machine-trend-chart { display: block; width: calc(100% - 28px); height: calc(100% - 12px); margin: 6px 14px; overflow: visible; }
+  .machine-trend-chart polyline { fill: none; stroke: var(--green); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .machine-trend-grid line { stroke: #293239; stroke-width: 1; stroke-dasharray: 4 5; vector-effect: non-scaling-stroke; }
+
+  .overview-grid,
+  .network-view,
+  .machines-view {
+    display: none;
   }
   .panel-header {
     height: 34px;
@@ -480,26 +675,48 @@ button { font: inherit; letter-spacing: 0; }
     grid-template-columns: repeat(3, minmax(64px, 1fr));
   }
   .nav-tabs button { gap: 0; }
-  .nav-tabs button svg { width: 19px; height: 19px; }
+  .nav-tabs button svg { width: 21px; height: 21px; }
   .nav-tabs button span { display: none; }
   .freshness {
-    padding: 0 10px;
+    padding: 0 14px;
     gap: 7px;
-    font-size: 9px;
+    font-size: 10px;
   }
-  .freshness > span:first-child, .freshness .divider { display: none; }
-  .freshness .status-label { font-size: 9px; }
+  .freshness > span:first-child, .freshness .divider, .freshness > span:last-child { display: none; }
+  .freshness .status-label { font-size: 10px; }
 }
 
 @media (max-width: 900px) and (max-height: 320px) and (orientation: landscape) {
-  .right-column {
-    grid-template-rows: minmax(0, 1.08fr) minmax(0, .92fr);
-  }
-  .codex-summary {
-    height: 44px;
-    padding-top: 4px;
-  }
-  .codex-panel .sparkline.compact { display: none; }
+  .device-overview { grid-template-rows: 62px minmax(0, 1fr) 38px; }
+  .device-network-view { grid-template-rows: 68px minmax(0, 1fr) 38px; }
+  .device-metric { padding: 5px 13px; }
+  .device-metric > span { font-size: 9px; }
+  .device-metric > div { margin-top: 3px; }
+  .device-metric strong { font-size: 31px; }
+  .device-network-view .device-metric strong { font-size: 38px; }
+  .device-metric small { font-size: 8px; }
+  .device-airview { padding: 4px 10px 3px; }
+  .device-stat { padding: 0 9px; }
+  .device-stat > span { font-size: 7px; }
+  .device-stat strong { font-size: 12px; }
+  .device-stat small { font-size: 7px; }
+  .device-machines-view { grid-template-rows: 34px minmax(0, 1fr) 34px; }
+  .device-machine-tabs button { gap: 4px; padding: 0 5px; font-size: 8px; }
+  .device-machine-primary { padding: 5px 16px; }
+  .device-machine-primary > span { font-size: 8px; }
+  .machine-tps-primary > div { margin-top: 4px; }
+  .machine-tps-primary strong { font-size: 40px; }
+  .device-machine-secondary .device-stat { padding: 0 13px; }
+  .device-machine-secondary .device-stat strong { font-size: 16px; }
+  .device-machines-view > .sparkline { height: 27px; margin-top: 2px; }
+}
+
+@keyframes airview-pulse {
+  50% { opacity: .35; transform: scale(1.8); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .airview-dot { animation: none; }
 }
 
 @media (max-width: 480px) {

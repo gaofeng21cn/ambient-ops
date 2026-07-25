@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Bot,
@@ -140,62 +140,195 @@ function Header({ status, connection }) {
 
 function Overview({ status, onMachine, onAllMachines }) {
   return (
-    <div className="overview-grid">
-      <Panel className="internet-panel" title="Internet" icon={Globe2} action={<span className="panel-action">WAN: Primary <StatusLabel status={status.network.status} compact /></span>}>
-        <ThroughputSummary network={status.network} />
-        <TrafficChart points={status.network.history} allowSampleData={status.demo} />
-        <div className="chart-legend">
-          <Legend color="blue" label="Download" />
-          <Legend color="green" label="Upload" />
-          <span className="chart-scale">Scale: auto</span>
+    <>
+      <DeviceOverview status={status} />
+      <div className="overview-grid">
+        <Panel className="internet-panel" title="Internet" icon={Globe2} action={<span className="panel-action">WAN: Primary <StatusLabel status={status.network.status} compact /></span>}>
+          <ThroughputSummary network={status.network} />
+          <TrafficChart points={status.network.history} allowSampleData={status.demo} />
+          <div className="chart-legend">
+            <Legend color="blue" label="Download" />
+            <Legend color="green" label="Upload" />
+            <span className="chart-scale">Scale: auto</span>
+          </div>
+        </Panel>
+        <div className="right-column">
+          <Panel className="codex-panel" title="Codex" icon={Bot} action={<StatusLabel status={status.codex.status} />}>
+            <CodexSummary codex={status.codex} />
+            <Sparkline values={status.machines.map((machine) => machine.oneMinute.tps)} color="green" compact />
+          </Panel>
+          <Panel className="machine-panel" title={`Machines (${status.machines.length})`} icon={Monitor} action={<button className="panel-link" type="button" onClick={onAllMachines}>All <ChevronRight size={20} /></button>}>
+            <MachineList machines={status.machines} onMachine={onMachine} />
+          </Panel>
         </div>
-      </Panel>
-      <div className="right-column">
-        <Panel className="codex-panel" title="Codex" icon={Bot} action={<StatusLabel status={status.codex.status} />}>
-          <CodexSummary codex={status.codex} />
-          <Sparkline values={status.machines.map((machine) => machine.oneMinute.tps)} color="green" compact />
-        </Panel>
-        <Panel className="machine-panel" title={`Machines (${status.machines.length})`} icon={Monitor} action={<button className="panel-link" type="button" onClick={onAllMachines}>All <ChevronRight size={20} /></button>}>
-          <MachineList machines={status.machines} onMachine={onMachine} />
-        </Panel>
       </div>
+    </>
+  );
+}
+
+function DeviceOverview({ status }) {
+  const liveMachines = status.machines.filter((machine) => machine.status === "live").length;
+  return (
+    <section className="device-overview">
+      <div className="device-primary-metrics">
+        <DeviceMetric label="Download" value={formatMetric(status.network.downloadMbps)} unit="Mbps" accent="download" />
+        <DeviceMetric label="Upload" value={formatMetric(status.network.uploadMbps)} unit="Mbps" accent="upload" />
+        <DeviceMetric label="Codex" value={formatTps(status.codex.oneMinuteTps)} unit="TPS" accent="codex" />
+      </div>
+      <section className="device-airview">
+        <AirViewChart points={status.network.history} allowSampleData={status.demo} />
+      </section>
+      <div className="device-summary-grid">
+        <DeviceStat label="5 MIN" value={formatTps(status.codex.fiveMinuteTps)} unit="TPS" />
+        <DeviceStat label="CACHE" value={status.codex.cachePercent} unit="%" />
+        <DeviceStat label="LIVE" value={`${liveMachines}/${status.machines.length}`} accent={liveMachines === status.machines.length ? "green" : "amber"} />
+      </div>
+    </section>
+  );
+}
+
+function DeviceMetric({ label, value, unit, accent, className = "" }) {
+  return (
+    <div className={`device-metric ${accent || ""} ${className}`}>
+      <span>{label}</span>
+      <div><strong>{value}</strong>{unit ? <small>{unit}</small> : null}</div>
     </div>
+  );
+}
+
+function DeviceStat({ label, value, unit, accent = "" }) {
+  return (
+    <div className="device-stat">
+      <span>{label}</span>
+      <div><strong className={accent}>{value}</strong>{unit ? <small>{unit}</small> : null}</div>
+    </div>
+  );
+}
+
+function AirViewChart({ points = [], allowSampleData = false }) {
+  const chartId = useId().replace(/:/g, "");
+  const fillId = `${chartId}-airview-fill`;
+  const data = trafficData(points, allowSampleData);
+  if (data.length === 0) return <div className="airview-empty">Waiting for WAN samples</div>;
+  const max = Math.max(100, ...data.flatMap((point) => [point.downloadMbps || 0, point.uploadMbps || 0]));
+  const downloadValues = data.map((point) => point.downloadMbps || 0);
+  const uploadValues = data.map((point) => point.uploadMbps || 0);
+  const download = stepLinePoints(downloadValues, max);
+  const upload = stepLinePoints(uploadValues, max);
+  const lastDownloadY = scaledY(downloadValues.at(-1), max, 100);
+  const lastUploadY = scaledY(uploadValues.at(-1), max, 100);
+  return (
+    <svg className="airview-chart" viewBox="0 0 1000 100" preserveAspectRatio="none" role="img" aria-label="Live WAN throughput">
+      <defs>
+        <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38bdf8" stopOpacity=".24" /><stop offset="1" stopColor="#38bdf8" stopOpacity=".04" /></linearGradient>
+      </defs>
+      <line className="airview-baseline" x1="0" y1="99" x2="1000" y2="99" />
+      <polygon fill={`url(#${fillId})`} points={`0,100 ${download} 1000,100`} />
+      <polyline className="airview-download" points={download} />
+      <polyline className="airview-upload" points={upload} />
+      <circle className="airview-dot download" cx="1000" cy={lastDownloadY} r="4" />
+      <circle className="airview-dot upload" cx="1000" cy={lastUploadY} r="3" />
+    </svg>
   );
 }
 
 function NetworkView({ network }) {
   return (
-    <div className="network-view">
-      <section className="network-hero">
-        <div className="section-heading"><Globe2 size={26} /><h2>Internet</h2><StatusLabel status={network.status} /></div>
-        <ThroughputSummary network={network} large />
-        <div className="network-facts">
-          <Fact label="Connected clients" value={network.clients ?? "--"} />
-          <Fact label="Gateway latency" value={network.latencyMs == null ? "--" : `${network.latencyMs} ms`} />
-          <Fact label="Data source" value={network.source === "unifi" ? "UniFi Gateway" : network.source === "demo" ? "Demonstration" : "Unconfigured"} />
-          <Fact label="Last update" value={formatAge(network.updatedAt)} />
-        </div>
-      </section>
-      <section className="network-chart-wrap">
-        <div className="section-heading"><Activity size={24} /><h2>WAN throughput</h2><span>Last {historyWindowSeconds(network.history)}s</span></div>
-        <TrafficChart points={network.history} detailed allowSampleData={network.source === "demo"} />
-        <div className="chart-legend"><Legend color="blue" label="Download" /><Legend color="green" label="Upload" /></div>
-      </section>
-    </div>
+    <>
+      <DeviceNetworkView network={network} />
+      <div className="network-view">
+        <section className="network-hero">
+          <div className="section-heading"><Globe2 size={26} /><h2>Internet</h2><StatusLabel status={network.status} /></div>
+          <ThroughputSummary network={network} large />
+          <div className="network-facts">
+            <Fact label="Connected clients" value={network.clients ?? "--"} />
+            <Fact label="Gateway latency" value={network.latencyMs == null ? "--" : `${network.latencyMs} ms`} />
+            <Fact label="Data source" value={network.source === "unifi" ? "UniFi Gateway" : network.source === "demo" ? "Demonstration" : "Unconfigured"} />
+            <Fact label="Last update" value={formatAge(network.updatedAt)} />
+          </div>
+        </section>
+        <section className="network-chart-wrap">
+          <div className="section-heading"><Activity size={24} /><h2>WAN throughput</h2><span>Last {historyWindowSeconds(network.history)}s</span></div>
+          <TrafficChart points={network.history} detailed allowSampleData={network.source === "demo"} />
+          <div className="chart-legend"><Legend color="blue" label="Download" /><Legend color="green" label="Upload" /></div>
+        </section>
+      </div>
+    </>
+  );
+}
+
+function DeviceNetworkView({ network }) {
+  return (
+    <section className="device-network-view">
+      <div className="device-network-metrics">
+        <DeviceMetric label="Download" value={formatMetric(network.downloadMbps)} unit="Mbps" accent="download" />
+        <DeviceMetric label="Upload" value={formatMetric(network.uploadMbps)} unit="Mbps" accent="upload" />
+      </div>
+      <section className="device-airview network-airview"><AirViewChart points={network.history} allowSampleData={network.source === "demo"} /></section>
+      <div className="device-summary-grid network-summary">
+        <DeviceStat label="CLIENTS" value={network.clients ?? "--"} />
+        <DeviceStat label="LATENCY" value={network.latencyMs ?? "--"} unit="ms" />
+      </div>
+    </section>
   );
 }
 
 function MachinesView({ machines, selected, onSelect }) {
   return (
-    <div className="machines-view">
-      <section className="machine-directory">
-        <div className="section-heading"><Monitor size={26} /><h2>Machines</h2><span>{machines.length} agents</span></div>
-        <MachineList machines={machines} onMachine={onSelect} selectedId={selected?.machineId} expanded />
-      </section>
-      <section className="machine-detail">
-        {selected ? <MachineDetail machine={selected} /> : <EmptyState />}
-      </section>
-    </div>
+    <>
+      <DeviceMachinesView machines={machines} selected={selected} onSelect={onSelect} />
+      <div className="machines-view">
+        <section className="machine-directory">
+          <div className="section-heading"><Monitor size={26} /><h2>Machines</h2><span>{machines.length} agents</span></div>
+          <MachineList machines={machines} onMachine={onSelect} selectedId={selected?.machineId} expanded />
+        </section>
+        <section className="machine-detail">
+          {selected ? <MachineDetail machine={selected} /> : <EmptyState />}
+        </section>
+      </div>
+    </>
+  );
+}
+
+function DeviceMachinesView({ machines, selected, onSelect }) {
+  if (!selected) return <section className="device-machines-view"><EmptyState /></section>;
+  return (
+    <section className="device-machines-view">
+      <div className="device-machine-tabs">
+        {machines.map((machine) => <button className={selected.machineId === machine.machineId ? "selected" : ""} key={machine.machineId} onClick={() => onSelect(machine.machineId)}><i className={machine.status} />{machine.machineName}</button>)}
+      </div>
+      <div className="device-machine-body">
+        <div className="device-machine-primary">
+          <span>1 MIN · {selected.platform}</span>
+          <DeviceMetric label="1 min" value={formatTps(selected.oneMinute.tps)} unit="TPS" accent="codex" className="machine-tps-primary" />
+        </div>
+        <div className="device-machine-secondary">
+          <DeviceStat label="5 MIN" value={formatTps(selected.fiveMinutes.tps)} unit="TPS" />
+          <DeviceStat label="CACHE" value={selected.cachePercent || 0} unit="%" />
+          <DeviceStat label="SESSIONS" value={selected.activeSessions} />
+        </div>
+      </div>
+      <MachineTrendChart values={sparkValues(selected.oneMinute.tps)} />
+    </section>
+  );
+}
+
+function MachineTrendChart({ values = [] }) {
+  const fillId = useId().replace(/:/g, "");
+  const max = Math.max(1, ...values);
+  const points = linePoints(values, max, 1000, 100);
+  return (
+    <svg className="machine-trend-chart" viewBox="0 0 1000 100" preserveAspectRatio="none" role="img" aria-label="Recent machine TPS trend">
+      <defs>
+        <linearGradient id={`${fillId}-machine-fill`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#25d06f" stopOpacity=".26" />
+          <stop offset="1" stopColor="#25d06f" stopOpacity=".03" />
+        </linearGradient>
+      </defs>
+      <g className="machine-trend-grid"><line x1="0" y1="25" x2="1000" y2="25" /><line x1="0" y1="50" x2="1000" y2="50" /><line x1="0" y1="75" x2="1000" y2="75" /></g>
+      <polygon fill={`url(#${fillId}-machine-fill)`} points={`0,100 ${points} 1000,100`} />
+      <polyline points={points} />
+    </svg>
   );
 }
 
@@ -302,10 +435,10 @@ function TokenBar({ label, value, max, color }) {
 }
 
 function TrafficChart({ points = [], detailed = false, allowSampleData = false }) {
-  const data = points.length > 1 ? points : allowSampleData ? Array.from({ length: 60 }, (_, index) => ({
-    downloadMbps: 700 + Math.sin(index / 5) * 80,
-    uploadMbps: 115 + Math.cos(index / 7) * 16,
-  })) : [];
+  const chartId = useId().replace(/:/g, "");
+  const downloadFillId = `${chartId}-download-fill`;
+  const uploadFillId = `${chartId}-upload-fill`;
+  const data = trafficData(points, allowSampleData);
   if (data.length === 0) {
     return <div className={`traffic-chart chart-empty ${detailed ? "detailed" : ""}`}><Activity size={32} /><strong>Waiting for WAN samples</strong><span>The last known values will appear here when the gateway reports data.</span></div>;
   }
@@ -318,12 +451,12 @@ function TrafficChart({ points = [], detailed = false, allowSampleData = false }
       <div className="axis-labels"><span>{Math.ceil(max)}</span><span>{Math.ceil(max / 2)}</span><span>0</span></div>
       <svg viewBox="0 0 1000 300" preserveAspectRatio="none" role="img" aria-label="WAN throughput chart">
         <defs>
-          <linearGradient id="downloadFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2d8cff" stopOpacity=".2" /><stop offset="1" stopColor="#2d8cff" stopOpacity="0" /></linearGradient>
-          <linearGradient id="uploadFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38d891" stopOpacity=".18" /><stop offset="1" stopColor="#38d891" stopOpacity="0" /></linearGradient>
+          <linearGradient id={downloadFillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2d8cff" stopOpacity=".2" /><stop offset="1" stopColor="#2d8cff" stopOpacity="0" /></linearGradient>
+          <linearGradient id={uploadFillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38d891" stopOpacity=".18" /><stop offset="1" stopColor="#38d891" stopOpacity="0" /></linearGradient>
         </defs>
         <g className="grid-lines"><line x1="0" y1="0" x2="1000" y2="0" /><line x1="0" y1="150" x2="1000" y2="150" /><line x1="0" y1="299" x2="1000" y2="299" />{[0, 200, 400, 600, 800, 1000].map((x) => <line key={x} x1={x} y1="0" x2={x} y2="300" />)}</g>
-        <polygon className="download-fill" points={`0,300 ${download} 1000,300`} />
-        <polygon className="upload-fill" points={`0,300 ${upload} 1000,300`} />
+        <polygon className="download-fill" fill={`url(#${downloadFillId})`} points={`0,300 ${download} 1000,300`} />
+        <polygon className="upload-fill" fill={`url(#${uploadFillId})`} points={`0,300 ${upload} 1000,300`} />
         <polyline className="download-line" points={download} />
         <polyline className="upload-line" points={upload} />
       </svg>
@@ -351,6 +484,28 @@ function linePoints(values, max, width = 1000, height = 300) {
   }).join(" ");
 }
 
+function stepLinePoints(values, max, width = 1000, height = 100) {
+  return values.flatMap((value, index) => {
+    const x = values.length === 1 ? 0 : index * width / (values.length - 1);
+    const y = scaledY(value, max, height);
+    if (index === 0) return [`${x.toFixed(1)},${y.toFixed(1)}`];
+    return [`${x.toFixed(1)},${scaledY(values[index - 1], max, height).toFixed(1)}`, `${x.toFixed(1)},${y.toFixed(1)}`];
+  }).join(" ");
+}
+
+function scaledY(value, max, height) {
+  return height - Math.min(height, Math.max(0, Number(value || 0) / max * height * 0.88));
+}
+
+function trafficData(points, allowSampleData) {
+  if (points.length > 1) return points;
+  if (!allowSampleData) return [];
+  return Array.from({ length: 60 }, (_, index) => ({
+    downloadMbps: 700 + Math.sin(index / 5) * 80,
+    uploadMbps: 115 + Math.cos(index / 7) * 16,
+  }));
+}
+
 function historyWindowSeconds(points = []) {
   if (points.length > 1) {
     const first = new Date(points[0].at).valueOf();
@@ -371,7 +526,7 @@ function BottomNav({ view, setView, status, connection }) {
   return (
     <nav className="bottom-nav">
       <div className="nav-tabs">
-        {items.map(([id, Icon]) => <button key={id} className={view === id ? "active" : ""} onClick={() => setView(id)}><Icon size={24} /><span>{VIEW_LABELS[id]}</span></button>)}
+        {items.map(([id, Icon]) => <button key={id} aria-label={VIEW_LABELS[id]} className={view === id ? "active" : ""} onClick={() => setView(id)}><Icon size={24} /><span>{VIEW_LABELS[id]}</span></button>)}
       </div>
       <div className="freshness"><span>Data freshness</span><StatusLabel status={connection === "live" ? status.overallStatus : "stale"} /><span className="divider" /><span>Updated: {formatAge(status.generatedAt, true)}</span></div>
     </nav>
