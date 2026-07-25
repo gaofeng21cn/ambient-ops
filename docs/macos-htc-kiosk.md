@@ -1,5 +1,8 @@
 # macOS and HTC kiosk runtime
 
+This is the currently accepted production runtime. The Synology migration keeps
+it installed but unloaded as the rollback owner.
+
 The permanent runtime has one required user LaunchAgent:
 
 - `cn.gaofeng.ambient-ops.server` runs the built Ambient Ops server from
@@ -50,3 +53,48 @@ For a bounded USB recovery session only:
 launchctl bootstrap gui/$(id -u) \
   ~/Library/LaunchAgents/cn.gaofeng.ambient-ops.adb-kiosk.plist
 ```
+
+## Runtime readback
+
+```bash
+launchctl print gui/$(id -u)/cn.gaofeng.ambient-ops.server
+readlink "$HOME/Library/Application Support/Ambient Ops/runtime/current"
+curl -fsS http://127.0.0.1:8791/healthz
+curl -fsS http://127.0.0.1:8791/api/status
+```
+
+A successful HTTP response is not enough: require live network and Codex
+states, the expected machine count, and `network.source=unifi-snmp-v3`.
+
+When USB is intentionally attached for verification, normal LAN operation
+should also show:
+
+```bash
+adb reverse --list
+adb shell cmd package resolve-activity --brief \
+  -a android.intent.action.MAIN -c android.intent.category.HOME
+```
+
+The reverse list must be empty and the resolved Home activity must be
+`cn.gaofeng.ambientops.kiosk/.MainActivity`.
+
+## Synology handoff and rollback
+
+Stop the Mac owner only after a discovery-disabled NAS candidate has passed its
+build, health, and live SNMP checks:
+
+```bash
+launchctl bootout gui/$(id -u)/cn.gaofeng.ambient-ops.server
+```
+
+Retain the LaunchAgent plist, Keychain entries, data directory, and runtime
+releases. To roll back, stop the NAS container first, then restore the Mac:
+
+```bash
+launchctl bootstrap gui/$(id -u) \
+  "$HOME/Library/LaunchAgents/cn.gaofeng.ambient-ops.server.plist"
+launchctl kickstart -k gui/$(id -u)/cn.gaofeng.ambient-ops.server
+```
+
+Never publish Mac and NAS instances concurrently. Preserving the same
+`INSTANCE_ID` lets the HTC kiosk recognize the restored logical installation.

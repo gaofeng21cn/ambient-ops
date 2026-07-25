@@ -1,73 +1,91 @@
 # UniFi Setup
 
 Ambient Ops can read WAN throughput with SNMPv3 or the UniFi Network API.
-SNMPv3 is preferred when it is already enabled because it avoids a controller
-API credential and exposes standard 64-bit interface counters.
+SNMPv3 is preferred because it avoids a controller API credential and exposes
+standard 64-bit interface counters. If both paths are configured, SNMPv3 wins.
 
 ## SNMPv3
 
-Enable SNMPv3 `authPriv` in UniFi Network and configure the existing username,
-authentication password, privacy password, and WAN interface names or indexes:
+Enable SNMPv3 `authPriv` in UniFi Network and record the existing username,
+authentication password, privacy password, and exact WAN interface names or
+indexes.
+
+For Compose, keep only non-secret values in `.env`:
 
 ```dotenv
 DEMO_MODE=false
 UNIFI_SNMP_HOST=192.168.1.1
 UNIFI_SNMP_USER=<snmp-v3-user>
-UNIFI_SNMP_AUTH_PASSWORD=<private-password>
-UNIFI_SNMP_PRIV_PASSWORD=<private-password>
 UNIFI_SNMP_AUTH_PROTOCOL=sha
 UNIFI_SNMP_PRIV_PROTOCOL=aes
 UNIFI_SNMP_INTERFACES=<wan-interface>,<wan2-interface>
 UNIFI_POLL_MS=250
 UNIFI_RATE_WINDOW_MS=2000
+UNIFI_SNMP_TIMEOUT_MS=3000
 ```
+
+Store passwords in ignored files:
+
+```text
+secrets/unifi_snmp_auth_password
+secrets/unifi_snmp_priv_password
+```
+
+Direct Node deployments may instead set `UNIFI_SNMP_AUTH_PASSWORD` and
+`UNIFI_SNMP_PRIV_PASSWORD`. The macOS LaunchAgent uses a Keychain service. Do
+not put passwords in tracked environment files, shell history, screenshots, or
+logs.
 
 The collector reads IF-MIB `ifHCInOctets` and `ifHCOutOctets` four times per
 second. Each displayed value is calculated from the real counter delta over a
-rolling two-second window. This preserves the 4 Hz display cadence while
-covering the roughly one-second counter refresh and its observed timing jitter,
-instead of showing zero readings followed by a spike. Multiple selected WAN
-interfaces are summed, and the display keeps roughly 75 seconds of real samples. Use
-`snmpwalk` against `ifName` and `ifAlias` to discover the exact selectors; do
-not guess an interface from its position in the table.
+rolling two-second window. This keeps the 4 Hz visual cadence while covering
+the gateway's approximately one-second counter refresh and timing jitter,
+instead of showing zeros followed by a spike.
 
-Keep SNMP UDP/161 reachable only from the trusted LAN or the monitoring host.
-Passwords stay in private deployment configuration and never reach the display.
+Multiple selected WAN interfaces are summed. The display keeps approximately
+75 seconds of real samples. Use an authenticated `snmpwalk` against `ifName`
+and `ifAlias` to discover exact selectors; do not infer an interface from its
+table position. Keep UDP/161 reachable only from the trusted LAN or the
+monitoring host.
 
-## Network API
+Live readback must show:
 
-## Create a dedicated API key
+```bash
+curl -fsS http://<ambient-ops-host>:8787/api/status |
+  jq -e '.demo == false
+    and .network.status == "live"
+    and .network.source == "unifi-snmp-v3"
+    and (.network.interfaces | length) > 0'
+```
 
-UniFi OS labels have changed between releases. On current consoles, sign in to
-the console owner interface and look under **Settings** for **Control Plane** or
-**Admins & Users**, then open **Integrations / API Keys**. Create a key named
-`Ambient Ops` and give it read-only access to the Network application and the
-target site. Copy the key once into the private deployment `.env`:
+## Network API fallback
+
+The API path is optional and is not required for an SNMPv3 deployment. If it is
+needed, create a dedicated read-only UniFi Network integration key and write it
+to:
+
+```text
+secrets/unifi_api_key
+```
+
+Set:
 
 ```dotenv
 DEMO_MODE=false
 UNIFI_BASE_URL=https://gateway.example.lan
 UNIFI_SITE=default
-UNIFI_API_KEY=<private-api-key>
 ```
 
-If the console only offers administrator roles rather than scoped API keys,
-update UniFi OS first or create a dedicated local read-only account and API key.
-Do not reuse the owner account password, and do not place the key in a browser
-URL or a tracked Compose file.
-
-The endpoint used by the current implementation is:
+The implementation requests:
 
 ```text
 /proxy/network/api/s/default/stat/health
 ```
 
-The request sends the key as `X-API-KEY` and reads WAN `rx_bytes-r` and
-`tx_bytes-r` fields.
+It sends the key as `X-API-KEY` and reads WAN `rx_bytes-r` and `tx_bytes-r`.
+Do not reuse the owner account password or place the key in a URL.
 
-## TLS option A: local self-signed certificate
-
-The simplest trusted-LAN setup is:
+## API TLS option A: trusted-LAN self-signed certificate
 
 ```dotenv
 UNIFI_BASE_URL=https://<gateway-address>
@@ -76,22 +94,22 @@ UNIFI_CA_FILE=
 ```
 
 This disables certificate verification only for the dedicated UniFi HTTP
-agent. It does not change TLS behavior for Home Assistant or other Node
-connections. Use this only on a trusted LAN or private VPN.
+client. It does not affect Home Assistant or other Node connections. Use it
+only on a trusted LAN or private VPN.
 
-## TLS option B: strict certificate validation
+## API TLS option B: strict validation
 
-For strict validation, the URL hostname must appear in the certificate's
-Subject Alternative Name. Export the public server certificate:
+The URL hostname must appear in the certificate Subject Alternative Name.
+Export and inspect the public server certificate:
 
 ```bash
 openssl s_client -connect <gateway-address>:443 -servername unifi.local -showcerts \
   </dev/null 2>/dev/null | openssl x509 -outform PEM > unifi-gateway.crt
-openssl x509 -in unifi-gateway.crt -noout -subject -issuer -dates -fingerprint -sha256 -ext subjectAltName
+openssl x509 -in unifi-gateway.crt -noout \
+  -subject -issuer -dates -fingerprint -sha256 -ext subjectAltName
 ```
 
-Keep the certificate in a private NAS folder, mount it read-only, and use the
-matching hostname:
+Keep the certificate in a private NAS folder and mount it read-only:
 
 ```yaml
 services:
@@ -108,8 +126,5 @@ UNIFI_ALLOW_SELF_SIGNED=false
 UNIFI_CA_FILE=/run/secrets/unifi-gateway.crt
 ```
 
-Do not commit the certificate or the private override. A server certificate is
-not a secret, but keeping environment-specific trust material outside the
-portable repository avoids silently trusting the wrong gateway after a device
-replacement. Re-check the SHA-256 fingerprint and expiry after UniFi upgrades
-or certificate regeneration.
+Re-check the SHA-256 fingerprint and expiry after UniFi upgrades, certificate
+regeneration, or gateway replacement.

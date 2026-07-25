@@ -1,83 +1,90 @@
-# Ambient Ops Git Collaboration
+# Ambient Ops Release Handoff
 
-Prepared on 2026-07-25 after the user moved the HTC USB connection to the Mac.
-Windows is no longer a feature or device-operation writer for this task. This
-repository is the canonical source transfer surface for continued work on the
-Mac.
+Updated on 2026-07-26. The Mac checkout and private GitHub repository are the
+source and delivery surfaces for Ambient Ops.
 
-## Git Context
+## Current accepted runtime
 
-- Repository: `https://github.com/gaofeng21cn/ambient-ops`
-- Branch: `feat/functional-prototype`
-- Visibility: private
-- Windows delivery scope: the complete Ambient Ops functional prototype,
-  documentation, tests, and container configuration
+The canonical production instance currently runs on the Mac as
+`cn.gaofeng.ambient-ops.server` from the atomic runtime release
+`20260726-pet-input-output-tps-v3`.
 
-Clone the repository on the Mac and check out the delivery branch:
-
-```bash
-git clone https://github.com/gaofeng21cn/ambient-ops.git
-cd ambient-ops
-git switch feat/functional-prototype
-```
-
-Continue all feature development, HTC device operations, live integration, and
-deployment from the Mac checkout. Do not restore the stopped Windows ADB,
-scrcpy, development-server, browser-test, or verification-container processes.
-
-## Completed Verification
+Fresh owner-side readback on 2026-07-26 confirmed:
 
 | Surface | Result |
 | --- | --- |
-| Node tests | 10/10 passed |
-| Vite production build | Passed |
-| `npm audit`, production and full tree | 0 vulnerabilities |
-| Docker image build | Passed with `node:22-alpine` |
-| Container health and API status | Passed in demo mode |
-| Compose expansion | Passed with strict TLS default |
-| Agent API normalization/privacy tests | Passed |
-| Prometheus output | Passed |
-| Home Assistant mapping/failure isolation tests | Passed |
-| Desktop browser, 1280x720 | Passed |
-| Concept-size browser, 1672x941 | Passed |
-| Network, Machines, machine selection | Passed |
-| Mobile browser, 412x915 | Passed without horizontal overflow |
-| E-ink, 1280x720 | Passed, black/white, no animation or overflow |
-| Browser console | Zero application errors/warnings after final fixes |
-| Concept-to-render `view_image` comparison | Completed |
+| LaunchAgent | Running, last exit code 0 |
+| `/healthz` | `mode=live`, overall/network/Codex live |
+| UniFi | SNMPv3 `authPriv`, two selected WAN interfaces, 4 Hz polling |
+| Codex | One live Mac; duplicate legacy agent disabled |
+| Pet | Ledger Owl state and asset identity received from Codex TPS |
+| HTC 5G Hub | Native kiosk verified on physical device |
+| Discovery | Wi-Fi mDNS; no USB or `adb reverse` dependency |
+| Home Assistant | Disabled and non-critical |
 
-The Browser plugin failed in the WSL workspace because `sandboxCwd` was not a
-local file URI. The rendered validation used Playwright Chromium instead.
+The HTC app is the default Home activity, owns an immersive WebView, remembers
+the preferred `INSTANCE_ID`, and resolves `_ambient-ops._tcp.local`. Codex TPS
+also discovers Ambient Ops and pushes only normalized aggregate metrics. The
+legacy standalone Codex push LaunchAgent and ADB watcher are recovery artifacts
+and must remain disabled during normal operation.
 
-## Not Completed
+## Delivered product surface
 
-- Latest Ambient Ops build on the physical HTC. Windows lost the USB device and
-  the user moved the cable to the Mac before final device validation.
-- Live UniFi polling. A dedicated API key is still required.
-- Live Home Assistant writeback. A long-lived token is still required.
-- Synology production deployment and owner-authoritative health readback.
-- `codex-tps` macOS/Windows agent changes and signed Mac distribution.
+- Live Overview, Network, Machines, Pet, and e-ink views
+- Smoothed 4 Hz UniFi SNMPv3 WAN rates from 64-bit interface counters
+- Authenticated multi-machine Codex TPS ingestion and stale retirement
+- Host pet protocol and selected-machine Pet view
+- Native Android kiosk with boot, Home, immersive, retry, and LAN discovery
+- Atomic macOS runtime install and previous-release rollback
+- Docker/Compose packaging, persistent `/data`, health check, and host-network
+  discovery override
+- Optional Prometheus and Home Assistant outputs
 
-## Configuration Schema
+SNMPv3 is the preferred UniFi path and does not require `UNIFI_API_KEY`.
+The Network API remains a fallback only.
+
+## Remaining production gate
+
+The only host migration still requiring owner-authoritative execution is the
+Synology cutover. Follow
+[`docs/production-migration-checklist.md`](docs/production-migration-checklist.md)
+and do not declare completion after only an image build, Compose expansion, or
+HTTP 200 response.
+
+The terminal state is:
+
+1. Synology host-network container is the only canonical instance.
+2. It preserves the Mac `INSTANCE_ID`, agent token, and required secrets.
+3. `/data` survives replacement and the container returns after NAS reboot.
+4. `/healthz` reports live network and Codex sources with the expected machines.
+5. The HTC and Codex TPS apps discover and use the NAS without manual URLs,
+   USB, or `adb reverse`.
+6. The Mac LaunchAgent is unloaded but retained as a tested rollback.
+
+Home Assistant is optional and must not block this gate.
+
+## Configuration contract
+
+Non-secret configuration:
 
 ```text
+AMBIENT_OPS_PORT
 PORT
 DATA_DIR
 DEMO_MODE
 SITE_NAME
 DISPLAY_TIME_ZONE
-AGENT_PUSH_TOKEN
+DISCOVERY_ENABLED
+INSTANCE_ID
 UNIFI_BASE_URL
 UNIFI_SITE
-UNIFI_API_KEY
 UNIFI_ALLOW_SELF_SIGNED
 UNIFI_CA_FILE
 UNIFI_POLL_MS
+UNIFI_RATE_WINDOW_MS
 UNIFI_SNMP_HOST
 UNIFI_SNMP_PORT
 UNIFI_SNMP_USER
-UNIFI_SNMP_AUTH_PASSWORD
-UNIFI_SNMP_PRIV_PASSWORD
 UNIFI_SNMP_AUTH_PROTOCOL
 UNIFI_SNMP_PRIV_PROTOCOL
 UNIFI_SNMP_INTERFACES
@@ -86,52 +93,39 @@ LIVE_AFTER_SECONDS
 STALE_AFTER_SECONDS
 HA_ENABLED
 HA_BASE_URL
-HA_TOKEN
 HA_ENTITY_PREFIX
 HA_SYNC_MS
 HA_TIMEOUT_MS
 ```
 
-Security defaults:
+The production Compose deployment reads these ignored files:
 
-- `UNIFI_ALLOW_SELF_SIGNED=false`
-- secrets and environment-specific addresses belong in ignored `.env` and
-  private Compose overrides
-- `.env`, data, certificates, private keys, logs, screenshots, and CodeGraph
-  state are ignored
-- the display browser receives normalized status only and needs no credential
+```text
+secrets/agent_push_token
+secrets/unifi_snmp_auth_password
+secrets/unifi_snmp_priv_password
+secrets/unifi_api_key          # only for the API fallback
+secrets/ha_token               # only when HA_ENABLED=true
+```
 
-## Mac Resume
+Do not put secret values in tracked Compose files, screenshots, logs, or this
+handoff. Direct Node operation also supports environment and macOS Keychain
+secret sources, but mounted files are the canonical Docker path.
 
-From the cloned project root:
+## Source validation
+
+Before integrating or releasing a source commit:
 
 ```bash
 npm ci
 npm test
 npm run build
-docker build -t ambient-ops:prototype .
-docker run --rm -d --name ambient-ops-verify \
-  -p 127.0.0.1:8791:8787 \
-  -e DEMO_MODE=true \
-  ambient-ops:prototype
-curl http://127.0.0.1:8791/healthz
+docker compose -f compose.yaml config
+docker compose -f compose.yaml -f compose.host-network.yaml config
+git diff --check
 ```
 
-For physical HTC validation:
-
-1. Confirm the device appears in `adb devices -l`.
-2. Accept the Mac ADB RSA prompt if Android asks.
-3. Use `adb reverse tcp:8791 tcp:8791`.
-4. Open `http://127.0.0.1:8791/display/overview` in HTC Chrome.
-5. Verify Overview, Network, Machines, machine selection, swipe navigation,
-   fullscreen/immersive mode, wake behavior, and a physical 1280x720 screenshot.
-
-## External Inputs
-
-- Dedicated read-only UniFi API key.
-- Private UniFi hostname/address selection and either the gateway certificate
-  plus matching hostname, or an explicit trusted-LAN self-signed exception.
-- Home Assistant long-lived access token if HA bridge is enabled.
-- Synology Container Manager or SSH deployment authority.
-- Apple signing identity remains on the primary Mac for any signed
-  `codex-tps` artifact.
+See [`docs/security.md`](docs/security.md),
+[`docs/agent-push-api.md`](docs/agent-push-api.md), and
+[`docs/macos-htc-kiosk.md`](docs/macos-htc-kiosk.md) for the exact trust and
+runtime contracts.
