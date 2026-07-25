@@ -91,7 +91,7 @@ public final class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (url != null && url.startsWith("http")) {
+                if (currentEndpoint != null && url != null && url.startsWith("http")) {
                     pageLoaded = true;
                     handler.removeCallbacks(retry);
                     preferences.edit().putString(PREF_ENDPOINT, url).apply();
@@ -262,12 +262,7 @@ public final class MainActivity extends Activity {
         resolving = false;
         String instanceId = attribute(resolved, "id");
         String preferredId = preferences.getString(PREF_INSTANCE_ID, null);
-        if (
-            preferredId != null
-                && instanceId != null
-                && !preferredId.equals(instanceId)
-                && pageLoaded
-        ) {
+        if (!ServiceSelectionPolicy.shouldAccept(preferredId, instanceId, pageLoaded)) {
             return;
         }
 

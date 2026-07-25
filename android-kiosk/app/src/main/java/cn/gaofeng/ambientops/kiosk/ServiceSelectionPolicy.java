@@ -1,0 +1,16 @@
+package cn.gaofeng.ambientops.kiosk;
+
+final class ServiceSelectionPolicy {
+    private ServiceSelectionPolicy() {}
+
+    static boolean shouldAccept(
+        String rememberedInstanceId,
+        String candidateInstanceId,
+        boolean currentPageHealthy
+    ) {
+        if (!currentPageHealthy || rememberedInstanceId == null) {
+            return true;
+        }
+        return rememberedInstanceId.equals(candidateInstanceId);
+    }
+}
