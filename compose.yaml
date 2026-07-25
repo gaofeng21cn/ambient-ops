@@ -1,0 +1,30 @@
+services:
+  ambient-ops:
+    build: .
+    container_name: ambient-ops
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+      DATA_DIR: /data
+      DEMO_MODE: ${DEMO_MODE:-true}
+      SITE_NAME: ${SITE_NAME:-Ambient Ops}
+      DISPLAY_TIME_ZONE: ${DISPLAY_TIME_ZONE:-Asia/Shanghai}
+      AGENT_PUSH_TOKEN: ${AGENT_PUSH_TOKEN}
+      UNIFI_BASE_URL: ${UNIFI_BASE_URL:-}
+      UNIFI_SITE: ${UNIFI_SITE:-default}
+      UNIFI_API_KEY: ${UNIFI_API_KEY:-}
+      UNIFI_ALLOW_SELF_SIGNED: ${UNIFI_ALLOW_SELF_SIGNED:-false}
+      UNIFI_CA_FILE: ${UNIFI_CA_FILE:-}
+      UNIFI_POLL_MS: ${UNIFI_POLL_MS:-3000}
+      LIVE_AFTER_SECONDS: ${LIVE_AFTER_SECONDS:-30}
+      STALE_AFTER_SECONDS: ${STALE_AFTER_SECONDS:-300}
+      HA_ENABLED: ${HA_ENABLED:-false}
+      HA_BASE_URL: ${HA_BASE_URL:-}
+      HA_TOKEN: ${HA_TOKEN:-}
+      HA_ENTITY_PREFIX: ${HA_ENTITY_PREFIX:-ambient_ops}
+      HA_SYNC_MS: ${HA_SYNC_MS:-30000}
+      HA_TIMEOUT_MS: ${HA_TIMEOUT_MS:-5000}
+    volumes:
+      - ./data:/data

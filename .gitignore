@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.DS_Store
+data/
+.codegraph/
+*.log
+*.pem
+*.key
+*.crt
+secrets/
+captures/
+screenshots/
+playwright-report/
+test-results/
