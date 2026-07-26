@@ -177,7 +177,10 @@ jobs:
             "ghcr.io/${GITHUB_REPOSITORY}:${IMAGE_VERSION}" \
             "ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}" \
             > "release-assets/Ambient-Ops-Docker-${IMAGE_VERSION}.txt"
-          sha256sum release-assets/* > release-assets/SHA256SUMS
+          (
+            cd release-assets
+            sha256sum Ambient-Ops-* > SHA256SUMS
+          )
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

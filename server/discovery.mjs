@@ -34,7 +34,7 @@ export function createDiscoveryPublisher({
   port,
   displayPath = "/display/overview",
   apiPath = "/api/status",
-  version = "0.1.1",
+  version = "0.1.2",
   bonjour = new Bonjour(),
 }) {
   let service = null;
