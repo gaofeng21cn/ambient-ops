@@ -18,8 +18,8 @@ public final class UpdateTrustPolicyTest {
             UPDATE,
             PACKAGE_NAME,
             PACKAGE_NAME,
-            6,
-            "1.2.2",
+            7,
+            "1.2.3",
             SHA,
             SIGNER,
             SIGNER
@@ -36,23 +36,23 @@ public final class UpdateTrustPolicyTest {
 
     @Test
     public void rejectsCandidateHashMismatch() {
-        assertCandidateRejected(PACKAGE_NAME, 6, "1.2.2", "b".repeat(64), SIGNER);
+        assertCandidateRejected(PACKAGE_NAME, 7, "1.2.3", "b".repeat(64), SIGNER);
     }
 
     @Test
     public void rejectsCandidatePackageMismatch() {
-        assertCandidateRejected("cn.example.untrusted", 6, "1.2.2", SHA, SIGNER);
+        assertCandidateRejected("cn.example.untrusted", 7, "1.2.3", SHA, SIGNER);
     }
 
     @Test
     public void rejectsCandidateVersionMismatch() {
-        assertCandidateRejected(PACKAGE_NAME, 7, "1.2.2", SHA, SIGNER);
-        assertCandidateRejected(PACKAGE_NAME, 6, "1.2.3", SHA, SIGNER);
+        assertCandidateRejected(PACKAGE_NAME, 8, "1.2.3", SHA, SIGNER);
+        assertCandidateRejected(PACKAGE_NAME, 7, "1.2.4", SHA, SIGNER);
     }
 
     @Test
     public void rejectsCandidateSignerMismatch() {
-        assertCandidateRejected(PACKAGE_NAME, 6, "1.2.2", SHA, "b".repeat(64));
+        assertCandidateRejected(PACKAGE_NAME, 7, "1.2.3", SHA, "b".repeat(64));
     }
 
     private static void assertCandidateRejected(
@@ -81,9 +81,9 @@ public final class UpdateTrustPolicyTest {
         try {
             return UpdateMetadata.parse(
                 "{"
-                    + "\"versionCode\":6,"
-                    + "\"versionName\":\"1.2.2\","
-                    + "\"apkPath\":\"/api/v1/kiosk/releases/Ambient-Ops-Kiosk-1.2.2.apk\","
+                    + "\"versionCode\":7,"
+                    + "\"versionName\":\"1.2.3\","
+                    + "\"apkPath\":\"/api/v1/kiosk/releases/Ambient-Ops-Kiosk-1.2.3.apk\","
                     + "\"sha256\":\"" + SHA + "\","
                     + "\"signerSha256\":\"" + SIGNER + "\""
                     + "}"

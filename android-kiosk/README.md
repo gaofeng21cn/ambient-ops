@@ -65,8 +65,8 @@ owner key used by the macOS helper, plus a sibling SHA-256 file. Download both
 files from the release, then verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.1.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.1.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.3.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.3.apk
 ```
 
 The GitHub Release APK and checksum are public downloads. A future release
@@ -121,7 +121,7 @@ discovery so the display is independent of a development computer.
 
 ## Trusted unattended updates
 
-Version `1.2.1` checks `/api/v1/kiosk/update` ten seconds after a healthy page
+Version `1.2.1` and later check `/api/v1/kiosk/update` ten seconds after a healthy page
 load and every six hours after that. A check runs only while the device is
 on external power and its active network is Wi-Fi. Before invoking the package manager,
 the client verifies:
