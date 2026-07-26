@@ -28,10 +28,13 @@ import {
 } from "./traffic-chart.mjs";
 import {
   petAnimationForState,
+  petFramePosition,
+  petPlaybackForState,
   petSpriteGrid,
   petSpriteKey,
   resolvePetSpriteUrl,
   selectDisplayMachine,
+  shouldReducePetMotion,
 } from "./pet-display.mjs";
 import { fetchWithTimeout } from "./http.mjs";
 
@@ -609,24 +612,95 @@ function PetMachineControl({ machines, selected, followMode, onFollowMode, onSel
 }
 
 function PetSprite({ pet, machineName, spriteUrl }) {
-  const animation = petAnimationForState(pet.state);
+  const frameRef = useRef(null);
+  const [transientState, setTransientState] = useState(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const animationState = transientState || pet.state;
+  const animation = petAnimationForState(animationState);
   const spriteGrid = petSpriteGrid(pet);
+  const reduceMotion = shouldReducePetMotion(navigator.userAgent, prefersReducedMotion);
+
+  useEffect(() => {
+    const frameElement = frameRef.current;
+    if (!frameElement) return undefined;
+
+    const playback = petPlaybackForState(animationState, reduceMotion);
+    let frameIndex = 0;
+    let timer = null;
+    const paintFrame = () => {
+      frameElement.style.backgroundPosition = petFramePosition(
+        playback.frames[frameIndex],
+        pet,
+      );
+    };
+    const scheduleNextFrame = () => {
+      timer = window.setTimeout(() => {
+        const nextFrame = frameIndex + 1;
+        if (nextFrame >= playback.frames.length) {
+          if (playback.loopStartIndex === null) {
+            timer = null;
+            return;
+          }
+          frameIndex = playback.loopStartIndex;
+        } else {
+          frameIndex = nextFrame;
+        }
+        paintFrame();
+        scheduleNextFrame();
+      }, playback.frames[frameIndex].frameDurationMs);
+    };
+
+    paintFrame();
+    if (playback.frames.length > 1) scheduleNextFrame();
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [animationState, pet.spriteVersionNumber, reduceMotion]);
+
+  const onPointerEnter = (event) => {
+    if (event.pointerType === "mouse") setTransientState("jumping");
+  };
+  const onPointerLeave = (event) => {
+    if (event.pointerType === "mouse") setTransientState(null);
+  };
+
   return (
     <div
-      className={`pet-sprite ${pet.state} pet-animation-${animation.name}`}
+      className={`pet-sprite ${pet.state}`}
       role="img"
       aria-label={`${pet.displayName} on ${machineName}, ${PET_STATE_LABELS[pet.state] || pet.state}`}
+      data-pet-animation={animation.name}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
     >
-      <img
-        className="pet-sprite-sheet"
-        src={spriteUrl}
-        alt=""
+      <div
+        ref={frameRef}
+        className="pet-sprite-frame"
         aria-hidden="true"
-        draggable="false"
-        style={{ height: spriteGrid.sheetHeight, top: spriteGrid.rowOffset(animation.row) }}
+        style={{
+          backgroundImage: `url(${spriteUrl})`,
+          backgroundSize: spriteGrid.backgroundSize,
+        }}
       />
     </div>
   );
+}
+
+function usePrefersReducedMotion() {
+  const query = "(prefers-reduced-motion: reduce)";
+  const [preferred, setPreferred] = useState(
+    () => typeof matchMedia === "function" && matchMedia(query).matches,
+  );
+
+  useEffect(() => {
+    if (typeof matchMedia !== "function") return undefined;
+    const mediaQuery = matchMedia(query);
+    const onChange = (event) => setPreferred(event.matches);
+    mediaQuery.addEventListener("change", onChange);
+    return () => mediaQuery.removeEventListener("change", onChange);
+  }, []);
+
+  return preferred;
 }
 
 function MachineTrendChart({ values = [] }) {

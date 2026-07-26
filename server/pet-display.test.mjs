@@ -4,10 +4,13 @@ import {
   PET_ANIMATIONS,
   petAnimationForState,
   petFrameAtElapsed,
+  petFramePosition,
+  petPlaybackForState,
   petSpriteKey,
   petSpriteGrid,
   resolvePetSpriteUrl,
   selectDisplayMachine,
+  shouldReducePetMotion,
 } from "../src/pet-display.mjs";
 
 test("fixed pet display keeps the explicitly selected machine", () => {
@@ -109,6 +112,59 @@ test("uses the Codex frame timing contract for every projected pet state", () =>
     duration: 1030,
   });
   assert.equal(petAnimationForState("unknown"), PET_ANIMATIONS.idle);
+});
+
+test("matches the Codex action-to-idle playback sequence", () => {
+  const idle = petPlaybackForState("idle");
+  assert.equal(idle.frames.length, 6);
+  assert.equal(idle.loopStartIndex, 0);
+  assert.deepEqual(idle.frames[0], {
+    rowIndex: 0,
+    columnIndex: 0,
+    frameDurationMs: 1680,
+  });
+  assert.deepEqual(idle.frames[5], {
+    rowIndex: 0,
+    columnIndex: 5,
+    frameDurationMs: 1920,
+  });
+
+  const running = petPlaybackForState("running");
+  assert.equal(running.frames.length, 24);
+  assert.equal(running.loopStartIndex, 18);
+  assert.deepEqual(running.frames[0], {
+    rowIndex: 7,
+    columnIndex: 0,
+    frameDurationMs: 120,
+  });
+  assert.deepEqual(running.frames[17], {
+    rowIndex: 7,
+    columnIndex: 5,
+    frameDurationMs: 220,
+  });
+  assert.deepEqual(running.frames[18], idle.frames[0]);
+
+  const reduced = petPlaybackForState("running", true);
+  assert.equal(reduced.frames.length, 1);
+  assert.equal(reduced.loopStartIndex, null);
+  assert.deepEqual(reduced.frames[0], running.frames[0]);
+});
+
+test("uses Codex background-position math for sprite frames", () => {
+  assert.equal(
+    petFramePosition({ rowIndex: 7, columnIndex: 5 }, { spriteVersionNumber: 2 }),
+    "71.42857142857143% 70%",
+  );
+  assert.equal(
+    petFramePosition({ rowIndex: 8, columnIndex: 7 }, { spriteVersionNumber: 1 }),
+    "100% 100%",
+  );
+});
+
+test("dedicated kiosk keeps the pet moving when Android animations are disabled", () => {
+  assert.equal(shouldReducePetMotion("Chrome", true), true);
+  assert.equal(shouldReducePetMotion("Chrome AmbientOpsKiosk/1.1", true), false);
+  assert.equal(shouldReducePetMotion("Chrome", false), false);
 });
 
 test("locates frames from absolute elapsed time and catches up after throttling", () => {
