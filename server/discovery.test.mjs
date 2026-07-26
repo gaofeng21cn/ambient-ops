@@ -48,7 +48,7 @@ test("publishes the shared Ambient Ops discovery contract", async () => {
   };
   const publisher = createDiscoveryPublisher({
     instanceId: "home-ops",
-    name: "Gaofeng Home",
+    name: "Example Home",
     host: "ambient-nas",
     port: 8791,
     version: "0.1.3",
@@ -57,14 +57,14 @@ test("publishes the shared Ambient Ops discovery contract", async () => {
 
   publisher.start();
   assert.deepEqual(published, {
-    name: "Gaofeng Home",
+    name: "Example Home",
     host: "ambient-nas.local",
     type: "ambient-ops",
     protocol: "tcp",
     port: 8791,
     txt: {
       id: "home-ops",
-      name: "Gaofeng Home",
+      name: "Example Home",
       path: "/display/overview",
       api: "/api/status",
       protocol: "1",
