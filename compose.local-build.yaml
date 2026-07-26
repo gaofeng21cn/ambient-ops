@@ -1,0 +1,4 @@
+services:
+  ambient-ops:
+    build: .
+    image: ${AMBIENT_OPS_LOCAL_IMAGE:-ambient-ops:local}

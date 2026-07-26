@@ -18,9 +18,9 @@ an existing Mac-to-NAS cutover. This page describes the target installation.
 - A Compose implementation that accepts the `!reset` tag used by the
   host-network override
 
-The Dockerfile uses the multi-platform official `node:22-alpine` base. Building
-on the NAS selects the native architecture. Registry releases for both Intel
-and ARM Synology models must use a multi-platform manifest.
+Tagged releases publish one GHCR manifest containing both `linux/amd64` and
+`linux/arm64` images. Intel and ARM Synology models pull the native image; the
+NAS does not build Node or frontend assets locally.
 
 Check the exact Compose merge before copying any secrets:
 
@@ -50,6 +50,19 @@ chmod 700 secrets
 umask 077
 openssl rand -hex 32 > secrets/agent_push_token
 ```
+
+Set `AMBIENT_OPS_IMAGE` in `.env` to the reviewed release, for example
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.0`. This repository and package are
+private, so authenticate once with a GitHub token limited to `read:packages`,
+then pull the image:
+
+```bash
+printf '%s' "$GHCR_READ_TOKEN" | \
+  docker login ghcr.io -u gaofeng21cn --password-stdin
+docker compose -p ambient-ops -f compose.yaml pull
+```
+
+Do not store the GitHub token in `.env`, Compose, or the repository.
 
 For a fresh installation, generate a new token as above. For a migration, copy
 the existing token instead; changing it makes every Codex TPS agent fail with
@@ -111,7 +124,8 @@ build and check the candidate without competing with a running production
 instance:
 
 ```bash
-docker compose -p ambient-ops -f compose.yaml up --build -d
+docker compose -p ambient-ops -f compose.yaml pull
+docker compose -p ambient-ops -f compose.yaml up -d
 docker compose -p ambient-ops -f compose.yaml ps
 curl -fsS http://127.0.0.1:8787/healthz
 curl -fsS http://127.0.0.1:8787/api/status
@@ -133,7 +147,11 @@ docker compose -p ambient-ops -f compose.yaml down
 docker compose -p ambient-ops \
   -f compose.yaml \
   -f compose.host-network.yaml \
-  up --build -d
+  pull
+docker compose -p ambient-ops \
+  -f compose.yaml \
+  -f compose.host-network.yaml \
+  up -d
 ```
 
 The named `ambient_ops_data` volume is preserved by `down`; never add `-v`
@@ -190,11 +208,15 @@ Pin and record source commits. Qualify the new commit with
 docker compose -p ambient-ops \
   -f compose.yaml \
   -f compose.host-network.yaml \
-  up --build -d
+  pull
+docker compose -p ambient-ops \
+  -f compose.yaml \
+  -f compose.host-network.yaml \
+  up -d
 ```
 
-Repeat live network/Codex, mDNS, HTC, and reboot readbacks. To roll back, switch
-the checkout to the recorded prior commit and run the same command. Keep
+Repeat live network/Codex, mDNS, HTC, and reboot readbacks. To roll back, set
+`AMBIENT_OPS_IMAGE` to the recorded prior release and run the same commands. Keep
 `.env`, `secrets`, `INSTANCE_ID`, and the named volume unchanged. Never use
 `down -v` during an upgrade or rollback.
 

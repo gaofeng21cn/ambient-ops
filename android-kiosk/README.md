@@ -56,6 +56,23 @@ The repository helper reads those local values without printing them:
 Back up the keystore and its password together in the owner's encrypted secret
 store. Losing either one makes future in-place Android updates impossible.
 
+## Install a published release
+
+Each tagged GitHub Release contains a CI-built APK signed by the same stable
+owner key used by the macOS helper, plus a sibling SHA-256 file. Download both
+files from the release, then verify and install:
+
+```bash
+shasum -a 256 -c Ambient-Ops-Kiosk-1.1.0.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.1.0.apk
+```
+
+The repository is private, so the GitHub download requires an authenticated
+owner account. A future release remains upgrade-compatible only when it keeps
+the application ID and signing key and increments `versionCode`. GitHub Actions
+stores the key and passwords as encrypted repository secrets; the recovery copy
+remains in the owner's encrypted local secret store.
+
 ## Install and update
 
 USB is needed only for installation and diagnostics, not for normal operation:

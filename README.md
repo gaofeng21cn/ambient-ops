@@ -74,7 +74,10 @@ cp .env.example .env
 mkdir -p secrets
 umask 077
 openssl rand -hex 32 > secrets/agent_push_token
-docker compose up --build -d
+docker compose \
+  -f compose.yaml \
+  -f compose.local-build.yaml \
+  up --build -d
 curl -fsS http://127.0.0.1:8787/healthz
 ```
 
@@ -99,7 +102,7 @@ Install or provide:
 - UDP/5353 multicast on the display/client LAN for mDNS
 - UDP/161 from the Ambient Ops host to the router
 
-Clone and pin the source:
+Clone and pin the release metadata and Compose files:
 
 ```bash
 git clone https://github.com/gaofeng21cn/ambient-ops.git
@@ -108,6 +111,24 @@ git fetch --tags origin
 git switch --detach <reviewed-tag-or-commit>
 git rev-parse HEAD
 ```
+
+Published tags provide one immutable multi-platform image for `linux/amd64`
+and `linux/arm64`. The default Compose image is pinned to
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.0`; set `AMBIENT_OPS_IMAGE` in `.env` to
+the reviewed release tag. Because this repository and its GHCR package are
+private, authenticate the Docker host once with a GitHub token that has only
+`read:packages` access:
+
+```bash
+printf '%s' "$GHCR_READ_TOKEN" | \
+  docker login ghcr.io -u gaofeng21cn --password-stdin
+docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.0
+```
+
+Do not place the token in `.env`, Compose, shell history, or the repository.
+The NAS pulls the published image and does not compile Node or frontend assets.
+For local source development only, add `-f compose.local-build.yaml` and use
+`--build` explicitly.
 
 Synology must use a Container Manager/Compose version that accepts the
 `!reset` tag in `compose.host-network.yaml`. From the pinned checkout, treat
@@ -238,7 +259,8 @@ The base Compose file publishes TCP/8787 but keeps discovery off:
 
 ```bash
 docker compose -p ambient-ops -f compose.yaml config --quiet
-docker compose -p ambient-ops -f compose.yaml up --build -d
+docker compose -p ambient-ops -f compose.yaml pull
+docker compose -p ambient-ops -f compose.yaml up -d
 docker compose -p ambient-ops -f compose.yaml ps
 ```
 
@@ -269,7 +291,11 @@ docker compose -p ambient-ops -f compose.yaml down
 docker compose -p ambient-ops \
   -f compose.yaml \
   -f compose.host-network.yaml \
-  up --build -d
+  pull
+docker compose -p ambient-ops \
+  -f compose.yaml \
+  -f compose.host-network.yaml \
+  up -d
 ```
 
 Do not add `-v` to `down`; the named `ambient_ops_data` volume contains the
@@ -420,6 +446,13 @@ removes its remembered instance, and a different signing key cannot update the
 existing app. The one-time debug-to-production transition and signing setup are
 documented in [`android-kiosk/README.md`](android-kiosk/README.md).
 
+Every tagged GitHub Release also contains the CI-signed APK and its SHA-256
+file. Download `Ambient-Ops-Kiosk-<version>.apk`, verify the sibling checksum,
+and install it with `adb install -r`. The CI release uses the same owner-held
+signing key as the local Keychain helper, so later releases can update in place.
+The first transition from a debug-signed APK still requires the one-time
+uninstall described above.
+
 USB and `adb reverse` are not part of normal operation. After installation the
 kiosk is the Android Home activity, discovers the server by Wi-Fi mDNS, keeps
 the screen awake, restores immersive mode, and retries after network changes.
@@ -512,30 +545,41 @@ curl -fsS http://<server-ip>:8787/api/status | jq
 Record the exact current source before changing it:
 
 ```bash
-AMBIENT_OPS_PREVIOUS_COMMIT=$(git rev-parse HEAD)
+AMBIENT_OPS_PREVIOUS_IMAGE=$(docker compose -p ambient-ops -f compose.yaml config --images)
 git fetch --tags origin
-git switch --detach <reviewed-new-tag-or-commit>
+git switch --detach <reviewed-new-tag>
+sed -i.bak 's|^AMBIENT_OPS_IMAGE=.*|AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:<new-version>|' .env
 ./ops/docker/smoke-test.sh
 docker compose -p ambient-ops \
   -f compose.yaml \
   -f compose.host-network.yaml \
-  up --build -d
+  pull
+docker compose -p ambient-ops \
+  -f compose.yaml \
+  -f compose.host-network.yaml \
+  up -d
 ```
 
-Record `AMBIENT_OPS_PREVIOUS_COMMIT` outside the shell before proceeding.
+Record `AMBIENT_OPS_PREVIOUS_IMAGE` outside the shell before proceeding. On
+Linux, replace `sed -i.bak` with the host's supported in-place edit form or edit
+the one `AMBIENT_OPS_IMAGE` line directly.
 
 Repeat the final acceptance. Keep `.env`, `secrets`, `INSTANCE_ID`, the agent
 token, and the named volume unchanged.
 
-To roll back the server code, rebuild the recorded commit against the same
+To roll back the server, restore the recorded versioned image against the same
 configuration and volume:
 
 ```bash
-git switch --detach "$AMBIENT_OPS_PREVIOUS_COMMIT"
+# Set AMBIENT_OPS_IMAGE in .env to the recorded versioned image.
 docker compose -p ambient-ops \
   -f compose.yaml \
   -f compose.host-network.yaml \
-  up --build -d
+  pull
+docker compose -p ambient-ops \
+  -f compose.yaml \
+  -f compose.host-network.yaml \
+  up -d
 ```
 
 Never use `docker compose down -v` for an upgrade or rollback. Android upgrades

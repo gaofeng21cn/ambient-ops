@@ -82,7 +82,8 @@ Keep the Mac as canonical owner. On Synology, use only the base Compose file:
 
 ```bash
 docker compose -p ambient-ops -f compose.yaml config
-docker compose -p ambient-ops -f compose.yaml up --build -d
+docker compose -p ambient-ops -f compose.yaml pull
+docker compose -p ambient-ops -f compose.yaml up -d
 docker compose -p ambient-ops -f compose.yaml ps
 ```
 
@@ -142,7 +143,11 @@ Immediately start Synology with host networking:
 docker compose -p ambient-ops \
   -f compose.yaml \
   -f compose.host-network.yaml \
-  up --build -d
+  pull
+docker compose -p ambient-ops \
+  -f compose.yaml \
+  -f compose.host-network.yaml \
+  up -d
 ```
 
 Do not restart the Mac owner while Synology is publishing. A short collection
