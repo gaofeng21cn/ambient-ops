@@ -1,7 +1,6 @@
 package cn.gaofeng.ambientops.kiosk;
 
 import android.app.Activity;
-import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -11,7 +10,6 @@ import android.net.nsd.NsdServiceInfo;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.PowerManager;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -49,7 +47,6 @@ public final class MainActivity extends Activity {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private WebView webView;
-    private PowerManager.WakeLock wakeLock;
     private NsdManager nsdManager;
     private NsdManager.DiscoveryListener discoveryListener;
     private SharedPreferences preferences;
@@ -89,17 +86,10 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-                | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
-                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-        );
+        getWindow().addFlags(DisplayPowerPolicy.windowFlags());
         WindowManager.LayoutParams layout = getWindow().getAttributes();
         layout.screenBrightness = DEFAULT_SCREEN_BRIGHTNESS;
         getWindow().setAttributes(layout);
-        wakeScreen();
         enterImmersiveMode();
 
         preferences = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -213,9 +203,6 @@ public final class MainActivity extends Activity {
         if (kioskUpdater != null) {
             kioskUpdater.close();
             kioskUpdater = null;
-        }
-        if (wakeLock != null && wakeLock.isHeld()) {
-            wakeLock.release();
         }
         if (webView != null) {
             webView.destroy();
@@ -432,21 +419,5 @@ public final class MainActivity extends Activity {
 
     private void enterImmersiveMode() {
         getWindow().getDecorView().setSystemUiVisibility(IMMERSIVE_FLAGS);
-    }
-
-    @SuppressWarnings("deprecation")
-    private void wakeScreen() {
-        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.FULL_WAKE_LOCK
-                | PowerManager.ACQUIRE_CAUSES_WAKEUP
-                | PowerManager.ON_AFTER_RELEASE,
-            "AmbientOps:KioskDisplay"
-        );
-        wakeLock.acquire();
-
-        KeyguardManager keyguardManager =
-            (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
-        keyguardManager.requestDismissKeyguard(this, null);
     }
 }
