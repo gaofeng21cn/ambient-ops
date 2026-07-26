@@ -17,7 +17,7 @@ application from source.
 - Optional for initial Android installation: a computer with `adb`
 
 The current published server image is
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.7` for both `linux/amd64` and
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.8` for both `linux/amd64` and
 `linux/arm64`. The package is public. Do not create or configure a GitHub token
 for a normal pull.
 
@@ -48,7 +48,7 @@ Open `.env` in a local text editor. For a Codex-only screen, these are the only
 values most users review:
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.7
+AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.8
 AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Etc/UTC
@@ -176,23 +176,23 @@ live state repeatedly.
 ## 6. Install the Android kiosk
 
 Download these assets from
-[Ambient Ops v0.1.7](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.7):
+[Ambient Ops v0.1.8](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.8):
 
-- `Ambient-Ops-Kiosk-1.2.1.apk`
-- `Ambient-Ops-Kiosk-1.2.1.apk.sha256`
+- `Ambient-Ops-Kiosk-1.2.3.apk`
+- `Ambient-Ops-Kiosk-1.2.3.apk.sha256`
 
 Verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.1.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.1.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.3.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.3.apk
 adb shell cmd package set-home-activity \
   cn.gaofeng.ambientops.kiosk/.MainActivity
 adb shell am start -n cn.gaofeng.ambientops.kiosk/.MainActivity
 ```
 
 The production APK is owner-signed. Do not uninstall it during an update:
-uninstalling clears the remembered server identity. Version `1.2.1` checks the
+uninstalling clears the remembered server identity. Version `1.2.1` and later check the
 selected Ambient Ops server ten seconds after a healthy page load and every six
 hours afterwards. While on external power and connected over Wi-Fi, it accepts only the
 fixed package ID, owner certificate, higher `versionCode`, and exact manifest

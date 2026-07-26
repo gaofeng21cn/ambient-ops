@@ -15,7 +15,7 @@ NAS 不在本地构建应用源码。
 - 可选：Docker 主机可通过 IPv4/UDP 161 访问经过验证的 SNMPv3 路由器
 - 首次安装 Android 时可使用一台装有 `adb` 的电脑
 
-当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.7`，同时支持
+当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.8`，同时支持
 `linux/amd64` 与 `linux/arm64`。该镜像公开可拉取；正常安装不要创建或配置
 GitHub Token。
 
@@ -45,7 +45,7 @@ git rev-parse HEAD
 确认这些值：
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.7
+AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.8
 AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Asia/Shanghai
@@ -169,24 +169,24 @@ macOS 版会把 token 存入登录 Keychain 的
 
 ## 6. 安装 Android Kiosk
 
-从 [Ambient Ops v0.1.7](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.7)
+从 [Ambient Ops v0.1.8](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.8)
 下载：
 
-- `Ambient-Ops-Kiosk-1.2.1.apk`
-- `Ambient-Ops-Kiosk-1.2.1.apk.sha256`
+- `Ambient-Ops-Kiosk-1.2.3.apk`
+- `Ambient-Ops-Kiosk-1.2.3.apk.sha256`
 
 校验并安装：
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.1.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.1.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.3.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.3.apk
 adb shell cmd package set-home-activity \
   cn.gaofeng.ambientops.kiosk/.MainActivity
 adb shell am start -n cn.gaofeng.ambientops.kiosk/.MainActivity
 ```
 
 生产 APK 使用项目固定证书签名。不要在升级时先卸载，否则会清除已记住的服务
-身份。`1.2.1` 会在页面健康 10 秒后检查当前 Ambient Ops，之后每 6 小时检查一次；
+身份。`1.2.1` 及后续版本会在页面健康 10 秒后检查当前 Ambient Ops，之后每 6 小时检查一次；
 只在接入外部电源且 Wi-Fi 在线时工作，并只接受固定包名、项目证书、递增
 `versionCode` 和 manifest SHA-256 完全匹配的 APK。每个版本化服务端镜像都
 内置其 GitHub Release 中完全相同的签名 APK。

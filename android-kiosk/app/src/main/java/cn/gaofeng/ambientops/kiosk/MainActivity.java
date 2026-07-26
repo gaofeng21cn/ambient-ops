@@ -38,6 +38,7 @@ public final class MainActivity extends Activity {
     private static final long RESOLVE_TIMEOUT_MS = 5_000L;
     private static final long UPDATE_INITIAL_DELAY_MS = 10_000L;
     private static final long UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1_000L;
+    private static final float DEFAULT_SCREEN_BRIGHTNESS = 0.5f;
     private static final int IMMERSIVE_FLAGS =
         View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             | View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -95,6 +96,9 @@ public final class MainActivity extends Activity {
                 | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                 | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         );
+        WindowManager.LayoutParams layout = getWindow().getAttributes();
+        layout.screenBrightness = DEFAULT_SCREEN_BRIGHTNESS;
+        getWindow().setAttributes(layout);
         wakeScreen();
         enterImmersiveMode();
 
