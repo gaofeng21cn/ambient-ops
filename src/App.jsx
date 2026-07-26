@@ -491,13 +491,6 @@ function PetView({ machines, selected, followMode, onFollowMode, onSelect }) {
   return (
     <section className={`pet-view ${pet ? "" : "pet-unconfigured"}`}>
       <div className="pet-stage">
-        <PetMachineControl
-          machines={machines}
-          selected={selected}
-          followMode={followMode}
-          onFollowMode={onFollowMode}
-          onSelect={onSelect}
-        />
         {pet && spriteUrl ? (
           <>
             <PetSprite
@@ -548,7 +541,14 @@ function PetView({ machines, selected, followMode, onFollowMode, onSelect }) {
           />
           <PetTokenStat label="SESSIONS" value={selected.activeSessions} />
         </div>
-        <div className="pet-host-status">
+        <div className={`pet-host-status ${machines.length > 1 ? "has-machine-picker" : ""}`}>
+          <PetMachineControl
+            machines={machines}
+            selected={selected}
+            followMode={followMode}
+            onFollowMode={onFollowMode}
+            onSelect={onSelect}
+          />
           <StatusLabel status={selected.status} age={selected.ageSeconds} />
           <span>{selected.platform} · {formatAge(selected.generatedAt)}</span>
         </div>
