@@ -5,6 +5,9 @@ LAN discovery, and the web app; display clients only discover and open it.
 
 Use [`production-migration-checklist.md`](production-migration-checklist.md) for
 an existing Mac-to-NAS cutover. This page describes the target installation.
+For the shorter ordinary-user path, start with the
+[installation guide](installation.md) or its
+[Chinese edition](installation.zh-CN.md).
 
 ## Requirements
 
@@ -44,12 +47,15 @@ Clone or copy a reviewed source commit into the persistent project directory:
 
 ```bash
 cd /volume1/docker/ambient-ops
-cp .env.example .env
-mkdir -p secrets
-chmod 700 secrets
-umask 077
-openssl rand -hex 32 > secrets/agent_push_token
+./scripts/ambient-ops.sh init
 ```
+
+The helper refuses to overwrite an existing installation, generates a stable
+`INSTANCE_ID` and agent token without printing them, and creates the optional
+secret files. Edit only `.env`; enter SNMPv3 passwords with the documented
+interactive `set-secret` commands. A manual `cp .env.example .env` path remains
+valid for operators who deliberately manage identity and secret generation
+themselves.
 
 Set `AMBIENT_OPS_IMAGE` in `.env` to the reviewed release, for example
 `ghcr.io/gaofeng21cn/ambient-ops:0.1.2`. The GitHub Container Registry package
@@ -191,10 +197,11 @@ After the acceptance checks pass, reboot the NAS once and repeat the health,
 API, discovery, HTC, and Codex TPS readbacks. `restart: unless-stopped` is not
 proof until the service has returned after a real daemon/host restart.
 
-Codex TPS needs the exact `secrets/agent_push_token` value in the Mac Keychain
-service `cn.gaofeng.ambient-ops.agent-push`. Enable aggregate sending and
-auto-discovery in the app. The Android kiosk must load through Wi-Fi discovery
-with `adb reverse --list` empty. The root [`README`](../README.md) contains the
+Codex TPS needs the exact `secrets/agent_push_token` value in each host's
+credential store: Keychain service `cn.gaofeng.ambient-ops.agent-push` on macOS
+or DPAPI-backed settings on Windows. Enable aggregate sending and auto-discovery
+in the app. The Android kiosk must load through Wi-Fi discovery with
+`adb reverse --list` empty. The root [`README`](../README.md) contains the
 complete agent and APK installation commands.
 
 ## Upgrade and rollback
@@ -228,6 +235,13 @@ docker compose -p ambient-ops \
 curl -fsS http://127.0.0.1:8787/healthz
 curl -fsS http://127.0.0.1:8787/api/status
 ```
+
+If DSM reports **Unable to build project ambient-ops**, treat that as a project
+definition error. Production uses the public versioned image and must not
+build. Confirm that the project uses `compose.yaml` plus
+`compose.host-network.yaml`, does not include `compose.local-build.yaml`, and
+renders no `build:` key. A GHCR login or DSM scheduled task is not a fix: the
+package is public and `restart: unless-stopped` owns normal container startup.
 
 ## URLs
 
