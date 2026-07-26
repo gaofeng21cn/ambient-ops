@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -15,6 +15,10 @@ import {
 } from "./pet-assets.mjs";
 
 const fixturePath = new URL("../public/pets/ledger-owl/spritesheet.webp", import.meta.url);
+const v2Fixture = Buffer.from(
+  "UklGRrQAAABXRUJQVlA4TKgAAAAv/8U7EgcQEREQkCT93x8Y0f+M//znP//5z3/+85///Oc///nPf/7zn//85z//+c9//vOf//znP//5z3/+85///Oc///nPf/7zn//85z//+c9//vOf//znP//5z3/+85///Oc///nPf/7zn//85z//+c9//vOf//znP//5z3/+85///Oc///nPf/7zn//85z//+c9//vOf//znP//5z3/+85///Of/aQA=",
+  "base64",
+);
 
 test("stores a validated pet asset atomically and deduplicates by content hash", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "ambient-ops-pets-"));
@@ -36,20 +40,58 @@ test("stores a validated pet asset atomically and deduplicates by content hash",
   }
 });
 
-test("loads valid persisted assets and ignores corrupt content-addressed files", async () => {
+test("removes invalid persisted candidates so a valid upload can recover the hash", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "ambient-ops-pets-"));
   try {
     const body = await readFile(fixturePath);
     const hash = sha256(body);
-    const first = new PetAssetStore(dataDir);
-    await first.load();
-    await first.put(hash, body);
+    const mismatchHash = "a".repeat(64);
+    const petsDir = join(dataDir, "pets");
+    const corruptPath = join(petsDir, `${hash}.webp`);
+    const mismatchPath = join(petsDir, `${mismatchHash}.webp`);
+    const unrelatedPath = join(petsDir, "operator-note.txt");
+    await mkdir(petsDir);
+    await writeFile(corruptPath, "not webp");
+    await writeFile(mismatchPath, body);
+    await writeFile(unrelatedPath, "keep");
 
     const reloaded = new PetAssetStore(dataDir);
     await reloaded.load();
 
+    assert.equal(reloaded.has(hash), false);
+    assert.equal(reloaded.has(mismatchHash), false);
+    await assert.rejects(access(corruptPath), { code: "ENOENT" });
+    await assert.rejects(access(mismatchPath), { code: "ENOENT" });
+    assert.equal(await readFile(unrelatedPath, "utf8"), "keep");
+
+    const recovered = await reloaded.put(hash, body);
+    assert.equal(recovered.created, true);
     assert.equal(reloaded.has(hash), true);
-    assert.equal(reloaded.has("a".repeat(64)), false);
+    assert.deepEqual(await reloaded.read(hash), body);
+    assert.equal((await stat(corruptPath)).mode & 0o777, 0o600);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("accepts a real 8x11 WebP fixture only for a v2 pet manifest", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ambient-ops-pets-"));
+  try {
+    const hash = sha256(v2Fixture);
+    const assets = new PetAssetStore(dataDir);
+    await assets.load();
+
+    const stored = await assets.put(hash, v2Fixture, { spriteVersionNumber: 2 });
+
+    assert.equal(stored.created, true);
+    assert.deepEqual(
+      { width: stored.width, height: stored.height },
+      { width: 1536, height: 2288 },
+    );
+    await assert.rejects(
+      assets.put(hash, v2Fixture, { spriteVersionNumber: 1 }),
+      (error) => error.statusCode === 422 && /version 1 requires 1536x1872/.test(error.message),
+    );
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }
@@ -74,7 +116,7 @@ test("rejects hash mismatches, malformed WebP, and oversized assets", async () =
     wrongDimensions.writeUInt32LE(0, 21);
     await assert.rejects(
       assets.put(sha256(wrongDimensions), wrongDimensions),
-      (error) => error.statusCode === 422 && /1536x1872/.test(error.message),
+      (error) => error.statusCode === 422 && /1536x1872.*1536x2288/.test(error.message),
     );
     const oversized = Buffer.alloc(body.length + 1);
     await assert.rejects(

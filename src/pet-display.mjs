@@ -34,3 +34,11 @@ export function resolvePetSpriteUrl(pet) {
 export function petSpriteKey(machine, pet) {
   return `${machine.machineId}:${pet.assetHash || "legacy"}:${pet.spriteVersionNumber || 1}`;
 }
+
+export function petSpriteGrid(pet) {
+  const rows = pet?.spriteVersionNumber === 2 ? 11 : 9;
+  return {
+    backgroundSize: `800% ${rows * 100}%`,
+    rowPosition: (row) => `${row * 100 / (rows - 1)}%`,
+  };
+}

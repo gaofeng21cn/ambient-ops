@@ -23,7 +23,12 @@ import {
   smoothTrafficValues,
   trafficScale,
 } from "./traffic-chart.mjs";
-import { petSpriteKey, resolvePetSpriteUrl, selectDisplayMachine } from "./pet-display.mjs";
+import {
+  petSpriteGrid,
+  petSpriteKey,
+  resolvePetSpriteUrl,
+  selectDisplayMachine,
+} from "./pet-display.mjs";
 
 const VIEWS = ["overview", "network", "machines", "pet"];
 const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", pet: "Pet" };
@@ -504,6 +509,7 @@ function PetMachineControl({ machines, selected, followMode, onFollowMode, onSel
 
 function PetSprite({ pet, machineName, spriteUrl }) {
   const animation = PET_ANIMATIONS[pet.state] || PET_ANIMATIONS.idle;
+  const spriteGrid = petSpriteGrid(pet);
   const reduceMotion = useMemo(
     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
     [],
@@ -524,7 +530,8 @@ function PetSprite({ pet, machineName, spriteUrl }) {
       aria-label={`${pet.displayName} on ${machineName}, ${PET_STATE_LABELS[pet.state] || pet.state}`}
       style={{
         backgroundImage: `url(${spriteUrl})`,
-        backgroundPosition: `${frame * 100 / 7}% ${animation.row * 100 / 8}%`,
+        backgroundPosition: `${frame * 100 / 7}% ${spriteGrid.rowPosition(animation.row)}`,
+        backgroundSize: spriteGrid.backgroundSize,
       }}
     />
   );

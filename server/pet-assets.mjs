@@ -1,10 +1,11 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { link, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, readdir, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export const PET_ASSET_MAX_BYTES = 8 * 1024 * 1024;
 export const PET_SPRITESHEET_WIDTH = 1536;
-export const PET_SPRITESHEET_HEIGHT = 1872;
+export const PET_V1_SPRITESHEET_HEIGHT = 1872;
+export const PET_V2_SPRITESHEET_HEIGHT = 2288;
 export const LEGACY_PET_ID = "ledger-owl";
 export const LEGACY_PET_HASH = "783854af87d6ee8639843ca7812917e062345b0095d43f9be5ea2374a41ada6c";
 export const LEGACY_PET_URL = "/pets/ledger-owl/spritesheet.webp";
@@ -26,8 +27,15 @@ export class PetAssetStore {
       if (!match) continue;
       try {
         await this.read(match[1]);
-      } catch {
+      } catch (error) {
         this.assets.delete(match[1]);
+        if ([404, 413, 422].includes(error.statusCode)) {
+          try {
+            await unlink(join(this.directory, entry.name));
+          } catch (unlinkError) {
+            if (unlinkError.code !== "ENOENT") throw unlinkError;
+          }
+        }
       }
     }
   }
@@ -36,9 +44,12 @@ export class PetAssetStore {
     return HASH_PATTERN.test(hash || "") && this.assets.has(hash);
   }
 
-  async put(expectedHash, body) {
+  async put(expectedHash, body, { spriteVersionNumber } = {}) {
     assertHash(expectedHash);
     const metadata = inspectPetWebp(body, this.maxBytes);
+    if (spriteVersionNumber != null) {
+      assertVersionDimensions(spriteVersionNumber, metadata);
+    }
     const actualHash = sha256(body);
     if (actualHash !== expectedHash) {
       throw httpError(422, "Pet asset SHA-256 does not match the URL");
@@ -174,14 +185,28 @@ export function inspectPetWebp(body, maxBytes = PET_ASSET_MAX_BYTES) {
   if (offset !== body.length || !dimensions) throw httpError(422, "WebP image data is missing");
   if (
     dimensions.width !== PET_SPRITESHEET_WIDTH
-    || dimensions.height !== PET_SPRITESHEET_HEIGHT
+    || ![PET_V1_SPRITESHEET_HEIGHT, PET_V2_SPRITESHEET_HEIGHT].includes(dimensions.height)
   ) {
     throw httpError(
       422,
-      `Pet spritesheet must be ${PET_SPRITESHEET_WIDTH}x${PET_SPRITESHEET_HEIGHT} pixels`,
+      `Pet spritesheet must be ${PET_SPRITESHEET_WIDTH}x${PET_V1_SPRITESHEET_HEIGHT} (v1) or ${PET_SPRITESHEET_WIDTH}x${PET_V2_SPRITESHEET_HEIGHT} (v2) pixels`,
     );
   }
   return dimensions;
+}
+
+function assertVersionDimensions(spriteVersionNumber, dimensions) {
+  const version = Number(spriteVersionNumber);
+  const expectedHeight = version === 1
+    ? PET_V1_SPRITESHEET_HEIGHT
+    : version === 2 ? PET_V2_SPRITESHEET_HEIGHT : null;
+  if (!expectedHeight) throw httpError(422, "Unsupported pet sprite version");
+  if (dimensions.height !== expectedHeight) {
+    throw httpError(
+      422,
+      `Pet sprite version ${version} requires ${PET_SPRITESHEET_WIDTH}x${expectedHeight} pixels`,
+    );
+  }
 }
 
 function dimensionsForChunk(type, body, offset, size) {

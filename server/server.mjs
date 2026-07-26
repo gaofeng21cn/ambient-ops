@@ -236,7 +236,9 @@ const server = createServer(async (request, response) => {
         contentEncoding: request.headers["content-encoding"],
       });
       const body = await readPetAssetBody(request);
-      const stored = await petAssets.put(hash, body);
+      const stored = await petAssets.put(hash, body, {
+        spriteVersionNumber: store.machines.get(machineId).pet.spriteVersionNumber,
+      });
       const location = `/api/v1/pets/${hash}.webp`;
       if (!stored.created) {
         response.writeHead(204, { ...responseHeaders("image/webp"), location, etag: `"${hash}"` });

@@ -97,7 +97,8 @@ Content-Type: image/webp
 The server accepts the upload only when the current normalized snapshot for
 `machineId` declares the same hash. It rejects compressed transfer content,
 non-WebP media types, malformed RIFF/WebP containers, a mismatched SHA-256,
-files larger than 8 MiB, and spritesheets not sized 1536 by 1872 pixels.
+files larger than 8 MiB, and spritesheets whose dimensions do not match the
+manifest version: v1 is 1536 by 1872 pixels and v2 is 1536 by 2288 pixels.
 
 - `201 Created`: new bytes were atomically persisted. The JSON body contains
   `stored`, `assetHash`, and the content-addressed `assetUrl`.

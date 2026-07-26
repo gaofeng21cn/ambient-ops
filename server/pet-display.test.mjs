@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   petSpriteKey,
+  petSpriteGrid,
   resolvePetSpriteUrl,
   selectDisplayMachine,
 } from "../src/pet-display.mjs";
@@ -56,6 +57,16 @@ test("keeps the bundled Ledger Owl URL for old machine state", () => {
     resolvePetSpriteUrl({ id: "ledger-owl", assetHash: null, spriteVersionNumber: 1 }),
     "/pets/ledger-owl/spritesheet.webp",
   );
+});
+
+test("maps standard animation rows correctly in v1 and v2 atlases", () => {
+  const v1 = petSpriteGrid({ spriteVersionNumber: 1 });
+  const v2 = petSpriteGrid({ spriteVersionNumber: 2 });
+
+  assert.equal(v1.backgroundSize, "800% 900%");
+  assert.equal(v1.rowPosition(8), "100%");
+  assert.equal(v2.backgroundSize, "800% 1100%");
+  assert.equal(v2.rowPosition(8), "80%");
 });
 
 function machine(machineId, machineName, status, generatedAt) {
