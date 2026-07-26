@@ -1,6 +1,6 @@
 services:
   ambient-ops:
-    image: ${AMBIENT_OPS_IMAGE:-ghcr.io/gaofeng21cn/ambient-ops:0.1.3}
+    image: ${AMBIENT_OPS_IMAGE:-ghcr.io/gaofeng21cn/ambient-ops:0.1.4}
     restart: unless-stopped
     init: true
     read_only: true
@@ -19,6 +19,7 @@ services:
       DISCOVERY_ENABLED: ${DISCOVERY_ENABLED:-false}
       INSTANCE_ID: ${INSTANCE_ID:-}
       AGENT_PUSH_TOKEN_FILE: /run/secrets/agent_push_token
+      DEVICE_PAIRING_ENABLED: ${DEVICE_PAIRING_ENABLED:-true}
       UNIFI_BASE_URL: ${UNIFI_BASE_URL:-}
       UNIFI_SITE: ${UNIFI_SITE:-default}
       UNIFI_API_KEY_FILE: /run/secrets/unifi_api_key

@@ -34,7 +34,8 @@ export function createDiscoveryPublisher({
   port,
   displayPath = "/display/overview",
   apiPath = "/api/status",
-  version = "0.1.3",
+  pairingEnabled = true,
+  version = "0.1.4",
   bonjour = new Bonjour(),
 }) {
   let service = null;
@@ -54,6 +55,7 @@ export function createDiscoveryPublisher({
           path: normalizePath(displayPath, "/display/overview"),
           api: normalizePath(apiPath, "/api/status"),
           protocol: DISCOVERY_PROTOCOL_VERSION,
+          pairing: pairingEnabled ? "1" : "0",
           version: String(version).slice(0, 32),
         },
       });

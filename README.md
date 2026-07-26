@@ -17,15 +17,16 @@ Docker. It is not zero-configuration, but normal installation is intentionally
 limited to one `.env` file plus private files under `secrets/`. Router metrics
 are optional; Codex and pet status can run in `codex-only` mode.
 
-Published release `v0.1.3` includes:
+Published release `v0.1.4` includes:
 
 - public `linux/amd64` and `linux/arm64` image
-  `ghcr.io/gaofeng21cn/ambient-ops:0.1.3`
+  `ghcr.io/gaofeng21cn/ambient-ops:0.1.4`
+- one-click Windows device pairing without copying the shared agent token
 - owner-signed `Ambient-Ops-Kiosk-1.1.1.apk` with a sibling SHA-256 file
 - no GitHub token and no NAS-local source build for a normal deployment
 
 Kiosk updates currently use the explicit Release download, checksum, and
-`adb install -r` path. An in-app updater is not part of `v0.1.3`.
+`adb install -r` path. An in-app updater is not part of `v0.1.4`.
 
 ## Production quick start
 
@@ -160,12 +161,12 @@ git rev-parse HEAD
 
 Published tags provide one immutable multi-platform image for `linux/amd64`
 and `linux/arm64`. The default Compose image is pinned to
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.3`; set `AMBIENT_OPS_IMAGE` in `.env` to
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.4`; set `AMBIENT_OPS_IMAGE` in `.env` to
 the reviewed release tag. The GHCR package is public, so a Docker host pulls it
 anonymously:
 
 ```bash
-docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.3
+docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.4
 ```
 
 Do not add GitHub credentials to `.env`, Compose, or the repository for normal
@@ -303,9 +304,11 @@ HA_TIMEOUT_MS=5000
 Never regenerate it during an upgrade or host migration. Back up `.env`, the
 `secrets` directory, and the Android signing key outside the repository.
 
-The agent token in `secrets/agent_push_token` must be the exact value stored by
-every Codex TPS host in macOS Keychain or Windows DPAPI. Rotating it is allowed
-only when every agent is updated deliberately.
+The agent token in `secrets/agent_push_token` must be the exact value stored in
+every Codex TPS Mac Keychain and legacy agent. Windows Codex TPS `v0.2.9+`
+instead uses a per-device signing key after one visible pairing approval.
+Rotating the shared token is allowed only when every remaining bearer agent is
+updated deliberately.
 
 ### 4. Stage without announcing the service
 
@@ -359,7 +362,8 @@ TCP/8787 and LAN mDNS multicast in DSM/firewall policy. See
 
 ### 6. Connect each Codex TPS host
 
-Use Codex TPS `v0.2.5` or newer. Version `v0.2.5` is the first public release
+Use Codex TPS `v0.2.9` or newer for automatic Windows device pairing. Version
+`v0.2.5` is the first public release
 that includes the macOS Ambient Ops settings, automatic
 `_ambient-ops._tcp.local` discovery, host pet reporting, and the standard
 Windows installer. Older releases do not satisfy this guide. Download only
@@ -419,10 +423,16 @@ registers a standard uninstaller. In **Settings**:
 1. Leave the Codex home empty for `%USERPROFILE%\.codex`, or select an explicit
    native/WSL UNC Codex home.
 2. Enable **Ambient Ops** and **Auto-discover**.
-3. Paste the exact `agent_push_token` value used by this Ambient Ops server.
+3. Codex TPS opens the one-time Ambient Ops approval page automatically. Confirm
+   the six-digit code matches and select **Allow device**. Do not copy the NAS
+   shared token into Windows.
 4. Optionally enable the pet and **Start with Windows**.
 5. Accept local-network firewall access for private networks and require the
    Ambient Ops state to become connected.
+
+Windows stores its P-256 private device key only as current-user DPAPI ciphertext.
+Ambient Ops stores the public key in `/data/device-pairings.json`. The
+**Compatible token** field remains only for older Ambient Ops releases.
 
 The Windows installer is not yet Authenticode-signed and can show an
 unknown-publisher warning. The published checksum proves byte integrity but

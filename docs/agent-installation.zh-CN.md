@@ -41,7 +41,8 @@ AMBIENT_OPS_NETWORK_MODE=<profile>。
 
 不要让我把 token 或密码粘贴到对话；不要打印或读取 secret 文件内容；不要把
 凭据写进 .env、Compose、命令、日志或仓库。只有需要我在可信终端执行文档中的
-交互式 set-secret 命令，或把既有 agent token 直接粘贴到 Codex TPS 时才暂停。
+交互式 set-secret 命令时才暂停。Windows Codex TPS v0.2.9+ 使用自动设备配对页；
+只有 macOS 和旧版客户端仍需由我在本机直接输入既有 agent token。
 
 已有安装必须保留 .env、INSTANCE_ID、secrets 目录和 ambient_ops_data 数据卷；
 绝不能执行 docker compose down -v。修改运行中的实例前，记录当前镜像、提交、
@@ -126,8 +127,10 @@ Agent 可以查看 `./scripts/ambient-ops.sh logs`。遇到失败应修复第一
 
 ### 5. 连接 Codex TPS 与 Kiosk
 
-用户在每台电脑本地把完全相同的 agent token 写入 Codex TPS。Agent 可以配置
-非敏感开关并检查设备状态，但不能通过对话中转 token。
+Windows Codex TPS v0.2.9+ 会自动发现 Ambient Ops、打开一次批准页，并使用
+Windows DPAPI 保存设备私钥。用户核对六位配对码后批准设备，不再复制共享 token。
+macOS 与旧版客户端仍由用户在本机写入完全相同的 agent token。Agent 可以配置
+非敏感开关并检查设备状态，但不能读取或通过对话中转 token。
 
 Android APK 只能来自正式 Release，并同时校验同名 checksum。执行
 `adb install -r` 前比较已安装与候选 APK 的签名证书。已有生产签名 Kiosk 的

@@ -11,6 +11,20 @@ Authorization: Bearer <AGENT_PUSH_TOKEN>
 Content-Type: application/json
 ```
 
+Windows Codex TPS `v0.2.9+` normally uses an approved P-256 device key instead:
+
+```http
+POST /api/v1/agents/{machineId}/snapshot
+Authorization: AmbientKey {machineId}
+X-Ambient-Timestamp: <unix-seconds>
+X-Ambient-Nonce: <random-base64url>
+X-Ambient-Signature: <ECDSA-P256-DER-base64>
+Content-Type: application/json
+```
+
+The signature covers the method, path, timestamp, nonce, and SHA-256 of the
+exact JSON bytes. The server rejects stale timestamps and repeated nonces.
+
 ```json
 {
   "schemaVersion": 1,
@@ -94,6 +108,10 @@ Content-Type: image/webp
 <raw spritesheet.webp bytes>
 ```
 
+Paired Windows agents use the same `AmbientKey`, timestamp, nonce, and
+signature headers as snapshot requests. The signature covers the `PUT` method,
+the full request path, and the SHA-256 of the exact WebP bytes.
+
 The server accepts the upload only when the current normalized snapshot for
 `machineId` declares the same hash. It rejects compressed transfer content,
 non-WebP media types, malformed RIFF/WebP containers, a mismatched SHA-256,
@@ -104,7 +122,8 @@ manifest version: v1 is 1536 by 1872 pixels and v2 is 1536 by 2288 pixels.
   `stored`, `assetHash`, and the content-addressed `assetUrl`.
 - `204 No Content`: the same content hash is already present. This is the normal
   idempotent retry result.
-- `401 Unauthorized`: bearer token missing or incorrect.
+- `401 Unauthorized`: bearer token or paired-device signature is missing or
+  incorrect.
 - `409 Conflict`: the machine's current pet manifest does not declare this hash,
   or persisted bytes conflict with their hash.
 - `413 Payload Too Large`: declared or streamed content exceeds 8 MiB.
@@ -123,9 +142,12 @@ The bundled Ledger Owl remains available to old snapshots that omit
 hash. No migration or upload is required for those snapshots.
 
 For Compose, the shared bearer value lives in
-`secrets/agent_push_token`. Codex TPS stores the same value in the user's
-Keychain. Keep it stable during a server migration or explicitly update every
-agent.
+`secrets/agent_push_token`. Current macOS and legacy agents store the same value
+in Keychain or their protected credential store. Windows `v0.2.9+` automatically
+requests pairing after mDNS discovery, opens `/pair/{requestId}`, and begins
+signed pushes after the user confirms the matching six-digit code. The server
+persists only the approved public key; the Windows private key never leaves the
+device.
 
 ## Freshness
 
