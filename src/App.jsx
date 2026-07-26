@@ -27,21 +27,16 @@ import {
   trafficScale,
 } from "./traffic-chart.mjs";
 import {
+  petAnimationForState,
   petSpriteGrid,
   petSpriteKey,
   resolvePetSpriteUrl,
   selectDisplayMachine,
 } from "./pet-display.mjs";
+import { fetchWithTimeout } from "./http.mjs";
 
 const VIEWS = ["overview", "network", "machines", "pet"];
 const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", pet: "Pet" };
-const PET_ANIMATIONS = {
-  idle: { row: 0, frames: 6, interval: 620 },
-  failed: { row: 5, frames: 8, interval: 480 },
-  waiting: { row: 6, frames: 6, interval: 420 },
-  running: { row: 7, frames: 6, interval: 180 },
-  review: { row: 8, frames: 6, interval: 320 },
-};
 const PET_STATE_LABELS = {
   idle: "IDLE",
   failed: "OFFLINE",
@@ -75,10 +70,7 @@ function PairingApproval({ requestId }) {
 
   useEffect(() => {
     let stopped = false;
-    fetch(`/api/v1/pairings/${requestId}`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(4000),
-    })
+    fetchWithTimeout(`/api/v1/pairings/${requestId}`, { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
@@ -184,7 +176,7 @@ function useStatus() {
     let timer;
     const refresh = async () => {
       try {
-        const response = await fetch("/api/status", { cache: "no-store", signal: AbortSignal.timeout(4000) });
+        const response = await fetchWithTimeout("/api/status", { cache: "no-store" });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const next = await response.json();
         if (stopped) return;
@@ -617,32 +609,23 @@ function PetMachineControl({ machines, selected, followMode, onFollowMode, onSel
 }
 
 function PetSprite({ pet, machineName, spriteUrl }) {
-  const animation = PET_ANIMATIONS[pet.state] || PET_ANIMATIONS.idle;
+  const animation = petAnimationForState(pet.state);
   const spriteGrid = petSpriteGrid(pet);
-  const reduceMotion = useMemo(
-    () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
-    [],
-  );
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    setFrame(0);
-    if (reduceMotion) return undefined;
-    const timer = setInterval(() => {
-      setFrame((current) => (current + 1) % animation.frames);
-    }, animation.interval);
-    return () => clearInterval(timer);
-  }, [animation.frames, animation.interval, pet.state, reduceMotion]);
   return (
     <div
-      className={`pet-sprite ${pet.state}`}
+      className={`pet-sprite ${pet.state} pet-animation-${animation.name}`}
       role="img"
       aria-label={`${pet.displayName} on ${machineName}, ${PET_STATE_LABELS[pet.state] || pet.state}`}
-      style={{
-        backgroundImage: `url(${spriteUrl})`,
-        backgroundPosition: `${frame * 100 / 7}% ${spriteGrid.rowPosition(animation.row)}`,
-        backgroundSize: spriteGrid.backgroundSize,
-      }}
-    />
+    >
+      <img
+        className="pet-sprite-sheet"
+        src={spriteUrl}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        style={{ height: spriteGrid.sheetHeight, top: spriteGrid.rowOffset(animation.row) }}
+      />
+    </div>
   );
 }
 

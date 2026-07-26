@@ -51,7 +51,7 @@ test("publishes the shared Ambient Ops discovery contract", async () => {
     name: "Example Home",
     host: "ambient-nas",
     port: 8791,
-    version: "0.1.4",
+    version: "0.1.5",
     bonjour,
   });
 
@@ -69,7 +69,7 @@ test("publishes the shared Ambient Ops discovery contract", async () => {
       api: "/api/status",
       protocol: "1",
       pairing: "1",
-      version: "0.1.4",
+      version: "0.1.5",
     },
   });
   await publisher.stop();
