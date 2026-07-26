@@ -50,7 +50,8 @@ final class KioskUpdater {
         }
         executor.execute(() -> {
             try {
-                if (!isChargingAndOnWifi()) {
+                if (!isExternallyPoweredAndOnWifi()) {
+                    Log.d(TAG, "Skipping update check until external power and Wi-Fi are available");
                     return;
                 }
                 checkAndInstall(endpoint);
@@ -191,21 +192,27 @@ final class KioskUpdater {
         return connection;
     }
 
+    @SuppressWarnings("deprecation")
     private PackageInfo packageInfo(String value, boolean archive)
         throws PackageManager.NameNotFoundException {
         PackageManager packages = context.getPackageManager();
-        int flags = PackageManager.GET_SIGNING_CERTIFICATES;
+        int flags =
+            PackageManager.GET_SIGNING_CERTIFICATES
+                | PackageManager.GET_SIGNATURES;
         PackageInfo info = archive
             ? packages.getPackageArchiveInfo(value, flags)
             : packages.getPackageInfo(value, flags);
-        if (info == null || info.signingInfo == null) {
-            throw new PackageManager.NameNotFoundException("Package signing information is missing");
+        if (info == null) {
+            throw new PackageManager.NameNotFoundException("Package information is missing");
         }
         return info;
     }
 
+    @SuppressWarnings("deprecation")
     private String signerSha256(PackageInfo info) throws Exception {
-        Signature[] signers = info.signingInfo.getApkContentsSigners();
+        Signature[] signers = info.signingInfo == null
+            ? info.signatures
+            : info.signingInfo.getApkContentsSigners();
         if (signers == null || signers.length != 1) {
             throw new SecurityException("Exactly one APK signer is required");
         }
@@ -232,7 +239,7 @@ final class KioskUpdater {
         }
     }
 
-    private boolean isChargingAndOnWifi() {
+    private boolean isExternallyPoweredAndOnWifi() {
         Intent battery = context.registerReceiver(
             null,
             new IntentFilter(Intent.ACTION_BATTERY_CHANGED)
@@ -240,13 +247,17 @@ final class KioskUpdater {
         int status = battery == null
             ? -1
             : battery.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-        boolean charging =
-            status == BatteryManager.BATTERY_STATUS_CHARGING
+        int plugged = battery == null
+            ? 0
+            : battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
+        boolean externallyPowered =
+            plugged != 0
+                || status == BatteryManager.BATTERY_STATUS_CHARGING
                 || status == BatteryManager.BATTERY_STATUS_FULL;
         ConnectivityManager connectivity =
             (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo network = connectivity == null ? null : connectivity.getActiveNetworkInfo();
-        return charging
+        return externallyPowered
             && network != null
             && network.isConnected()
             && network.getType() == ConnectivityManager.TYPE_WIFI;

@@ -90,7 +90,16 @@ node -e '
   if (!health.ok || health.mode !== "live") {
     throw new Error("unexpected health payload: " + JSON.stringify(health));
   }
+  if (health.kioskUpdate !== null) {
+    throw new Error("source smoke image unexpectedly contains a kiosk release");
+  }
 ' "$health_file"
+update_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  "$base_url/api/v1/kiosk/update")
+if [ "$update_status" != 404 ]; then
+  echo "empty source smoke image exposed kiosk update HTTP $update_status" >&2
+  exit 1
+fi
 
 generated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 curl --fail --silent --show-error \

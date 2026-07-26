@@ -55,6 +55,7 @@ public final class MainActivity extends Activity {
     private KioskUpdater kioskUpdater;
     private String currentEndpoint;
     private boolean pageLoaded;
+    private boolean endpointAttemptInProgress;
     private boolean resolving;
 
     private final Runnable retry = () -> {
@@ -115,6 +116,7 @@ public final class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 if (ServiceSelectionPolicy.shouldMarkPageHealthy(currentEndpoint, url)) {
                     pageLoaded = true;
+                    endpointAttemptInProgress = false;
                     handler.removeCallbacks(retry);
                     preferences.edit().putString(PREF_ENDPOINT, url).apply();
                     handler.removeCallbacks(updateCheck);
@@ -149,9 +151,14 @@ public final class MainActivity extends Activity {
 
         String rememberedEndpoint = preferences.getString(PREF_ENDPOINT, null);
         String manualUrl = preferences.getString(PREF_MANUAL_URL, null);
-        currentEndpoint = validHttpUrl(rememberedEndpoint)
-            ? rememberedEndpoint
-            : validHttpUrl(manualUrl) ? manualUrl : null;
+        String requestedUrl = getIntent() == null
+            ? null
+            : getIntent().getStringExtra(EXTRA_URL);
+        currentEndpoint = validHttpUrl(requestedUrl)
+            ? requestedUrl
+            : validHttpUrl(rememberedEndpoint)
+                ? rememberedEndpoint
+                : validHttpUrl(manualUrl) ? manualUrl : null;
         if (currentEndpoint != null) {
             loadEndpoint(currentEndpoint);
         } else {
@@ -164,11 +171,10 @@ public final class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (applyConfiguration(intent)) {
-            String manualUrl = preferences.getString(PREF_MANUAL_URL, null);
-            if (validHttpUrl(manualUrl)) {
-                loadEndpoint(manualUrl);
-            }
+        applyConfiguration(intent);
+        String requestedUrl = intent == null ? null : intent.getStringExtra(EXTRA_URL);
+        if (validHttpUrl(requestedUrl)) {
+            loadEndpoint(requestedUrl);
         }
     }
 
@@ -294,7 +300,13 @@ public final class MainActivity extends Activity {
         handler.removeCallbacks(resolveTimeout);
         String instanceId = attribute(resolved, "id");
         String preferredId = preferences.getString(PREF_INSTANCE_ID, null);
-        if (!ServiceSelectionPolicy.shouldAccept(preferredId, instanceId, pageLoaded)) {
+        if (
+            !ServiceSelectionPolicy.shouldAccept(
+                preferredId,
+                instanceId,
+                pageLoaded || endpointAttemptInProgress
+            )
+        ) {
             return;
         }
 
@@ -346,12 +358,14 @@ public final class MainActivity extends Activity {
         }
         currentEndpoint = endpoint;
         pageLoaded = false;
+        endpointAttemptInProgress = true;
         handler.removeCallbacks(retry);
         webView.loadUrl(endpoint);
     }
 
     private void handleLoadFailure() {
         pageLoaded = false;
+        endpointAttemptInProgress = false;
         handler.removeCallbacks(updateCheck);
         showDiscoveryState("Ambient Ops 暂时不可用，正在重新查找");
         startDiscovery();

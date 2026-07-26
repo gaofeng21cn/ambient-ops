@@ -17,7 +17,7 @@ application from source.
 - Optional for initial Android installation: a computer with `adb`
 
 The current published server image is
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.5` for both `linux/amd64` and
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.6` for both `linux/amd64` and
 `linux/arm64`. The package is public. Do not create or configure a GitHub token
 for a normal pull.
 
@@ -48,7 +48,7 @@ Open `.env` in a local text editor. For a Codex-only screen, these are the only
 values most users review:
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.5
+AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.6
 AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Etc/UTC
@@ -176,26 +176,33 @@ live state repeatedly.
 ## 6. Install the Android kiosk
 
 Download these assets from
-[Ambient Ops v0.1.5](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.5):
+[Ambient Ops v0.1.6](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.6):
 
-- `Ambient-Ops-Kiosk-1.1.1.apk`
-- `Ambient-Ops-Kiosk-1.1.1.apk.sha256`
+- `Ambient-Ops-Kiosk-1.2.1.apk`
+- `Ambient-Ops-Kiosk-1.2.1.apk.sha256`
 
 Verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.1.1.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.1.1.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.1.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.1.apk
 adb shell cmd package set-home-activity \
   cn.gaofeng.ambientops.kiosk/.MainActivity
 adb shell am start -n cn.gaofeng.ambientops.kiosk/.MainActivity
 ```
 
-The production APK is owner-signed. Future in-place updates must keep the same
-application ID and signing certificate and increase `versionCode`. Install
-them with `adb install -r`; do not uninstall the production app first.
-The current release has no in-app updater; this verified Release-to-ADB flow is
-the supported upgrade path.
+The production APK is owner-signed. Do not uninstall it during an update:
+uninstalling clears the remembered server identity. Version `1.2.1` checks the
+selected Ambient Ops server ten seconds after a healthy page load and every six
+hours afterwards. While on external power and connected over Wi-Fi, it accepts only the
+fixed package ID, owner certificate, higher `versionCode`, and exact manifest
+SHA-256. Each versioned server image embeds the same signed APK published in
+its GitHub Release.
+
+Unattended installation requires Magisk root and a one-time permanent `su`
+grant to the kiosk. Without root, verify the published checksum and continue to
+install later releases with `adb install -r`. Neither path requires a GitHub
+credential.
 
 Once installed, USB is not part of normal operation. The kiosk uses Wi-Fi mDNS,
 remembers the logical instance, stays immersive, and retries after network

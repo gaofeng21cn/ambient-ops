@@ -18,6 +18,14 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+      - name: Require tag and package version parity
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          test "$GITHUB_REF_NAME" = "v$package_version" || {
+            echo "Tag $GITHUB_REF_NAME does not match package version $package_version." >&2
+            exit 1
+          }
       - run: npm ci
       - run: npm test
       - run: npm run build
@@ -38,7 +46,7 @@ jobs:
             :app:assembleReleaseUnsigned
 
   docker:
-    needs: validate
+    needs: [validate, android]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -53,6 +61,24 @@ jobs:
         id: version
         shell: bash
         run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: ambient-ops-android-release
+          path: kiosk-release
+      - name: Verify embedded kiosk release
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { KioskReleaseStore } from "./server/kiosk-release.mjs";
+          const releases = new KioskReleaseStore("./kiosk-release");
+          await releases.load();
+          if (!releases.manifest) {
+            throw new Error("Signed kiosk release is missing");
+          }
+          process.stdout.write(
+            `Embedding kiosk ${releases.manifest.versionName} (${releases.manifest.versionCode})\n`,
+          );
+          NODE
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -142,10 +168,38 @@ jobs:
             echo "Android signing certificate does not match the established upgrade key." >&2
             exit 1
           }
-          version_name="$(sed -n 's/.*versionName[[:space:]]*"\([^"]*\)".*/\1/p' android-kiosk/app/build.gradle)"
+          aapt="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -x "$aapt"
+          package_line="$("$aapt" dump badging "$apk" | sed -n '1p')"
+          package_name="$(printf '%s\n' "$package_line" | sed -n "s/.*name='\([^']*\)'.*/\1/p")"
+          version_code="$(printf '%s\n' "$package_line" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")"
+          version_name="$(printf '%s\n' "$package_line" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
+          test "$package_name" = "cn.gaofeng.ambientops.kiosk"
+          test -n "$version_code"
+          test -n "$version_name"
           artifact="Ambient-Ops-Kiosk-${version_name}.apk"
           cp "$apk" "$artifact"
-          sha256sum "$artifact" > "${artifact}.sha256"
+          artifact_sha256="$(sha256sum "$artifact" | awk '{print $1}')"
+          printf '%s  %s\n' "$artifact_sha256" "$artifact" > "${artifact}.sha256"
+          node - \
+            "$version_code" \
+            "$version_name" \
+            "$artifact" \
+            "$artifact_sha256" \
+            "$EXPECTED_CERT_SHA256" \
+            > kiosk-update.json <<'NODE'
+          const [versionCode, versionName, artifact, sha256, signerSha256] =
+            process.argv.slice(2);
+          process.stdout.write(
+            `${JSON.stringify({
+              versionCode: Number(versionCode),
+              versionName,
+              artifact,
+              sha256,
+              signerSha256,
+            }, null, 2)}\n`,
+          );
+          NODE
           echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
@@ -153,6 +207,7 @@ jobs:
           path: |
             ${{ steps.apk.outputs.artifact }}
             ${{ steps.apk.outputs.artifact }}.sha256
+            kiosk-update.json
           if-no-files-found: error
           retention-days: 30
 
@@ -179,7 +234,7 @@ jobs:
             > "release-assets/Ambient-Ops-Docker-${IMAGE_VERSION}.txt"
           (
             cd release-assets
-            sha256sum Ambient-Ops-* > SHA256SUMS
+            sha256sum Ambient-Ops-* kiosk-update.json > SHA256SUMS
           )
       - name: Publish GitHub Release
         env:

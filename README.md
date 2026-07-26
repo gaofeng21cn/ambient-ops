@@ -17,16 +17,19 @@ Docker. It is not zero-configuration, but normal installation is intentionally
 limited to one `.env` file plus private files under `secrets/`. Router metrics
 are optional; Codex and pet status can run in `codex-only` mode.
 
-Published release `v0.1.5` includes:
+Published release `v0.1.6` includes:
 
 - public `linux/amd64` and `linux/arm64` image
-  `ghcr.io/gaofeng21cn/ambient-ops:0.1.5`
+  `ghcr.io/gaofeng21cn/ambient-ops:0.1.6`
 - one-click Windows device pairing without copying the shared agent token
-- owner-signed `Ambient-Ops-Kiosk-1.1.1.apk` with a sibling SHA-256 file
+- owner-signed `Ambient-Ops-Kiosk-1.2.1.apk` with a sibling SHA-256 file
 - no GitHub token and no NAS-local source build for a normal deployment
 
-Kiosk updates currently use the explicit Release download, checksum, and
-`adb install -r` path. An in-app updater is not part of `v0.1.5`.
+The same tagged Docker image embeds the exact signed APK from its GitHub
+Release. After the initial installation, a rooted kiosk can fetch later
+versions from its selected LAN server and install them without USB. It accepts
+only this package ID, the fixed owner certificate, a higher `versionCode`, and
+the manifest's exact SHA-256.
 
 ## Production quick start
 
@@ -161,12 +164,12 @@ git rev-parse HEAD
 
 Published tags provide one immutable multi-platform image for `linux/amd64`
 and `linux/arm64`. The default Compose image is pinned to
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.5`; set `AMBIENT_OPS_IMAGE` in `.env` to
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.6`; set `AMBIENT_OPS_IMAGE` in `.env` to
 the reviewed release tag. The GHCR package is public, so a Docker host pulls it
 anonymously:
 
 ```bash
-docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.5
+docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.6
 ```
 
 Do not add GitHub credentials to `.env`, Compose, or the repository for normal
@@ -520,6 +523,14 @@ uninstall described above.
 USB and `adb reverse` are not part of normal operation. After installation the
 kiosk is the Android Home activity, discovers the server by Wi-Fi mDNS, keeps
 the screen awake, restores immersive mode, and retries after network changes.
+
+Version `1.2.1` adds the trusted LAN updater. Ten seconds after a healthy page
+load, and then every six hours, it checks the selected server while the device
+is on external power and connected over Wi-Fi. The server returns the signed APK bundled
+into the same versioned Docker image. Magisk root and one permanent `su` grant
+to the kiosk are required for unattended package installation; without them,
+the verified Release-to-`adb install -r` path remains available. The updater
+never downloads from GitHub and needs no GitHub credential.
 
 ### 8. Final acceptance
 

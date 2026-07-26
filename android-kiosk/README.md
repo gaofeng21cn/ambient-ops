@@ -5,6 +5,8 @@ This small native Android application owns the HTC display surface. It discovers
 instance and LAN endpoint, keeps the screen awake, restores immersive mode,
 retries after connection failures, and can act as the default Home application.
 Normal operation uses Wi-Fi discovery and does not require USB or `adb reverse`.
+On a rooted dedicated display, it also performs trusted unattended upgrades
+from the selected Ambient Ops server.
 
 ## Build and test
 
@@ -63,8 +65,8 @@ owner key used by the macOS helper, plus a sibling SHA-256 file. Download both
 files from the release, then verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.1.1.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.1.1.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.1.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.1.apk
 ```
 
 The GitHub Release APK and checksum are public downloads. A future release
@@ -72,6 +74,11 @@ remains upgrade-compatible only when it keeps the application ID and signing key
 and increments `versionCode`. GitHub Actions stores the key and passwords as
 encrypted repository secrets; the recovery copy remains in the owner's
 encrypted local secret store.
+
+The same release workflow generates `kiosk-update.json` and embeds that APK
+into the matching versioned Docker image. The kiosk downloads updates only from
+the Ambient Ops endpoint whose display page is currently healthy; GitHub is not
+part of the device update path.
 
 ## Install and update
 
@@ -111,6 +118,31 @@ adb shell am start -n cn.gaofeng.ambientops.kiosk/.MainActivity \
 
 The manual URL is a rescue path. Normal operation should continue to use LAN
 discovery so the display is independent of a development computer.
+
+## Trusted unattended updates
+
+Version `1.2.1` checks `/api/v1/kiosk/update` ten seconds after a healthy page
+load and every six hours after that. A check runs only while the device is
+on external power and its active network is Wi-Fi. Before invoking the package manager,
+the client verifies:
+
+- the fixed `cn.gaofeng.ambientops.kiosk` package ID
+- a strictly higher `versionCode` and matching `versionName`
+- the manifest's exact APK SHA-256
+- the established signing-certificate SHA-256
+  `4e5f5732645986e5a861446028846fcfb571b9dd006d87da19aa60f152639206`
+
+Unattended installation uses `su -c "pm install -r ..."`. It therefore requires
+Magisk root and a one-time permanent root grant to the kiosk. A failed download,
+signature mismatch, downgrade, missing root grant, or package-manager failure
+leaves the installed version untouched and is retried at a later check.
+`MY_PACKAGE_REPLACED` restarts the Home activity after a successful replacement.
+
+The remembered endpoint has priority while its first load is pending and is
+retained when a page load fails. After that explicit failure, it remains a retry
+candidate while Android NSD searches for the logical instance at a new address.
+Each NSD resolve is bounded by a five-second timeout to prevent an Android 9
+resolver failure from leaving the kiosk permanently at "searching".
 
 ## Cold-boot acceptance
 
