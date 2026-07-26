@@ -120,10 +120,23 @@ require_empty() {
 require_secret() {
   local name="$1"
   local path="$SECRETS_DIR/$name"
+  local mode
   [ -s "$path" ] || die "Secret file is missing or empty: secrets/$name"
-  if [ "$(uname -s)" = "Linux" ] && [ "$(stat -c '%u' "$path")" != "1000" ]; then
-    die "secrets/$name must be owned by UID 1000 for the non-root container; run: sudo chown -R 1000:1000 '$SECRETS_DIR'"
-  fi
+  case "$(uname -s)" in
+    Linux)
+      mode="$(stat -c '%a' "$path")"
+      [ "$(stat -c '%u' "$path")" = "1000" ] ||
+        die "secrets/$name must be owned by UID 1000 for the non-root container; run: sudo chown -R 1000:1000 '$SECRETS_DIR'"
+      ;;
+    Darwin)
+      mode="$(stat -f '%Lp' "$path")"
+      ;;
+    *)
+      die "Unsupported platform for secret permission validation: $(uname -s)"
+      ;;
+  esac
+  [ $((8#$mode & 077)) -eq 0 ] ||
+    die "secrets/$name must not be accessible by group or other users; run: chmod 600 '$path'"
 }
 
 compose() {
@@ -266,6 +279,7 @@ validate_config() {
       require_value UNIFI_SNMP_INTERFACES >/dev/null
       require_secret unifi_snmp_auth_password
       require_secret unifi_snmp_priv_password
+      require_empty UNIFI_BASE_URL
       ;;
     unifi-api)
       require_value UNIFI_BASE_URL >/dev/null

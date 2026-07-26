@@ -17,7 +17,7 @@ application from source.
 - Optional for initial Android installation: a computer with `adb`
 
 The current published server image is
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.2` for both `linux/amd64` and
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.3` for both `linux/amd64` and
 `linux/arm64`. The package is public. Do not create or configure a GitHub token
 for a normal pull.
 
@@ -48,7 +48,7 @@ Open `.env` in a local text editor. For a Codex-only screen, these are the only
 values most users review:
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.2
+AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.3
 AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Etc/UTC
@@ -176,7 +176,7 @@ live state repeatedly.
 ## 6. Install the Android kiosk
 
 Download these assets from
-[Ambient Ops v0.1.2](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.2):
+[Ambient Ops v0.1.3](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.3):
 
 - `Ambient-Ops-Kiosk-1.1.1.apk`
 - `Ambient-Ops-Kiosk-1.1.1.apk.sha256`

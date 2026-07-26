@@ -15,7 +15,7 @@ NAS 不在本地构建应用源码。
 - 可选：Docker 主机可通过 IPv4/UDP 161 访问经过验证的 SNMPv3 路由器
 - 首次安装 Android 时可使用一台装有 `adb` 的电脑
 
-当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.2`，同时支持
+当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.3`，同时支持
 `linux/amd64` 与 `linux/arm64`。该镜像公开可拉取；正常安装不要创建或配置
 GitHub Token。
 
@@ -45,7 +45,7 @@ git rev-parse HEAD
 确认这些值：
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.2
+AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.3
 AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Asia/Shanghai
@@ -169,7 +169,7 @@ macOS 版会把 token 存入登录 Keychain 的
 
 ## 6. 安装 Android Kiosk
 
-从 [Ambient Ops v0.1.2](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.2)
+从 [Ambient Ops v0.1.3](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.3)
 下载：
 
 - `Ambient-Ops-Kiosk-1.1.1.apk`
