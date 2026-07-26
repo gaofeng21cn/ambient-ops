@@ -17,16 +17,16 @@ Docker. It is not zero-configuration, but normal installation is intentionally
 limited to one `.env` file plus private files under `secrets/`. Router metrics
 are optional; Codex and pet status can run in `codex-only` mode.
 
-Published release `v0.1.4` includes:
+Published release `v0.1.5` includes:
 
 - public `linux/amd64` and `linux/arm64` image
-  `ghcr.io/gaofeng21cn/ambient-ops:0.1.4`
+  `ghcr.io/gaofeng21cn/ambient-ops:0.1.5`
 - one-click Windows device pairing without copying the shared agent token
 - owner-signed `Ambient-Ops-Kiosk-1.1.1.apk` with a sibling SHA-256 file
 - no GitHub token and no NAS-local source build for a normal deployment
 
 Kiosk updates currently use the explicit Release download, checksum, and
-`adb install -r` path. An in-app updater is not part of `v0.1.4`.
+`adb install -r` path. An in-app updater is not part of `v0.1.5`.
 
 ## Production quick start
 
@@ -161,12 +161,12 @@ git rev-parse HEAD
 
 Published tags provide one immutable multi-platform image for `linux/amd64`
 and `linux/arm64`. The default Compose image is pinned to
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.4`; set `AMBIENT_OPS_IMAGE` in `.env` to
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.5`; set `AMBIENT_OPS_IMAGE` in `.env` to
 the reviewed release tag. The GHCR package is public, so a Docker host pulls it
 anonymously:
 
 ```bash
-docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.4
+docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.5
 ```
 
 Do not add GitHub credentials to `.env`, Compose, or the repository for normal
