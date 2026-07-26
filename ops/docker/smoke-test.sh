@@ -13,6 +13,7 @@ cleanup() {
   AMBIENT_OPS_SMOKE_IMAGE="$image_name" \
     docker compose \
       -f "$repo_root/compose.yaml" \
+      -f "$repo_root/compose.local-build.yaml" \
       -f "$repo_root/ops/docker/compose.smoke.yaml" \
       -p "$project_name" \
       down --volumes --remove-orphans >/dev/null 2>&1 || true
@@ -33,6 +34,7 @@ compose() {
   AMBIENT_OPS_SMOKE_IMAGE="$image_name" \
     docker compose \
       -f "$repo_root/compose.yaml" \
+      -f "$repo_root/compose.local-build.yaml" \
       -f "$repo_root/ops/docker/compose.smoke.yaml" \
       -p "$project_name" \
       "$@"

@@ -1,7 +1,6 @@
 services:
   ambient-ops:
-    build: .
-    image: ${AMBIENT_OPS_IMAGE:-ambient-ops:local}
+    image: ${AMBIENT_OPS_IMAGE:-ghcr.io/gaofeng21cn/ambient-ops:0.1.0}
     restart: unless-stopped
     init: true
     read_only: true
