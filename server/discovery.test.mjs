@@ -51,7 +51,7 @@ test("publishes the shared Ambient Ops discovery contract", async () => {
     name: "Gaofeng Home",
     host: "ambient-nas",
     port: 8791,
-    version: "0.1.0",
+    version: "0.1.1",
     bonjour,
   });
 
@@ -68,7 +68,7 @@ test("publishes the shared Ambient Ops discovery contract", async () => {
       path: "/display/overview",
       api: "/api/status",
       protocol: "1",
-      version: "0.1.0",
+      version: "0.1.1",
     },
   });
   await publisher.stop();
