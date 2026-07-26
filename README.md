@@ -1,12 +1,59 @@
 # Ambient Ops
 
+<p align="center">
+  <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
+</p>
+
 Ambient Ops is a self-hosted status aggregator and five-inch ambient dashboard
 for a trusted local network. It combines aggregate Codex activity pushed by
-each Mac with read-only WAN counters from a compatible SNMPv3 router, then
+each Mac or Windows PC with read-only WAN counters from a compatible SNMPv3 router, then
 serves the normalized state to browsers and the dedicated Android kiosk.
 
 The display has no collection credentials or business logic. It discovers and
 opens the one canonical Ambient Ops instance on the LAN.
+
+The current product is a guided self-hosted installation for users who can run
+Docker. It is not zero-configuration, but normal installation is intentionally
+limited to one `.env` file plus private files under `secrets/`. Router metrics
+are optional; Codex and pet status can run in `codex-only` mode.
+
+Published release `v0.1.3` includes:
+
+- public `linux/amd64` and `linux/arm64` image
+  `ghcr.io/gaofeng21cn/ambient-ops:0.1.3`
+- owner-signed `Ambient-Ops-Kiosk-1.1.1.apk` with a sibling SHA-256 file
+- no GitHub token and no NAS-local source build for a normal deployment
+
+Kiosk updates currently use the explicit Release download, checksum, and
+`adb install -r` path. An in-app updater is not part of `v0.1.3`.
+
+## Production quick start
+
+Requirements: Docker Engine, Docker Compose v2, `curl`, and `openssl`.
+
+```bash
+git clone https://github.com/gaofeng21cn/ambient-ops.git
+cd ambient-ops
+./scripts/ambient-ops.sh init
+# Edit .env. For SNMPv3, also run both set-secret commands documented below.
+./scripts/ambient-ops.sh validate
+./scripts/ambient-ops.sh up
+```
+
+`init` refuses to overwrite existing configuration. It creates a stable
+installation ID and agent token without printing either secret material or
+credentials. Use these interactive commands when SNMPv3 is enabled:
+
+```bash
+./scripts/ambient-ops.sh set-secret unifi_snmp_auth_password
+./scripts/ambient-ops.sh set-secret unifi_snmp_priv_password
+```
+
+Start with the ordinary-user [installation guide](docs/installation.md), the
+[Chinese guide](docs/installation.zh-CN.md), or the secret-safe
+[Agent installation guide](docs/agent-installation.md). The existing detailed
+operations, API, router, Synology, security, migration, and development
+references remain under [`docs/`](docs/).
 
 ## Architecture
 
@@ -23,8 +70,8 @@ SNMPv3 router ---- IF-MIB Counter64 polling -----------+--> Ambient Ops
 ```
 
 The server, API, SNMP collector, mDNS publisher, and built frontend ship as one
-container. Codex TPS remains a per-Mac agent because raw Codex session files
-never leave their host. The Android kiosk is a separate native client.
+container. Codex TPS remains a per-computer agent because raw Codex session
+files never leave their host. The Android kiosk is a separate native client.
 
 Available surfaces:
 
@@ -65,15 +112,12 @@ API key is not required when the preferred SNMPv3 path is live.
 
 ## Demo in five minutes
 
-Requirements: Docker Engine/Desktop, Docker Compose v2, `curl`, and `openssl`.
+Requirements: Docker Engine/Desktop, Docker Compose v2, and `curl`.
 
 ```bash
 git clone https://github.com/gaofeng21cn/ambient-ops.git
 cd ambient-ops
-cp .env.example .env
 mkdir -p secrets
-umask 077
-openssl rand -hex 32 > secrets/agent_push_token
 docker compose \
   -f compose.yaml \
   -f compose.local-build.yaml \
@@ -83,9 +127,10 @@ curl -fsS http://127.0.0.1:8787/healthz
 
 Open `http://127.0.0.1:8787/display/overview`. The example defaults to
 `DEMO_MODE=true` and discovery disabled, so it cannot silently compete with a
-production instance. Stop it with `docker compose down`.
+production instance. Run this only in a fresh checkout without a production
+`.env`. Stop it with `docker compose down`.
 
-## Complete production installation
+## Detailed production and developer reference
 
 This path is reproducible on a Linux Docker host or Synology NAS. The source
 repository and published container image are public; a source checkout is not
@@ -115,12 +160,12 @@ git rev-parse HEAD
 
 Published tags provide one immutable multi-platform image for `linux/amd64`
 and `linux/arm64`. The default Compose image is pinned to
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.2`; set `AMBIENT_OPS_IMAGE` in `.env` to
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.3`; set `AMBIENT_OPS_IMAGE` in `.env` to
 the reviewed release tag. The GHCR package is public, so a Docker host pulls it
 anonymously:
 
 ```bash
-docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.2
+docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.3
 ```
 
 Do not add GitHub credentials to `.env`, Compose, or the repository for normal
@@ -172,6 +217,16 @@ offloaded traffic, the router is not compatible with the current collector.
 
 ### 3. Create the stable configuration
 
+The ordinary path is:
+
+```bash
+./scripts/ambient-ops.sh init
+```
+
+The helper creates the files below without printing secrets and refuses to
+overwrite an existing installation. The following commands are the equivalent
+manual path for operators who deliberately manage identity generation:
+
 ```bash
 cp .env.example .env
 mkdir -p secrets
@@ -209,6 +264,7 @@ AMBIENT_OPS_PORT=8787
 DEMO_MODE=false
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Asia/Shanghai
+AMBIENT_OPS_NETWORK_MODE=snmpv3
 
 # The base file stays discovery-off for staging. The host override enables it.
 DISCOVERY_ENABLED=false
@@ -247,9 +303,9 @@ HA_TIMEOUT_MS=5000
 Never regenerate it during an upgrade or host migration. Back up `.env`, the
 `secrets` directory, and the Android signing key outside the repository.
 
-The agent token in `secrets/agent_push_token` must be the exact value stored in
-every Codex TPS Mac Keychain. Rotating it is allowed only when every agent is
-updated deliberately.
+The agent token in `secrets/agent_push_token` must be the exact value stored by
+every Codex TPS host in macOS Keychain or Windows DPAPI. Rotating it is allowed
+only when every agent is updated deliberately.
 
 ### 4. Stage without announcing the service
 
@@ -532,7 +588,7 @@ curl -fsS http://<server-ip>:8787/api/status | jq
 | Docker says healthy but overall status is error | Read the separate `network` and `codex` fields; the Docker health check proves only HTTP liveness. |
 | Network is error | Verify IPv4/UDP 161, authPriv credentials, IF-MIB view, and exact interface selectors. |
 | Network stays near zero | Generate known traffic; check Counter64 updates, flow offload, and whether a tunnel/VLAN/physical path was selected correctly. |
-| Codex is error or stale | Verify the same token exists in server secrets and Mac Keychain, the integration is enabled, and system time is correct. |
+| Codex is error or stale | Verify the same token exists in server secrets and the host credential store, integration is enabled, and system time is correct. |
 | Codex TPS cannot discover | Verify host networking, UDP/5353, same multicast domain or reflector, Local Network permission, and one canonical publisher. |
 | Duplicate Mac appears | Disable the legacy standalone push LaunchAgent, keep one sender, and wait `STALE_AFTER_SECONDS` for retirement. |
 | Android shows discovery/retry | Verify Wi-Fi, mDNS reachability, `INSTANCE_ID`, TCP/8787, and that no stale manual URL or reverse tunnel masks the LAN path. |
@@ -598,6 +654,10 @@ The persistent store contains normalized last values and short network history.
 It does not accept or retain prompts, responses, repository paths, or
 conversation content. See:
 
+- [`docs/installation.md`](docs/installation.md)
+- [`docs/installation.zh-CN.md`](docs/installation.zh-CN.md)
+- [`docs/agent-installation.md`](docs/agent-installation.md)
+- [`docs/agent-installation.zh-CN.md`](docs/agent-installation.zh-CN.md)
 - [`docs/security.md`](docs/security.md)
 - [`docs/agent-push-api.md`](docs/agent-push-api.md)
 - [`docs/unifi.md`](docs/unifi.md)

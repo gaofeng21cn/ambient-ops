@@ -84,6 +84,7 @@ export function buildDashboard({ machines, network, history, demo }, options = {
     const pet = snapshot.pet
       ? {
           ...snapshot.pet,
+          assetUrl: options.petAssetUrl?.(snapshot.pet) || null,
           state: current.status === "live"
             ? snapshot.pet.state
             : current.status === "stale" ? "waiting" : "failed",

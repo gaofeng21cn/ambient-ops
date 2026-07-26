@@ -2,39 +2,44 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <!-- Template rendered by install-runtime.sh. Do not install this file directly. -->
   <key>Label</key>
   <string>cn.gaofeng.ambient-ops.server</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/opt/homebrew/bin/node</string>
-    <string>/Users/gaofeng/Library/Application Support/Ambient Ops/runtime/current/server/server.mjs</string>
+    <string>__NODE_PATH__</string>
+    <string>__SERVER_PATH__</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/gaofeng/Library/Application Support/Ambient Ops/runtime/current</string>
+  <string>__CURRENT_RUNTIME__</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>__EXECUTABLE_PATH__</string>
     <key>PORT</key>
     <string>8791</string>
     <key>DATA_DIR</key>
-    <string>/Users/gaofeng/Library/Application Support/Ambient Ops/data</string>
+    <string>__DATA_DIR__</string>
     <key>DEMO_MODE</key>
     <string>false</string>
     <key>SITE_NAME</key>
-    <string>Gaofeng Home</string>
+    <string>__SITE_NAME__</string>
     <key>DISPLAY_TIME_ZONE</key>
-    <string>Asia/Shanghai</string>
+    <string>__DISPLAY_TIME_ZONE__</string>
+    <key>DISCOVERY_ENABLED</key>
+    <string>__DISCOVERY_ENABLED__</string>
+    <key>INSTANCE_ID</key>
+    <string>__INSTANCE_ID__</string>
     <key>AGENT_PUSH_TOKEN_KEYCHAIN_SERVICE</key>
     <string>cn.gaofeng.ambient-ops.agent-push</string>
     <key>KEYCHAIN_ACCOUNT</key>
-    <string>gaofeng</string>
+    <string>__KEYCHAIN_ACCOUNT__</string>
     <key>UNIFI_SNMP_HOST</key>
-    <string>192.168.1.1</string>
+    <string>__SNMP_HOST__</string>
     <key>UNIFI_SNMP_PORT</key>
     <string>161</string>
     <key>UNIFI_SNMP_USER</key>
-    <string>gaofeng</string>
+    <string>__SNMP_USER__</string>
     <key>UNIFI_SNMP_PASSWORD_KEYCHAIN_SERVICE</key>
     <string>cn.gaofeng.ambient-ops.unifi-snmp-v3</string>
     <key>UNIFI_SNMP_AUTH_PROTOCOL</key>
@@ -42,7 +47,7 @@
     <key>UNIFI_SNMP_PRIV_PROTOCOL</key>
     <string>aes</string>
     <key>UNIFI_SNMP_INTERFACES</key>
-    <string>23,3</string>
+    <string>__SNMP_INTERFACES__</string>
     <key>UNIFI_SNMP_TIMEOUT_MS</key>
     <string>3000</string>
     <key>UNIFI_POLL_MS</key>
@@ -59,8 +64,8 @@
   <key>ProcessType</key>
   <string>Background</string>
   <key>StandardOutPath</key>
-  <string>/Users/gaofeng/Library/Application Support/Ambient Ops/logs/server.out.log</string>
+  <string>__LOG_DIR__/server.out.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/gaofeng/Library/Application Support/Ambient Ops/logs/server.err.log</string>
+  <string>__LOG_DIR__/server.err.log</string>
 </dict>
 </plist>
