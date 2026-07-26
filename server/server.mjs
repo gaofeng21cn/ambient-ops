@@ -22,6 +22,10 @@ import {
   validatePetUpload,
 } from "./pet-assets.mjs";
 import { DevicePairingStore } from "./pairing.mjs";
+import {
+  KIOSK_UPDATE_PATH,
+  KioskReleaseStore,
+} from "./kiosk-release.mjs";
 import packageMetadata from "../package.json" with { type: "json" };
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -60,6 +64,7 @@ const config = {
   haEntityPrefix: process.env.HA_ENTITY_PREFIX || "ambient_ops",
   haSyncMs: numberEnv("HA_SYNC_MS", 30_000),
   haTimeoutMs: numberEnv("HA_TIMEOUT_MS", 5000),
+  kioskReleaseDir: process.env.KIOSK_RELEASE_DIR || join(root, "kiosk-release"),
 };
 
 const contentTypes = new Map([
@@ -77,6 +82,8 @@ const petAssets = new PetAssetStore(config.dataDir);
 await petAssets.load();
 const pairingStore = new DevicePairingStore(config.dataDir);
 await pairingStore.load();
+const kioskReleases = new KioskReleaseStore(config.kioskReleaseDir);
+await kioskReleases.load();
 await pruneStaleMachines();
 const instanceId = await resolveInstanceId(config.dataDir, config.instanceId);
 if (config.demo) updateDemo(store);
@@ -185,6 +192,12 @@ const server = createServer(async (request, response) => {
         devicePairing: config.pairingEnabled,
         pairedDevices: pairingStore.pairedDeviceCount,
         homeAssistant: haBridge.health(),
+        kioskUpdate: kioskReleases.manifest
+          ? {
+              versionCode: kioskReleases.manifest.versionCode,
+              versionName: kioskReleases.manifest.versionName,
+            }
+          : null,
       });
     }
     if (request.method === "GET" && url.pathname === "/api/status") {
@@ -192,6 +205,30 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && url.pathname === "/metrics") {
       return text(response, 200, renderPrometheus(dashboard()), "text/plain; version=0.0.4; charset=utf-8");
+    }
+    if (["GET", "HEAD"].includes(request.method) && url.pathname === KIOSK_UPDATE_PATH) {
+      if (!kioskReleases.manifest) {
+        return json(response, 404, { error: "Kiosk update is not available" });
+      }
+      const body = Buffer.from(JSON.stringify(kioskReleases.manifest));
+      response.writeHead(200, {
+        ...responseHeaders("application/json; charset=utf-8"),
+        "content-length": body.length,
+      });
+      return response.end(request.method === "HEAD" ? undefined : body);
+    }
+    if (["GET", "HEAD"].includes(request.method) && kioskReleases.matchesArtifact(url.pathname)) {
+      const body = await kioskReleases.readArtifact();
+      response.writeHead(200, {
+        "content-type": "application/vnd.android.package-archive",
+        "content-length": kioskReleases.artifactSize,
+        "cache-control": "public, max-age=31536000, immutable",
+        etag: `"${kioskReleases.manifest.sha256}"`,
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+      });
+      return response.end(request.method === "HEAD" ? undefined : body);
     }
     if (config.pairingEnabled && request.method === "POST" && url.pathname === "/api/v1/pairings") {
       const body = await readJson(request, 16 * 1024);

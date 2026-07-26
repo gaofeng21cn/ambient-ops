@@ -6,9 +6,9 @@ final class ServiceSelectionPolicy {
     static boolean shouldAccept(
         String rememberedInstanceId,
         String candidateInstanceId,
-        boolean currentPageHealthy
+        boolean keepRememberedInstance
     ) {
-        if (!currentPageHealthy || rememberedInstanceId == null) {
+        if (!keepRememberedInstance || rememberedInstanceId == null) {
             return true;
         }
         return rememberedInstanceId.equals(candidateInstanceId);

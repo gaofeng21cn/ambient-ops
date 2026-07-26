@@ -27,6 +27,11 @@ public final class ServiceSelectionPolicyTest {
     }
 
     @Test
+    public void pendingRememberedEndpointRejectsAnotherInstance() {
+        assertFalse(ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", true));
+    }
+
+    @Test
     public void firstHealthyDiscoveryIsAcceptedWithoutRememberedInstance() {
         assertTrue(ServiceSelectionPolicy.shouldAccept(null, "home-ops", true));
     }

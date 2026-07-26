@@ -35,6 +35,9 @@ public final class MainActivity extends Activity {
     private static final String EXTRA_URL = "ambient_ops_url";
     private static final String EXTRA_INSTANCE_ID = "ambient_ops_instance_id";
     private static final long RETRY_DELAY_MS = 2_000L;
+    private static final long RESOLVE_TIMEOUT_MS = 5_000L;
+    private static final long UPDATE_INITIAL_DELAY_MS = 10_000L;
+    private static final long UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1_000L;
     private static final int IMMERSIVE_FLAGS =
         View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             | View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -49,8 +52,10 @@ public final class MainActivity extends Activity {
     private NsdManager nsdManager;
     private NsdManager.DiscoveryListener discoveryListener;
     private SharedPreferences preferences;
+    private KioskUpdater kioskUpdater;
     private String currentEndpoint;
     private boolean pageLoaded;
+    private boolean endpointAttemptInProgress;
     private boolean resolving;
 
     private final Runnable retry = () -> {
@@ -59,6 +64,23 @@ public final class MainActivity extends Activity {
         } else {
             showDiscoveryState("正在查找 Ambient Ops");
             startDiscovery();
+        }
+    };
+    private final Runnable resolveTimeout = () -> {
+        if (!resolving) {
+            return;
+        }
+        resolving = false;
+        stopDiscovery();
+        handler.postDelayed(this::startDiscovery, RETRY_DELAY_MS);
+    };
+    private final Runnable updateCheck = new Runnable() {
+        @Override
+        public void run() {
+            if (kioskUpdater != null && pageLoaded && currentEndpoint != null) {
+                kioskUpdater.check(currentEndpoint);
+            }
+            handler.postDelayed(this, UPDATE_INTERVAL_MS);
         }
     };
 
@@ -77,6 +99,7 @@ public final class MainActivity extends Activity {
         enterImmersiveMode();
 
         preferences = getSharedPreferences(PREFS, MODE_PRIVATE);
+        kioskUpdater = new KioskUpdater(this);
         applyConfiguration(getIntent());
         nsdManager = (NsdManager) getSystemService(Context.NSD_SERVICE);
 
@@ -93,8 +116,11 @@ public final class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 if (ServiceSelectionPolicy.shouldMarkPageHealthy(currentEndpoint, url)) {
                     pageLoaded = true;
+                    endpointAttemptInProgress = false;
                     handler.removeCallbacks(retry);
                     preferences.edit().putString(PREF_ENDPOINT, url).apply();
+                    handler.removeCallbacks(updateCheck);
+                    handler.postDelayed(updateCheck, UPDATE_INITIAL_DELAY_MS);
                 }
                 enterImmersiveMode();
             }
@@ -125,9 +151,14 @@ public final class MainActivity extends Activity {
 
         String rememberedEndpoint = preferences.getString(PREF_ENDPOINT, null);
         String manualUrl = preferences.getString(PREF_MANUAL_URL, null);
-        currentEndpoint = validHttpUrl(rememberedEndpoint)
-            ? rememberedEndpoint
-            : validHttpUrl(manualUrl) ? manualUrl : null;
+        String requestedUrl = getIntent() == null
+            ? null
+            : getIntent().getStringExtra(EXTRA_URL);
+        currentEndpoint = validHttpUrl(requestedUrl)
+            ? requestedUrl
+            : validHttpUrl(rememberedEndpoint)
+                ? rememberedEndpoint
+                : validHttpUrl(manualUrl) ? manualUrl : null;
         if (currentEndpoint != null) {
             loadEndpoint(currentEndpoint);
         } else {
@@ -140,11 +171,10 @@ public final class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (applyConfiguration(intent)) {
-            String manualUrl = preferences.getString(PREF_MANUAL_URL, null);
-            if (validHttpUrl(manualUrl)) {
-                loadEndpoint(manualUrl);
-            }
+        applyConfiguration(intent);
+        String requestedUrl = intent == null ? null : intent.getStringExtra(EXTRA_URL);
+        if (validHttpUrl(requestedUrl)) {
+            loadEndpoint(requestedUrl);
         }
     }
 
@@ -176,6 +206,10 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         stopDiscovery();
+        if (kioskUpdater != null) {
+            kioskUpdater.close();
+            kioskUpdater = null;
+        }
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }
@@ -245,10 +279,13 @@ public final class MainActivity extends Activity {
 
     private void resolveService(NsdServiceInfo serviceInfo) {
         resolving = true;
+        handler.removeCallbacks(resolveTimeout);
+        handler.postDelayed(resolveTimeout, RESOLVE_TIMEOUT_MS);
         nsdManager.resolveService(serviceInfo, new NsdManager.ResolveListener() {
             @Override
             public void onResolveFailed(NsdServiceInfo failedService, int errorCode) {
                 resolving = false;
+                handler.removeCallbacks(resolveTimeout);
             }
 
             @Override
@@ -260,9 +297,16 @@ public final class MainActivity extends Activity {
 
     private void handleResolvedService(NsdServiceInfo resolved) {
         resolving = false;
+        handler.removeCallbacks(resolveTimeout);
         String instanceId = attribute(resolved, "id");
         String preferredId = preferences.getString(PREF_INSTANCE_ID, null);
-        if (!ServiceSelectionPolicy.shouldAccept(preferredId, instanceId, pageLoaded)) {
+        if (
+            !ServiceSelectionPolicy.shouldAccept(
+                preferredId,
+                instanceId,
+                pageLoaded || endpointAttemptInProgress
+            )
+        ) {
             return;
         }
 
@@ -314,14 +358,15 @@ public final class MainActivity extends Activity {
         }
         currentEndpoint = endpoint;
         pageLoaded = false;
+        endpointAttemptInProgress = true;
         handler.removeCallbacks(retry);
         webView.loadUrl(endpoint);
     }
 
     private void handleLoadFailure() {
         pageLoaded = false;
-        currentEndpoint = null;
-        preferences.edit().remove(PREF_ENDPOINT).apply();
+        endpointAttemptInProgress = false;
+        handler.removeCallbacks(updateCheck);
         showDiscoveryState("Ambient Ops 暂时不可用，正在重新查找");
         startDiscovery();
         scheduleRetry();
