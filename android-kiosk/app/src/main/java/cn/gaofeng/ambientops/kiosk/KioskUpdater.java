@@ -22,6 +22,7 @@ import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.json.JSONException;
 
@@ -34,6 +35,7 @@ final class KioskUpdater {
     private static final int READ_TIMEOUT_MS = 30_000;
     private static final int MAX_MANIFEST_BYTES = 64 * 1024;
     private static final int MAX_APK_BYTES = 32 * 1024 * 1024;
+    private static final long ROOT_INSTALL_TIMEOUT_SECONDS = 5 * 60;
 
     private final Context context;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -75,37 +77,54 @@ final class KioskUpdater {
         }
         UpdateMetadata update = UpdateMetadata.parse(body);
         PackageInfo installed = packageInfo(context.getPackageName(), false);
+        audit(
+            "manifest_checked installedVersionCode="
+                + installed.getLongVersionCode()
+                + " offeredVersionCode="
+                + update.versionCode
+        );
         if (!update.isNewerThan(installed.getLongVersionCode())) {
+            audit("no_update offeredVersionCode=" + update.versionCode);
             return;
         }
         String installedSigner = signerSha256(installed);
-        if (
-            !EXPECTED_SIGNER_SHA256.equals(installedSigner)
-                || !EXPECTED_SIGNER_SHA256.equals(update.signerSha256)
-        ) {
-            throw new SecurityException("Installed app or update manifest signer is not trusted");
-        }
+        UpdateTrustPolicy.requireTrustedManifest(
+            update,
+            installedSigner,
+            EXPECTED_SIGNER_SHA256
+        );
+        audit("manifest_trusted offeredVersionCode=" + update.versionCode);
 
         URL apkUrl = new URL(manifestUrl, update.apkPath);
         File apk = download(apkUrl, update.versionCode);
+        audit(
+            "apk_downloaded offeredVersionCode="
+                + update.versionCode
+                + " bytes="
+                + apk.length()
+        );
         try {
-            if (!update.sha256.equals(sha256(apk))) {
-                throw new SecurityException("Downloaded APK SHA-256 does not match the manifest");
-            }
+            String candidateSha256 = sha256(apk);
             PackageInfo candidate = packageInfo(apk.getAbsolutePath(), true);
-            if (!context.getPackageName().equals(candidate.packageName)) {
-                throw new SecurityException("Downloaded APK package name is not trusted");
-            }
-            if (
-                candidate.getLongVersionCode() != update.versionCode
-                    || !update.versionName.equals(candidate.versionName)
-            ) {
-                throw new SecurityException("Downloaded APK version does not match the manifest");
-            }
-            if (!EXPECTED_SIGNER_SHA256.equals(signerSha256(candidate))) {
-                throw new SecurityException("Downloaded APK signer is not trusted");
-            }
-            installWithRoot(apk);
+            UpdateTrustPolicy.requireTrustedCandidate(
+                update,
+                context.getPackageName(),
+                candidate.packageName,
+                candidate.getLongVersionCode(),
+                candidate.versionName,
+                candidateSha256,
+                signerSha256(candidate),
+                EXPECTED_SIGNER_SHA256
+            );
+            audit(
+                "apk_trusted package="
+                    + candidate.packageName
+                    + " versionCode="
+                    + candidate.getLongVersionCode()
+                    + " sha256="
+                    + candidateSha256
+            );
+            installWithRoot(apk, update.versionCode);
         } finally {
             if (apk.exists() && !apk.delete()) {
                 Log.w(TAG, "Could not remove cached update " + apk.getName());
@@ -219,17 +238,55 @@ final class KioskUpdater {
         return sha256(signers[0].toByteArray());
     }
 
-    private void installWithRoot(File apk) throws Exception {
+    private void installWithRoot(File apk, long versionCode) throws Exception {
         String command = "pm install -r " + shellQuote(apk.getAbsolutePath());
-        Process process = new ProcessBuilder("su", "-c", command)
-            .redirectErrorStream(true)
-            .start();
+        audit(
+            "install_permission_requested route=magisk versionCode="
+                + versionCode
+                + " ownerAction=grant_permanently_if_prompted"
+        );
+        Process process;
+        try {
+            process = new ProcessBuilder("su", "-c", command)
+                .redirectErrorStream(true)
+                .start();
+        } catch (IOException error) {
+            audit(
+                "install_permission_boundary route=magisk state=unavailable versionCode="
+                    + versionCode
+            );
+            throw error;
+        }
+        boolean completed = process.waitFor(ROOT_INSTALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        if (!completed) {
+            process.destroy();
+            if (!process.waitFor(2, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+            }
+            audit(
+                "install_permission_boundary route=magisk state=owner_grant_required versionCode="
+                    + versionCode
+            );
+            throw new IOException(
+                "Permanent Magisk root grant is required before the kiosk can install updates"
+            );
+        }
         String output;
         try (InputStream input = process.getInputStream()) {
             output = new String(readLimited(input, 8 * 1024), StandardCharsets.UTF_8);
         }
         int status = process.waitFor();
-        if (status != 0 || !output.contains("Success")) {
+        RootInstallResult.Status result = RootInstallResult.classify(false, status, output);
+        if (result == RootInstallResult.Status.OWNER_GRANT_REQUIRED) {
+            audit(
+                "install_permission_boundary route=magisk state=owner_grant_required versionCode="
+                    + versionCode
+            );
+            throw new IOException(
+                "Permanent Magisk root grant is required before the kiosk can install updates"
+            );
+        }
+        if (result != RootInstallResult.Status.SUCCESS) {
             throw new IOException(
                 "Root package install failed with status "
                     + status
@@ -237,6 +294,7 @@ final class KioskUpdater {
                     + output.trim()
             );
         }
+        audit("install_handoff_completed route=magisk versionCode=" + versionCode);
     }
 
     private boolean isExternallyPoweredAndOnWifi() {
@@ -318,5 +376,9 @@ final class KioskUpdater {
 
     private static String shellQuote(String value) {
         return "'" + value.replace("'", "'\\''") + "'";
+    }
+
+    private static void audit(String message) {
+        Log.i(TAG, "event=" + message);
     }
 }
