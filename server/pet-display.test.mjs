@@ -114,9 +114,10 @@ test("uses the Codex frame timing contract for every projected pet state", () =>
   assert.equal(petAnimationForState("unknown"), PET_ANIMATIONS.idle);
 });
 
-test("matches the Codex action-to-idle playback sequence", () => {
+test("keeps every projected pet state in its own animation loop", () => {
   const idle = petPlaybackForState("idle");
   assert.equal(idle.frames.length, 6);
+  assert.equal(idle.durationMs, 6600);
   assert.equal(idle.loopStartIndex, 0);
   assert.deepEqual(idle.frames[0], {
     rowIndex: 0,
@@ -129,25 +130,19 @@ test("matches the Codex action-to-idle playback sequence", () => {
     frameDurationMs: 1920,
   });
 
-  const running = petPlaybackForState("running");
-  assert.equal(running.frames.length, 24);
-  assert.equal(running.loopStartIndex, 18);
-  assert.deepEqual(running.frames[0], {
-    rowIndex: 7,
-    columnIndex: 0,
-    frameDurationMs: 120,
-  });
-  assert.deepEqual(running.frames[17], {
-    rowIndex: 7,
-    columnIndex: 5,
-    frameDurationMs: 220,
-  });
-  assert.deepEqual(running.frames[18], idle.frames[0]);
+  for (const state of ["jumping", "failed", "waiting", "running", "review", "waving"]) {
+    const playback = petPlaybackForState(state);
+    const animation = PET_ANIMATIONS[state];
+    assert.equal(playback.frames.length, animation.frameDurations.length);
+    assert.equal(playback.durationMs, animation.duration);
+    assert.equal(playback.loopStartIndex, 0);
+    assert.ok(playback.frames.every((frame) => frame.rowIndex === animation.row));
+  }
 
   const reduced = petPlaybackForState("running", true);
   assert.equal(reduced.frames.length, 1);
   assert.equal(reduced.loopStartIndex, null);
-  assert.deepEqual(reduced.frames[0], running.frames[0]);
+  assert.deepEqual(reduced.frames[0], petPlaybackForState("running").frames[0]);
 });
 
 test("uses Codex background-position math for sprite frames", () => {
@@ -167,8 +162,8 @@ test("dedicated kiosk keeps the pet moving when Android animations are disabled"
   assert.equal(shouldReducePetMotion("Chrome", false), false);
 });
 
-test("locates frames from absolute elapsed time and catches up after throttling", () => {
-  const running = PET_ANIMATIONS.running;
+test("locates playback frames from absolute elapsed time and catches up after throttling", () => {
+  const running = petPlaybackForState("running");
 
   assert.equal(petFrameAtElapsed(running, -1), 0);
   assert.equal(petFrameAtElapsed(running, 119), 0);
@@ -178,7 +173,17 @@ test("locates frames from absolute elapsed time and catches up after throttling"
   assert.equal(petFrameAtElapsed(running, 819), 5);
   assert.equal(petFrameAtElapsed(running, 820), 0);
   assert.equal(petFrameAtElapsed(running, (820 * 12) + 360), 3);
-  assert.equal(petFrameAtElapsed(running, 600, true), 0);
+  assert.equal(petFrameAtElapsed(running, (820 * 10_000) + 600), 5);
+
+  const waiting = petPlaybackForState("waiting");
+  assert.equal(petFrameAtElapsed(waiting, (1010 * 500) + 300), 2);
+
+  const idle = petPlaybackForState("idle");
+  assert.equal(petFrameAtElapsed(idle, 6599), 5);
+  assert.equal(petFrameAtElapsed(idle, 6600), 0);
+
+  const reduced = petPlaybackForState("running", true);
+  assert.equal(petFrameAtElapsed(reduced, 600), 0);
 });
 
 function machine(machineId, machineName, status, generatedAt) {

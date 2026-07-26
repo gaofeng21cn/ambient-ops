@@ -28,6 +28,7 @@ import {
 } from "./traffic-chart.mjs";
 import {
   petAnimationForState,
+  petFrameAtElapsed,
   petFramePosition,
   petPlaybackForState,
   petSpriteGrid,
@@ -625,35 +626,26 @@ function PetSprite({ pet, machineName, spriteUrl }) {
     if (!frameElement) return undefined;
 
     const playback = petPlaybackForState(animationState, reduceMotion);
-    let frameIndex = 0;
-    let timer = null;
-    const paintFrame = () => {
-      frameElement.style.backgroundPosition = petFramePosition(
-        playback.frames[frameIndex],
-        pet,
-      );
-    };
-    const scheduleNextFrame = () => {
-      timer = window.setTimeout(() => {
-        const nextFrame = frameIndex + 1;
-        if (nextFrame >= playback.frames.length) {
-          if (playback.loopStartIndex === null) {
-            timer = null;
-            return;
-          }
-          frameIndex = playback.loopStartIndex;
-        } else {
-          frameIndex = nextFrame;
-        }
-        paintFrame();
-        scheduleNextFrame();
-      }, playback.frames[frameIndex].frameDurationMs);
+    const startedAt = window.performance.now();
+    let animationFrame = null;
+    let paintedFrameIndex = -1;
+    const paintFrame = (timestamp) => {
+      const frameIndex = petFrameAtElapsed(playback, timestamp - startedAt);
+      if (frameIndex !== paintedFrameIndex) {
+        frameElement.style.backgroundPosition = petFramePosition(
+          playback.frames[frameIndex],
+          pet,
+        );
+        paintedFrameIndex = frameIndex;
+      }
+      if (playback.loopStartIndex !== null && playback.frames.length > 1) {
+        animationFrame = window.requestAnimationFrame(paintFrame);
+      }
     };
 
-    paintFrame();
-    if (playback.frames.length > 1) scheduleNextFrame();
+    paintFrame(startedAt);
     return () => {
-      if (timer !== null) window.clearTimeout(timer);
+      if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
     };
   }, [animationState, pet.spriteVersionNumber, reduceMotion]);
 

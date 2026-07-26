@@ -3,7 +3,6 @@ const LEGACY_PET_HASH = "783854af87d6ee8639843ca7812917e062345b0095d43f9be5ea237
 const LEGACY_PET_URL = "/pets/ledger-owl/spritesheet.webp";
 const CONTENT_ADDRESSED_URL = /^\/api\/v1\/pets\/[a-f0-9]{64}\.webp$/;
 const CODEX_IDLE_DURATION_SCALE = 6;
-const CODEX_ACTION_REPEATS = 3;
 const KIOSK_USER_AGENT = /\bAmbientOpsKiosk\//;
 
 export const PET_ANIMATIONS = Object.freeze({
@@ -69,25 +68,18 @@ export function petPlaybackForState(state, reduceMotion = false) {
   if (reduceMotion) {
     return Object.freeze({
       frames: Object.freeze([actionFrames[0]]),
+      durationMs: actionFrames[0].frameDurationMs,
       loopStartIndex: null,
     });
   }
 
-  const idleFrames = framesForAnimation(PET_ANIMATIONS.idle, CODEX_IDLE_DURATION_SCALE);
-  if (action.name === "idle") {
-    return Object.freeze({
-      frames: Object.freeze(idleFrames),
-      loopStartIndex: 0,
-    });
-  }
-
-  const repeatedAction = Array.from(
-    { length: CODEX_ACTION_REPEATS },
-    () => actionFrames,
-  ).flat();
+  const frames = action.name === "idle"
+    ? framesForAnimation(PET_ANIMATIONS.idle, CODEX_IDLE_DURATION_SCALE)
+    : actionFrames;
   return Object.freeze({
-    frames: Object.freeze([...repeatedAction, ...idleFrames]),
-    loopStartIndex: repeatedAction.length,
+    frames: Object.freeze(frames),
+    durationMs: frames.reduce((total, frame) => total + frame.frameDurationMs, 0),
+    loopStartIndex: 0,
   });
 }
 
@@ -100,14 +92,19 @@ export function shouldReducePetMotion(userAgent, prefersReducedMotion) {
   return Boolean(prefersReducedMotion) && !KIOSK_USER_AGENT.test(userAgent || "");
 }
 
-export function petFrameAtElapsed(animationDefinition, elapsedMs, reduceMotion = false) {
-  if (reduceMotion) return 0;
+export function petFrameAtElapsed(playback, elapsedMs) {
+  const frames = playback?.frames || [];
+  if (frames.length === 0 || playback.loopStartIndex === null) return 0;
   const elapsed = Number.isFinite(elapsedMs) && elapsedMs > 0 ? elapsedMs : 0;
-  const loopElapsed = elapsed % animationDefinition.duration;
+  if (playback.durationMs <= 0) return 0;
+  return frameIndexAtElapsed(frames, elapsed % playback.durationMs);
+}
+
+function frameIndexAtElapsed(frames, elapsedMs) {
   let frameEnd = 0;
-  for (let frame = 0; frame < animationDefinition.frameDurations.length; frame += 1) {
-    frameEnd += animationDefinition.frameDurations[frame];
-    if (loopElapsed < frameEnd) return frame;
+  for (let frame = 0; frame < frames.length; frame += 1) {
+    frameEnd += frames[frame].frameDurationMs;
+    if (elapsedMs < frameEnd) return frame;
   }
   return 0;
 }
