@@ -137,7 +137,7 @@ jobs:
           apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "$apksigner"
           "$apksigner" verify --verbose --print-certs "$apk"
-          actual_cert="$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+          actual_cert="$("$apksigner" verify --print-certs "$apk" | sed -n 's/^.*certificate SHA-256 digest: //p' | head -n 1)"
           test "$actual_cert" = "$EXPECTED_CERT_SHA256" || {
             echo "Android signing certificate does not match the established upgrade key." >&2
             exit 1
