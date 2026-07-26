@@ -6,7 +6,7 @@ clients.
 
 ## Trust boundary
 
-- Codex TPS reads local Codex token records on each Mac and sends only the
+- Codex TPS reads local Codex token records on each host and sends only the
   allowlisted aggregate snapshot documented in
   [`agent-push-api.md`](agent-push-api.md).
 - The server reads UniFi through SNMPv3 `authPriv` or an optional read-only
@@ -16,9 +16,10 @@ clients.
 - Home Assistant is an optional downstream write target, never an authority for
   collection or display.
 
-The display and status endpoints intentionally have no browser login. Bind them
-only to the trusted LAN or a private VPN. Add an authenticated TLS reverse proxy
-before exposing them outside that boundary.
+The display, status, and one-time device approval pages intentionally have no
+browser login. Bind them only to the trusted LAN or a private VPN. Approve a
+device only when its six-digit code matches Codex TPS. Add an authenticated TLS
+reverse proxy before exposing them outside that boundary.
 
 ## Secret handling
 
@@ -47,15 +48,24 @@ The macOS runtime stores credentials in Keychain and puts only Keychain service
 names in its LaunchAgent plist. Do not replace this with raw plist environment
 values.
 
+Windows Codex TPS `v0.2.9+` generates a P-256 device key locally and stores its
+private PKCS#8 bytes only as current-user DPAPI ciphertext. Ambient Ops stores
+the corresponding public key in `/data/device-pairings.json`; that file contains
+no bearer token or device private key.
+
 ## Agent authentication
 
-All agents for one installation share a long random bearer token. Preserve the
-same token during a host migration, or rotate it deliberately and update every
-agent. A token mismatch returns HTTP 401 and eventually makes that machine
+Current macOS and legacy agents for one installation share a long random bearer
+token. Preserve it during a host migration, or rotate it deliberately and
+update every bearer agent. Windows `v0.2.9+` uses an individually approved public
+key and signed, timestamped, nonce-protected snapshots and pet uploads instead.
+An authentication mismatch returns HTTP 401 and eventually makes that machine
 stale; it must not be worked around by disabling authentication.
 
-Bearer requests use plain HTTP on the current trusted LAN. Use an HTTPS reverse
-proxy or private VPN if traffic crosses an untrusted network.
+Pairing and agent requests use plain HTTP on the current trusted LAN. Signatures
+protect integrity and device identity but do not encrypt metadata or payloads.
+Use an HTTPS reverse proxy or private VPN if traffic crosses an untrusted
+network.
 
 ## Persistent data
 

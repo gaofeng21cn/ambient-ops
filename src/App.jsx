@@ -3,6 +3,7 @@ import {
   Activity,
   Bird,
   Bot,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Expand,
@@ -15,7 +16,9 @@ import {
   Pin,
   Radio,
   Server,
+  ShieldCheck,
   WifiOff,
+  XCircle,
 } from "lucide-react";
 import {
   scaledTrafficY,
@@ -57,10 +60,116 @@ const EMPTY_STATUS = {
 };
 
 export function App() {
+  const pairingMatch = location.pathname.match(/^\/pair\/([a-zA-Z0-9_-]{32,80})$/);
+  if (pairingMatch) return <PairingApproval requestId={pairingMatch[1]} />;
   const eink = location.pathname.startsWith("/display/eink");
   const [status, connection] = useStatus();
   if (eink) return <EinkDisplay status={status} connection={connection} />;
   return <Dashboard status={status} connection={connection} />;
+}
+
+function PairingApproval({ requestId }) {
+  const [pairing, setPairing] = useState(null);
+  const [state, setState] = useState("loading");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let stopped = false;
+    fetch(`/api/v1/pairings/${requestId}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+        if (!stopped) {
+          setPairing(payload);
+          setState(payload.status);
+        }
+      })
+      .catch((nextError) => {
+        if (!stopped) {
+          setError(nextError.message);
+          setState("error");
+        }
+      });
+    return () => { stopped = true; };
+  }, [requestId]);
+
+  const respond = async (action) => {
+    setState("submitting");
+    setError("");
+    try {
+      const response = await fetch(`/api/v1/pairings/${requestId}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action,
+          verificationCode: pairing.verificationCode,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      setPairing(payload);
+      setState(payload.status);
+    } catch (nextError) {
+      setError(nextError.message);
+      setState("error");
+    }
+  };
+
+  const finished = state === "approved" || state === "rejected";
+  return (
+    <main className="pairing-shell">
+      <section className={`pairing-panel ${finished ? state : ""}`}>
+        <div className="pairing-mark" aria-hidden="true">
+          {state === "approved" ? <CheckCircle2 /> : state === "rejected" || state === "error" ? <XCircle /> : <ShieldCheck />}
+        </div>
+        {state === "loading" ? (
+          <>
+            <h1>Checking request</h1>
+            <p>Reading the Codex TPS pairing request.</p>
+          </>
+        ) : null}
+        {pairing && (state === "pending" || state === "submitting") ? (
+          <>
+            <h1>Connect Codex TPS</h1>
+            <p>Approve this Windows device only when the code matches Codex TPS.</p>
+            <dl className="pairing-device">
+              <div><dt>Device</dt><dd>{pairing.machineName}</dd></div>
+              <div><dt>Platform</dt><dd>{pairing.platform}</dd></div>
+              <div className="pairing-code-row"><dt>Pairing code</dt><dd>{pairing.verificationCode}</dd></div>
+            </dl>
+            {pairing.replacement ? <p className="pairing-warning">This replaces the existing key for the same machine ID.</p> : null}
+            <div className="pairing-actions">
+              <button type="button" className="pairing-secondary" disabled={state === "submitting"} onClick={() => respond("reject")}>Reject</button>
+              <button type="button" className="pairing-primary" disabled={state === "submitting"} onClick={() => respond("approve")}>
+                {state === "submitting" ? "Approving..." : "Allow device"}
+              </button>
+            </div>
+          </>
+        ) : null}
+        {state === "approved" ? (
+          <>
+            <h1>Device connected</h1>
+            <p>{pairing.machineName} can now send signed aggregate metrics. You can close this page.</p>
+          </>
+        ) : null}
+        {state === "rejected" ? (
+          <>
+            <h1>Request rejected</h1>
+            <p>No device key was added. You can close this page.</p>
+          </>
+        ) : null}
+        {state === "error" ? (
+          <>
+            <h1>Pairing unavailable</h1>
+            <p>{error || "This request expired or could not be read."}</p>
+          </>
+        ) : null}
+      </section>
+    </main>
+  );
 }
 
 function useStatus() {

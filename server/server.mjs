@@ -21,6 +21,7 @@ import {
   readPetAssetBody,
   validatePetUpload,
 } from "./pet-assets.mjs";
+import { DevicePairingStore } from "./pairing.mjs";
 import packageMetadata from "../package.json" with { type: "json" };
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -34,6 +35,7 @@ const config = {
   discoveryEnabled: booleanEnv("DISCOVERY_ENABLED", true),
   instanceId: process.env.INSTANCE_ID || "",
   pushToken: secretEnv("AGENT_PUSH_TOKEN", "AGENT_PUSH_TOKEN_KEYCHAIN_SERVICE"),
+  pairingEnabled: booleanEnv("DEVICE_PAIRING_ENABLED", true),
   unifiBaseUrl: process.env.UNIFI_BASE_URL || "",
   unifiSite: process.env.UNIFI_SITE || "default",
   unifiApiKey: secretEnv("UNIFI_API_KEY"),
@@ -73,6 +75,8 @@ const store = new StatusStore(config.dataDir);
 await store.load();
 const petAssets = new PetAssetStore(config.dataDir);
 await petAssets.load();
+const pairingStore = new DevicePairingStore(config.dataDir);
+await pairingStore.load();
 await pruneStaleMachines();
 const instanceId = await resolveInstanceId(config.dataDir, config.instanceId);
 if (config.demo) updateDemo(store);
@@ -178,6 +182,8 @@ const server = createServer(async (request, response) => {
         network: current.network.status,
         codex: current.codex.status,
         machines: current.codex.machineCount,
+        devicePairing: config.pairingEnabled,
+        pairedDevices: pairingStore.pairedDeviceCount,
         homeAssistant: haBridge.health(),
       });
     }
@@ -186,6 +192,36 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && url.pathname === "/metrics") {
       return text(response, 200, renderPrometheus(dashboard()), "text/plain; version=0.0.4; charset=utf-8");
+    }
+    if (config.pairingEnabled && request.method === "POST" && url.pathname === "/api/v1/pairings") {
+      const body = await readJson(request, 16 * 1024);
+      const paired = await pairingStore.request(body, {
+        preauthorized: authorizedBearer(request.headers.authorization, config.pushToken),
+      });
+      return json(response, 202, paired);
+    }
+    const pairingMatch = config.pairingEnabled
+      && url.pathname.match(/^\/api\/v1\/pairings\/([a-zA-Z0-9_-]{32,80})$/);
+    if (pairingMatch && request.method === "GET") {
+      const pairing = pairingStore.get(pairingMatch[1]);
+      return pairing
+        ? json(response, 200, pairing)
+        : json(response, 404, { error: "Pairing request not found or expired" });
+    }
+    if (pairingMatch && request.method === "POST") {
+      if (!sameOriginApproval(request)) {
+        return json(response, 403, { error: "Pairing approval must come from this Ambient Ops page" });
+      }
+      const body = await readJson(request, 4 * 1024);
+      if (!["approve", "reject"].includes(body.action)) {
+        return json(response, 400, { error: "Pairing action must be approve or reject" });
+      }
+      const pairing = body.action === "reject"
+        ? pairingStore.reject(pairingMatch[1])
+        : await pairingStore.approve(pairingMatch[1], body.verificationCode);
+      return pairing
+        ? json(response, 200, pairing)
+        : json(response, 404, { error: "Pairing request not found or expired" });
     }
     const petReadMatch = ["GET", "HEAD"].includes(request.method)
       && url.pathname.match(/^\/api\/v1\/pets\/([a-f0-9]{64})\.webp$/);
@@ -210,10 +246,11 @@ const server = createServer(async (request, response) => {
     }
     const pushMatch = request.method === "POST" && url.pathname.match(/^\/api\/v1\/agents\/([a-zA-Z0-9._-]{1,80})\/snapshot$/);
     if (pushMatch) {
-      if (!config.pushToken) return json(response, 503, { error: "Agent push is not configured" });
-      if (!authorizedBearer(request.headers.authorization, config.pushToken)) return json(response, 401, { error: "Unauthorized" });
-      const body = await readJson(request, 64 * 1024);
-      const snapshot = normalizeSnapshot(pushMatch[1], body);
+      const body = await readJsonBody(request, 64 * 1024);
+      if (!authorizedAgentRequest(request, pushMatch[1], url.pathname, body.raw)) {
+        return json(response, 401, { error: "Unauthorized" });
+      }
+      const snapshot = normalizeSnapshot(pushMatch[1], body.value);
       await store.setMachine(snapshot);
       return json(response, 202, {
         accepted: true,
@@ -225,9 +262,11 @@ const server = createServer(async (request, response) => {
     const petUploadMatch = request.method === "PUT"
       && url.pathname.match(/^\/api\/v1\/agents\/([a-zA-Z0-9._-]{1,80})\/pets\/([a-f0-9]{64})$/);
     if (petUploadMatch) {
-      if (!config.pushToken) return json(response, 503, { error: "Agent push is not configured" });
-      if (!authorizedBearer(request.headers.authorization, config.pushToken)) return json(response, 401, { error: "Unauthorized" });
       const [machineId, hash] = petUploadMatch.slice(1);
+      const body = await readPetAssetBody(request);
+      if (!authorizedAgentRequest(request, machineId, url.pathname, body)) {
+        return json(response, 401, { error: "Unauthorized" });
+      }
       validatePetUpload({
         machine: store.machines.get(machineId),
         machineId,
@@ -235,7 +274,6 @@ const server = createServer(async (request, response) => {
         contentType: request.headers["content-type"],
         contentEncoding: request.headers["content-encoding"],
       });
-      const body = await readPetAssetBody(request);
       const stored = await petAssets.put(hash, body, {
         spriteVersionNumber: store.machines.get(machineId).pet.spriteVersionNumber,
       });
@@ -266,6 +304,7 @@ const discovery = createDiscoveryPublisher({
   name: config.siteName,
   host: process.env.DISCOVERY_HOST || "",
   port: config.port,
+  pairingEnabled: config.pairingEnabled,
   version: packageMetadata.version,
 });
 server.listen(config.port, "0.0.0.0", () => {
@@ -284,7 +323,7 @@ async function shutdown(signal) {
   clearInterval(haTimer);
   server.close();
   try {
-    await Promise.all([store.flush(), discovery.stop()]);
+    await Promise.all([store.flush(), pairingStore.flush(), discovery.stop()]);
   } finally {
     process.exit(0);
   }
@@ -300,15 +339,23 @@ process.once("SIGTERM", () => shutdown("SIGTERM"));
 process.once("SIGINT", () => shutdown("SIGINT"));
 
 async function readJson(request, limit) {
-  let body = "";
+  return (await readJsonBody(request, limit)).value;
+}
+
+async function readJsonBody(request, limit) {
+  const chunks = [];
+  let length = 0;
   for await (const chunk of request) {
-    body += chunk;
-    if (Buffer.byteLength(body) > limit) throw httpError(413, "Payload too large");
+    const bytes = Buffer.from(chunk);
+    length += bytes.length;
+    if (length > limit) throw httpError(413, "Payload too large");
+    chunks.push(bytes);
   }
+  const raw = Buffer.concat(chunks);
   let parsed;
-  try { parsed = JSON.parse(body); } catch { throw httpError(400, "Invalid JSON"); }
+  try { parsed = JSON.parse(raw.toString("utf8")); } catch { throw httpError(400, "Invalid JSON"); }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw httpError(400, "JSON body must be an object");
-  return parsed;
+  return { raw, value: parsed };
 }
 
 async function serveApp(pathname, response, headOnly) {
@@ -349,6 +396,34 @@ function responseHeaders(contentType) {
     "x-content-type-options": "nosniff",
     "x-frame-options": "SAMEORIGIN",
   };
+}
+
+function sameOriginApproval(request) {
+  const origin = request.headers.origin;
+  const host = request.headers.host;
+  const fetchSite = request.headers["sec-fetch-site"];
+  if (!origin || !host || (fetchSite && fetchSite !== "same-origin")) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+function authorizedAgentRequest(request, machineId, pathname, body) {
+  if (authorizedBearer(request.headers.authorization, config.pushToken)) {
+    return true;
+  }
+  return config.pairingEnabled && pairingStore.authorizeRequest({
+    machineId,
+    method: request.method,
+    pathname,
+    body,
+    authorization: request.headers.authorization || "",
+    timestamp: request.headers["x-ambient-timestamp"],
+    nonce: request.headers["x-ambient-nonce"],
+    signature: request.headers["x-ambient-signature"],
+  });
 }
 
 function httpError(statusCode, message) {
