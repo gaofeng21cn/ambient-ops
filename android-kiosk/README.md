@@ -67,11 +67,11 @@ shasum -a 256 -c Ambient-Ops-Kiosk-1.1.1.apk.sha256
 adb install -r Ambient-Ops-Kiosk-1.1.1.apk
 ```
 
-The repository is private, so the GitHub download requires an authenticated
-owner account. A future release remains upgrade-compatible only when it keeps
-the application ID and signing key and increments `versionCode`. GitHub Actions
-stores the key and passwords as encrypted repository secrets; the recovery copy
-remains in the owner's encrypted local secret store.
+The GitHub Release APK and checksum are public downloads. A future release
+remains upgrade-compatible only when it keeps the application ID and signing key
+and increments `versionCode`. GitHub Actions stores the key and passwords as
+encrypted repository secrets; the recovery copy remains in the owner's
+encrypted local secret store.
 
 ## Install and update
 

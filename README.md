@@ -87,9 +87,10 @@ production instance. Stop it with `docker compose down`.
 
 ## Complete production installation
 
-This path is reproducible on a Linux Docker host or Synology NAS. A private
-repository checkout requires GitHub access. Pin a reviewed tag or commit rather
-than deploying a moving branch.
+This path is reproducible on a Linux Docker host or Synology NAS. The source
+repository and published container image are public; a source checkout is not
+required to run the versioned production image. Pin a reviewed tag or commit
+rather than deploying a moving branch when inspecting the deployment files.
 
 ### 1. Prepare the host
 
@@ -115,20 +116,17 @@ git rev-parse HEAD
 Published tags provide one immutable multi-platform image for `linux/amd64`
 and `linux/arm64`. The default Compose image is pinned to
 `ghcr.io/gaofeng21cn/ambient-ops:0.1.2`; set `AMBIENT_OPS_IMAGE` in `.env` to
-the reviewed release tag. Because this repository and its GHCR package are
-private, authenticate the Docker host once with a GitHub token that has only
-`read:packages` access:
+the reviewed release tag. The GHCR package is public, so a Docker host pulls it
+anonymously:
 
 ```bash
-printf '%s' "$GHCR_READ_TOKEN" | \
-  docker login ghcr.io -u gaofeng21cn --password-stdin
 docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.2
 ```
 
-Do not place the token in `.env`, Compose, shell history, or the repository.
-The NAS pulls the published image and does not compile Node or frontend assets.
-For local source development only, add `-f compose.local-build.yaml` and use
-`--build` explicitly.
+Do not add GitHub credentials to `.env`, Compose, or the repository for normal
+pulls. The NAS pulls the published image and does not compile Node or frontend
+assets. For local source development only, add `-f compose.local-build.yaml`
+and use `--build` explicitly.
 
 Synology must use a Container Manager/Compose version that accepts the
 `!reset` tag in `compose.host-network.yaml`. From the pinned checkout, treat

@@ -52,21 +52,19 @@ openssl rand -hex 32 > secrets/agent_push_token
 ```
 
 Set `AMBIENT_OPS_IMAGE` in `.env` to the reviewed release, for example
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.2`. This repository and package are
-private, so authenticate once with a GitHub token limited to `read:packages`,
-then pull the image:
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.2`. The GitHub Container Registry package
+is public, so Synology can pull the image without a GitHub token:
 
 ```bash
-printf '%s' "$GHCR_READ_TOKEN" | \
-  docker login ghcr.io -u gaofeng21cn --password-stdin
 docker compose -p ambient-ops -f compose.yaml pull
 ```
 
-Do not store the GitHub token in `.env`, Compose, or the repository.
+Do not add GitHub credentials to `.env`, Compose, or the repository for normal
+pulls.
 
-For a fresh installation, generate a new token as above. For a migration, copy
-the existing token instead; changing it makes every Codex TPS agent fail with
-HTTP 401 until its Keychain item is updated.
+For a fresh installation, generate a new **agent push token** as above. For a
+migration, copy the existing agent push token instead; changing it makes every
+Codex TPS agent fail with HTTP 401 until its Keychain item is updated.
 
 Set at least:
 
