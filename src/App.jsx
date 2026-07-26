@@ -130,7 +130,7 @@ function PairingApproval({ requestId }) {
         {pairing && (state === "pending" || state === "submitting") ? (
           <>
             <h1>Connect Codex TPS</h1>
-            <p>Approve this Windows device only when the code matches Codex TPS.</p>
+            <p>Approve this device only when the code matches Codex TPS.</p>
             <dl className="pairing-device">
               <div><dt>Device</dt><dd>{pairing.machineName}</dd></div>
               <div><dt>Platform</dt><dd>{pairing.platform}</dd></div>

@@ -46,7 +46,8 @@ Never ask me to paste a token or password into chat, never print/read secret
 file contents, and never put credentials in .env, Compose, commands, logs, or
 the repository. Pause only for me to run the documented interactive
 set-secret command. On Windows Codex TPS v0.2.9+, use the automatic device
-pairing page; only macOS and legacy agents require the existing token to be
+pairing page. On macOS Codex TPS v0.2.11+, use the same automatic pairing
+flow. Only headless and legacy bearer agents require the existing token to be
 entered locally.
 
 Preserve an existing .env, INSTANCE_ID, secrets directory, and
@@ -140,12 +141,13 @@ restart ownership is Docker Compose `restart: unless-stopped`.
 
 ### 5. Connect agents and kiosk
 
-Windows Codex TPS v0.2.9+ discovers Ambient Ops, opens a one-time approval
-page, and stores its device private key with Windows DPAPI. The user compares
-the six-digit code and approves the device; no shared token is copied. macOS
-and legacy agents still receive the exact agent token locally. The Agent may
-configure non-secret switches and verify machine state, but must not read or
-relay the token through chat.
+Windows Codex TPS v0.2.9+ and macOS Codex TPS v0.2.11+ discover Ambient Ops,
+open a one-time approval page, and store a per-device private key with Windows
+DPAPI or the macOS Keychain. The user compares the six-digit code and approves
+the device; no shared token is copied. Only headless and legacy bearer agents
+still receive the exact agent token locally. The Agent may configure non-secret
+switches and verify machine state, but must not read or relay the token through
+chat.
 
 The Android APK comes only from the official release plus sibling checksum.
 Before `adb install -r`, compare the installed and candidate signing

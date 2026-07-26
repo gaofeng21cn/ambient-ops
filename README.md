@@ -17,12 +17,12 @@ Docker. It is not zero-configuration, but normal installation is intentionally
 limited to one `.env` file plus private files under `secrets/`. Router metrics
 are optional; Codex and pet status can run in `codex-only` mode.
 
-Published release `v0.1.8` includes:
+Published release `v0.1.9` includes:
 
 - public `linux/amd64` and `linux/arm64` image
-  `ghcr.io/gaofeng21cn/ambient-ops:0.1.8`
-- one-click Windows device pairing without copying the shared agent token
-- owner-signed `Ambient-Ops-Kiosk-1.2.3.apk` with a sibling SHA-256 file
+  `ghcr.io/gaofeng21cn/ambient-ops:0.1.9`
+- one-click macOS and Windows device pairing without copying the shared agent token
+- owner-signed `Ambient-Ops-Kiosk-1.2.4.apk` with a sibling SHA-256 file
 - no GitHub token and no NAS-local source build for a normal deployment
 
 The same tagged Docker image embeds the exact signed APK from its GitHub
@@ -164,12 +164,12 @@ git rev-parse HEAD
 
 Published tags provide one immutable multi-platform image for `linux/amd64`
 and `linux/arm64`. The default Compose image is pinned to
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.8`; set `AMBIENT_OPS_IMAGE` in `.env` to
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.9`; set `AMBIENT_OPS_IMAGE` in `.env` to
 the reviewed release tag. The GHCR package is public, so a Docker host pulls it
 anonymously:
 
 ```bash
-docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.8
+docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.9
 ```
 
 Do not add GitHub credentials to `.env`, Compose, or the repository for normal
@@ -307,9 +307,9 @@ HA_TIMEOUT_MS=5000
 Never regenerate it during an upgrade or host migration. Back up `.env`, the
 `secrets` directory, and the Android signing key outside the repository.
 
-The agent token in `secrets/agent_push_token` must be the exact value stored in
-every Codex TPS Mac Keychain and legacy agent. Windows Codex TPS `v0.2.9+`
-instead uses a per-device signing key after one visible pairing approval.
+The agent token in `secrets/agent_push_token` is retained for headless and
+legacy bearer agents. Codex TPS `v0.2.11+` on macOS and `v0.2.9+` on Windows
+instead use a per-device signing key after one visible pairing approval.
 Rotating the shared token is allowed only when every remaining bearer agent is
 updated deliberately.
 
@@ -365,38 +365,28 @@ TCP/8787 and LAN mDNS multicast in DSM/firewall policy. See
 
 ### 6. Connect each Codex TPS host
 
-Use Codex TPS `v0.2.9` or newer for automatic Windows device pairing. Version
-`v0.2.5` is the first public release
-that includes the macOS Ambient Ops settings, automatic
-`_ambient-ops._tcp.local` discovery, host pet reporting, and the standard
-Windows installer. Older releases do not satisfy this guide. Download only
+Use Codex TPS `v0.2.11` or newer on macOS and `v0.2.9` or newer on Windows for
+automatic device pairing. Both desktop apps discover
+`_ambient-ops._tcp.local`, report the selected host pet, and use a per-device
+signing key after visible approval. Older releases do not satisfy this guide. Download only
 from the [`releases`](https://github.com/gaofeng21cn/codex-tps/releases) page
 and verify the sibling SHA-256 file.
 
 #### macOS
 
-Store the exact server agent token in the login Keychain. With `-w` last,
-macOS prompts instead of exposing the token in the command line:
-
-```bash
-security add-generic-password -U \
-  -a "$USER" \
-  -s cn.gaofeng.ambient-ops.agent-push \
-  -w
-
-security find-generic-password \
-  -a "$USER" \
-  -s cn.gaofeng.ambient-ops.agent-push >/dev/null
-```
-
-If macOS asks whether Codex TPS may read the item, approve the installed signed
-app. In Codex TPS:
+In Codex TPS:
 
 1. Expand **Ambient Ops**.
 2. Enable **Send aggregate metrics** and **Auto-discover**.
-3. Optionally select the pet for this Mac.
-4. Require the status to become connected and confirm the displayed endpoint
+3. Codex TPS opens the one-time Ambient Ops approval page automatically.
+   Confirm the six-digit code matches and select **Allow device**.
+4. Optionally select the pet for this Mac.
+5. Require the status to become connected and confirm the displayed endpoint
    is the production host.
+
+The app stores its P-256 private key in the login Keychain; Ambient Ops stores
+only the public key. No shared agent token is copied. A compatible token remains
+available only for legacy servers and agents.
 
 Discovery uses `_ambient-ops._tcp.local` and remembers `INSTANCE_ID`. It needs
 the Mac and server on an mDNS-reachable LAN; routed VLANs require a correctly
@@ -404,8 +394,9 @@ configured mDNS reflector. Client isolation blocks discovery. A manual HTTP(S)
 URL is a recovery path, not the preferred permanent setup.
 
 The optional headless agent also discovers automatically when
-`CODEX_TPS_AMBIENT_URL` is absent. See the linked Codex TPS README for its
-service installation and `CODEX_TPS_AMBIENT_INSTANCE_ID` preference.
+`CODEX_TPS_AMBIENT_URL` is absent, but still uses the bearer agent token. See
+the linked Codex TPS README for its service installation and
+`CODEX_TPS_AMBIENT_INSTANCE_ID` preference.
 
 #### Windows 11
 
