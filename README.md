@@ -277,17 +277,19 @@ normalized machine state and short network history. On Synology, also permit
 TCP/8787 and LAN mDNS multicast in DSM/firewall policy. See
 [`docs/deployment-synology.md`](docs/deployment-synology.md).
 
-### 6. Connect each Codex TPS Mac
+### 6. Connect each Codex TPS host
 
-Install a reviewed Codex TPS build whose release notes and UI explicitly
-include Ambient Ops aggregate push and `_ambient-ops._tcp.local`
-auto-discovery. Older releases without the **Ambient Ops** settings do not
-satisfy this guide; do not assume that an older `latest` tag has the feature.
-Use the [`releases`](https://github.com/gaofeng21cn/codex-tps/releases) page and
-source [`README`](https://github.com/gaofeng21cn/codex-tps/blob/main/README.md)
-to verify the selected artifact/commit. Store the exact server agent token in
-the login Keychain. With `-w` last, macOS prompts instead of exposing the token
-in the command line:
+Use Codex TPS `v0.2.5` or newer. Version `v0.2.5` is the first public release
+that includes the macOS Ambient Ops settings, automatic
+`_ambient-ops._tcp.local` discovery, host pet reporting, and the standard
+Windows installer. Older releases do not satisfy this guide. Download only
+from the [`releases`](https://github.com/gaofeng21cn/codex-tps/releases) page
+and verify the sibling SHA-256 file.
+
+#### macOS
+
+Store the exact server agent token in the login Keychain. With `-w` last,
+macOS prompts instead of exposing the token in the command line:
 
 ```bash
 security add-generic-password -U \
@@ -317,6 +319,34 @@ URL is a recovery path, not the preferred permanent setup.
 The optional headless agent also discovers automatically when
 `CODEX_TPS_AMBIENT_URL` is absent. See the linked Codex TPS README for its
 service installation and `CODEX_TPS_AMBIENT_INSTANCE_ID` preference.
+
+#### Windows 11
+
+Download `Codex-TPS-Windows-win-x64-Setup.exe` and its `.sha256` file from the
+latest Codex TPS Release. Verify and open the current-user installer:
+
+```powershell
+$installer = ".\Codex-TPS-Windows-win-x64-Setup.exe"
+$expected = ((Get-Content "$installer.sha256" -Raw).Trim() -split "\s+")[0]
+$actual = (Get-FileHash -Algorithm SHA256 $installer).Hash
+if ($expected -ne $actual) { throw "Installer checksum mismatch" }
+Start-Process $installer -Wait
+```
+
+The installer writes the app under `%LOCALAPPDATA%\Programs\Codex TPS` and
+registers a standard uninstaller. In **Settings**:
+
+1. Leave the Codex home empty for `%USERPROFILE%\.codex`, or select an explicit
+   native/WSL UNC Codex home.
+2. Enable **Ambient Ops** and **Auto-discover**.
+3. Paste the exact `agent_push_token` value used by this Ambient Ops server.
+4. Optionally enable the pet and **Start with Windows**.
+5. Accept local-network firewall access for private networks and require the
+   Ambient Ops state to become connected.
+
+The Windows installer is not yet Authenticode-signed and can show an
+unknown-publisher warning. The published checksum proves byte integrity but
+does not replace Windows publisher trust or SmartScreen reputation.
 
 ### 7. Build and install the Android kiosk
 
