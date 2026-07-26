@@ -32,6 +32,7 @@ import {
   resolvePetSpriteUrl,
   selectDisplayMachine,
 } from "./pet-display.mjs";
+import { fetchWithTimeout } from "./http.mjs";
 
 const VIEWS = ["overview", "network", "machines", "pet"];
 const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", pet: "Pet" };
@@ -75,10 +76,7 @@ function PairingApproval({ requestId }) {
 
   useEffect(() => {
     let stopped = false;
-    fetch(`/api/v1/pairings/${requestId}`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(4000),
-    })
+    fetchWithTimeout(`/api/v1/pairings/${requestId}`, { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
@@ -184,7 +182,7 @@ function useStatus() {
     let timer;
     const refresh = async () => {
       try {
-        const response = await fetch("/api/status", { cache: "no-store", signal: AbortSignal.timeout(4000) });
+        const response = await fetchWithTimeout("/api/status", { cache: "no-store" });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const next = await response.json();
         if (stopped) return;
