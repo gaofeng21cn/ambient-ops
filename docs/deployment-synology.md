@@ -52,7 +52,7 @@ openssl rand -hex 32 > secrets/agent_push_token
 ```
 
 Set `AMBIENT_OPS_IMAGE` in `.env` to the reviewed release, for example
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.1`. This repository and package are
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.2`. This repository and package are
 private, so authenticate once with a GitHub token limited to `read:packages`,
 then pull the image:
 

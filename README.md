@@ -114,7 +114,7 @@ git rev-parse HEAD
 
 Published tags provide one immutable multi-platform image for `linux/amd64`
 and `linux/arm64`. The default Compose image is pinned to
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.1`; set `AMBIENT_OPS_IMAGE` in `.env` to
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.2`; set `AMBIENT_OPS_IMAGE` in `.env` to
 the reviewed release tag. Because this repository and its GHCR package are
 private, authenticate the Docker host once with a GitHub token that has only
 `read:packages` access:
@@ -122,7 +122,7 @@ private, authenticate the Docker host once with a GitHub token that has only
 ```bash
 printf '%s' "$GHCR_READ_TOKEN" | \
   docker login ghcr.io -u gaofeng21cn --password-stdin
-docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.1
+docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.2
 ```
 
 Do not place the token in `.env`, Compose, shell history, or the repository.
