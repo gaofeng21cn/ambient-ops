@@ -7,6 +7,9 @@ temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/ambient-ops-smoke.XXXXXX")
 project_name="ambient-ops-smoke-$$"
 image_name="${AMBIENT_OPS_SMOKE_IMAGE:-ambient-ops:smoke}"
 package_version=$(CDPATH='' cd -- "$repo_root" && node -p "require('./package.json').version")
+host_uid=$(id -u)
+host_gid=$(id -g)
+secret_owner_changed=false
 
 cleanup() {
   AMBIENT_OPS_SMOKE_SECRETS_DIR="$temporary_dir/secrets" \
@@ -17,6 +20,9 @@ cleanup() {
       -f "$repo_root/ops/docker/compose.smoke.yaml" \
       -p "$project_name" \
       down --volumes --remove-orphans >/dev/null 2>&1 || true
+  if [ "$secret_owner_changed" = true ]; then
+    sudo -n chown -R "$host_uid:$host_gid" "$temporary_dir" 2>/dev/null || true
+  fi
   case "$temporary_dir" in
     "${TMPDIR:-/tmp}"/ambient-ops-smoke.*)
       find "$temporary_dir" -depth -delete 2>/dev/null || true
@@ -28,6 +34,14 @@ trap cleanup EXIT INT TERM
 mkdir -p "$temporary_dir/secrets"
 printf '%s\n' "ambient-ops-smoke-token" > "$temporary_dir/secrets/agent_push_token"
 chmod 600 "$temporary_dir/secrets/agent_push_token"
+if [ "$(uname -s)" = Linux ] && [ "$host_uid" -ne 1000 ]; then
+  command -v sudo >/dev/null 2>&1 || {
+    echo "Linux smoke test requires UID 1000 or non-interactive sudo for secret ownership." >&2
+    exit 1
+  }
+  sudo -n chown -R 1000:1000 "$temporary_dir/secrets"
+  secret_owner_changed=true
+fi
 
 compose() {
   AMBIENT_OPS_SMOKE_SECRETS_DIR="$temporary_dir/secrets" \
