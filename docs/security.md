@@ -48,17 +48,19 @@ The macOS runtime stores credentials in Keychain and puts only Keychain service
 names in its LaunchAgent plist. Do not replace this with raw plist environment
 values.
 
-Windows Codex TPS `v0.2.9+` generates a P-256 device key locally and stores its
-private PKCS#8 bytes only as current-user DPAPI ciphertext. Ambient Ops stores
-the corresponding public key in `/data/device-pairings.json`; that file contains
-no bearer token or device private key.
+Codex TPS `v0.2.11+` on macOS and `v0.2.9+` on Windows generate a P-256 device
+key locally. The Mac stores its private key in the login Keychain; Windows
+stores the private PKCS#8 bytes only as current-user DPAPI ciphertext. Ambient
+Ops stores the corresponding public key in `/data/device-pairings.json`; that
+file contains no bearer token or device private key.
 
 ## Agent authentication
 
-Current macOS and legacy agents for one installation share a long random bearer
+Headless and legacy agents for one installation share a long random bearer
 token. Preserve it during a host migration, or rotate it deliberately and
-update every bearer agent. Windows `v0.2.9+` uses an individually approved public
-key and signed, timestamped, nonce-protected snapshots and pet uploads instead.
+update every bearer agent. Current macOS and Windows desktop apps use an
+individually approved public key and signed, timestamped, nonce-protected
+snapshots and pet uploads instead.
 An authentication mismatch returns HTTP 401 and eventually makes that machine
 stale; it must not be worked around by disabling authentication.
 

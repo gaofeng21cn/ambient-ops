@@ -17,7 +17,7 @@ application from source.
 - Optional for initial Android installation: a computer with `adb`
 
 The current published server image is
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.8` for both `linux/amd64` and
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.9` for both `linux/amd64` and
 `linux/arm64`. The package is public. Do not create or configure a GitHub token
 for a normal pull.
 
@@ -48,7 +48,7 @@ Open `.env` in a local text editor. For a Codex-only screen, these are the only
 values most users review:
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.8
+AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.9
 AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Etc/UTC
@@ -156,18 +156,19 @@ readiness is intentionally not an acceptance condition.
 
 ## 5. Connect every Codex TPS computer
 
-Install Codex TPS `v0.2.5` or later from its
+Install Codex TPS `v0.2.11` or later on macOS, or `v0.2.9` or later on Windows, from its
 [Releases page](https://github.com/gaofeng21cn/codex-tps/releases). Each
 computer keeps its own raw Codex sessions and sends only aggregate snapshots.
 
-Every computer must use the exact value in `secrets/agent_push_token`. Open the
-file locally with a private editor and paste it into Codex TPS; do not paste it
-into chat, screenshots, tickets, or documentation.
+Enable Ambient Ops and Auto-discover. The desktop app creates a per-device
+P-256 key, opens the local approval page, and shows the same six-digit code.
+Confirm the code and select **Allow device**. macOS stores the private key in
+the login Keychain; Windows stores it as current-user DPAPI ciphertext. No
+shared token is copied.
 
-On macOS, Codex TPS stores the token in the login Keychain service
-`cn.gaofeng.ambient-ops.agent-push`. Enable **Send aggregate metrics** and
-**Auto-discover**. On Windows, enable Ambient Ops and Auto-discover in Settings;
-the native app stores the token with Windows DPAPI.
+`secrets/agent_push_token` remains only for headless and legacy bearer agents.
+Enter it locally when one of those agents is intentionally retained; never
+paste it into chat, screenshots, tickets, or documentation.
 
 After each host pushes, require one stable machine entry with a live timestamp.
 If the same host appears twice, stop the legacy sender rather than deleting
@@ -176,16 +177,16 @@ live state repeatedly.
 ## 6. Install the Android kiosk
 
 Download these assets from
-[Ambient Ops v0.1.8](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.8):
+[Ambient Ops v0.1.9](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.9):
 
-- `Ambient-Ops-Kiosk-1.2.3.apk`
-- `Ambient-Ops-Kiosk-1.2.3.apk.sha256`
+- `Ambient-Ops-Kiosk-1.2.4.apk`
+- `Ambient-Ops-Kiosk-1.2.4.apk.sha256`
 
 Verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.3.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.3.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.4.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.4.apk
 adb shell cmd package set-home-activity \
   cn.gaofeng.ambientops.kiosk/.MainActivity
 adb shell am start -n cn.gaofeng.ambientops.kiosk/.MainActivity

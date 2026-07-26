@@ -11,7 +11,8 @@ Authorization: Bearer <AGENT_PUSH_TOKEN>
 Content-Type: application/json
 ```
 
-Windows Codex TPS `v0.2.9+` normally uses an approved P-256 device key instead:
+Codex TPS `v0.2.11+` on macOS and `v0.2.9+` on Windows normally use an approved
+P-256 device key instead:
 
 ```http
 POST /api/v1/agents/{machineId}/snapshot
@@ -142,12 +143,12 @@ The bundled Ledger Owl remains available to old snapshots that omit
 hash. No migration or upload is required for those snapshots.
 
 For Compose, the shared bearer value lives in
-`secrets/agent_push_token`. Current macOS and legacy agents store the same value
-in Keychain or their protected credential store. Windows `v0.2.9+` automatically
-requests pairing after mDNS discovery, opens `/pair/{requestId}`, and begins
-signed pushes after the user confirms the matching six-digit code. The server
-persists only the approved public key; the Windows private key never leaves the
-device.
+`secrets/agent_push_token`. Headless and legacy bearer agents store the same
+value in Keychain or their protected credential store. Current macOS and
+Windows desktop apps automatically request pairing after mDNS discovery, open
+`/pair/{requestId}`, and begin signed pushes after the user confirms the
+matching six-digit code. The server persists only the approved public key; the
+private key never leaves the device.
 
 ## Freshness
 
