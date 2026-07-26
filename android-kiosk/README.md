@@ -8,6 +8,12 @@ Normal operation uses Wi-Fi discovery and does not require USB or `adb reverse`.
 On a rooted dedicated display, it also performs trusted unattended upgrades
 from the selected Ambient Ops server.
 
+The visible kiosk prevents Android's inactivity timeout, but never wakes a
+display that the user turned off. Boot, package replacement, discovery, and
+update checks may restore the Home activity in the background without turning
+the screen on. When the user turns the screen back on, the existing activity
+returns directly to the dashboard.
+
 ## Build and test
 
 The project requires JDK 17 and Android SDK 35. On a Homebrew-based Mac, a
@@ -65,8 +71,8 @@ owner key used by the macOS helper, plus a sibling SHA-256 file. Download both
 files from the release, then verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.4.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.4.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.5.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.5.apk
 ```
 
 The GitHub Release APK and checksum are public downloads. A future release
