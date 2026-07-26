@@ -2,13 +2,18 @@ const LEGACY_PET_ID = "ledger-owl";
 const LEGACY_PET_HASH = "783854af87d6ee8639843ca7812917e062345b0095d43f9be5ea2374a41ada6c";
 const LEGACY_PET_URL = "/pets/ledger-owl/spritesheet.webp";
 const CONTENT_ADDRESSED_URL = /^\/api\/v1\/pets\/[a-f0-9]{64}\.webp$/;
+const CODEX_IDLE_DURATION_SCALE = 6;
+const CODEX_ACTION_REPEATS = 3;
+const KIOSK_USER_AGENT = /\bAmbientOpsKiosk\//;
 
 export const PET_ANIMATIONS = Object.freeze({
   idle: animation("idle", 0, [280, 110, 110, 140, 140, 320]),
+  jumping: animation("jumping", 4, [140, 140, 140, 140, 280]),
   failed: animation("failed", 5, [140, 140, 140, 140, 140, 140, 140, 240]),
   waiting: animation("waiting", 6, [150, 150, 150, 150, 150, 260]),
   running: animation("running", 7, [120, 120, 120, 120, 120, 220]),
   review: animation("review", 8, [150, 150, 150, 150, 150, 280]),
+  waving: animation("waving", 3, [140, 140, 140, 280]),
 });
 
 export function selectDisplayMachine(machines, selectedMachineId, followMode) {
@@ -58,6 +63,43 @@ export function petAnimationForState(state) {
   return PET_ANIMATIONS[state] || PET_ANIMATIONS.idle;
 }
 
+export function petPlaybackForState(state, reduceMotion = false) {
+  const action = petAnimationForState(state);
+  const actionFrames = framesForAnimation(action);
+  if (reduceMotion) {
+    return Object.freeze({
+      frames: Object.freeze([actionFrames[0]]),
+      loopStartIndex: null,
+    });
+  }
+
+  const idleFrames = framesForAnimation(PET_ANIMATIONS.idle, CODEX_IDLE_DURATION_SCALE);
+  if (action.name === "idle") {
+    return Object.freeze({
+      frames: Object.freeze(idleFrames),
+      loopStartIndex: 0,
+    });
+  }
+
+  const repeatedAction = Array.from(
+    { length: CODEX_ACTION_REPEATS },
+    () => actionFrames,
+  ).flat();
+  return Object.freeze({
+    frames: Object.freeze([...repeatedAction, ...idleFrames]),
+    loopStartIndex: repeatedAction.length,
+  });
+}
+
+export function petFramePosition(frame, pet) {
+  const grid = petSpriteGrid(pet);
+  return `${grid.columnPosition(frame.columnIndex)} ${grid.rowPosition(frame.rowIndex)}`;
+}
+
+export function shouldReducePetMotion(userAgent, prefersReducedMotion) {
+  return Boolean(prefersReducedMotion) && !KIOSK_USER_AGENT.test(userAgent || "");
+}
+
 export function petFrameAtElapsed(animationDefinition, elapsedMs, reduceMotion = false) {
   if (reduceMotion) return 0;
   const elapsed = Number.isFinite(elapsedMs) && elapsedMs > 0 ? elapsedMs : 0;
@@ -68,6 +110,14 @@ export function petFrameAtElapsed(animationDefinition, elapsedMs, reduceMotion =
     if (loopElapsed < frameEnd) return frame;
   }
   return 0;
+}
+
+function framesForAnimation(animationDefinition, durationScale = 1) {
+  return animationDefinition.frameDurations.map((frameDurationMs, columnIndex) => Object.freeze({
+    rowIndex: animationDefinition.row,
+    columnIndex,
+    frameDurationMs: frameDurationMs * durationScale,
+  }));
 }
 
 function animation(name, row, frameDurations) {

@@ -327,21 +327,14 @@ button { font: inherit; letter-spacing: 0; }
   filter: drop-shadow(0 18px 18px rgba(0, 0, 0, .42));
   transform: translateY(-2%);
 }
-.pet-sprite-sheet {
+.pet-sprite-frame {
   position: absolute;
-  left: 0;
-  width: 800%;
-  max-width: none;
+  inset: 0;
+  background-position: 0 0;
+  background-repeat: no-repeat;
   user-select: none;
   pointer-events: none;
-  animation-timing-function: steps(1, end);
-  animation-iteration-count: infinite;
 }
-.pet-animation-idle .pet-sprite-sheet { animation-name: pet-frames-idle; animation-duration: 1100ms; }
-.pet-animation-failed .pet-sprite-sheet { animation-name: pet-frames-failed; animation-duration: 1220ms; }
-.pet-animation-waiting .pet-sprite-sheet { animation-name: pet-frames-waiting; animation-duration: 1010ms; }
-.pet-animation-running .pet-sprite-sheet { animation-name: pet-frames-running; animation-duration: 820ms; }
-.pet-animation-review .pet-sprite-sheet { animation-name: pet-frames-review; animation-duration: 1030ms; }
 .pet-sprite.failed { filter: grayscale(.35) saturate(.72) drop-shadow(0 18px 18px rgba(0, 0, 0, .42)); }
 .pet-machine-label,
 .pet-machine-control {
@@ -1176,53 +1169,6 @@ button { font: inherit; letter-spacing: 0; }
   50% { opacity: .5; transform: scale(1.55); }
 }
 
-@keyframes pet-frames-idle {
-  0% { transform: translateX(0%); }
-  25.454545% { transform: translateX(-12.5%); }
-  35.454545% { transform: translateX(-25%); }
-  45.454545% { transform: translateX(-37.5%); }
-  58.181818% { transform: translateX(-50%); }
-  70.909091%, 100% { transform: translateX(-62.5%); }
-}
-
-@keyframes pet-frames-failed {
-  0% { transform: translateX(0%); }
-  11.475410% { transform: translateX(-12.5%); }
-  22.950820% { transform: translateX(-25%); }
-  34.426230% { transform: translateX(-37.5%); }
-  45.901639% { transform: translateX(-50%); }
-  57.377049% { transform: translateX(-62.5%); }
-  68.852459% { transform: translateX(-75%); }
-  80.327869%, 100% { transform: translateX(-87.5%); }
-}
-
-@keyframes pet-frames-waiting {
-  0% { transform: translateX(0%); }
-  14.851485% { transform: translateX(-12.5%); }
-  29.702970% { transform: translateX(-25%); }
-  44.554455% { transform: translateX(-37.5%); }
-  59.405941% { transform: translateX(-50%); }
-  74.257426%, 100% { transform: translateX(-62.5%); }
-}
-
-@keyframes pet-frames-running {
-  0% { transform: translateX(0%); }
-  14.634146% { transform: translateX(-12.5%); }
-  29.268293% { transform: translateX(-25%); }
-  43.902439% { transform: translateX(-37.5%); }
-  58.536585% { transform: translateX(-50%); }
-  73.170732%, 100% { transform: translateX(-62.5%); }
-}
-
-@keyframes pet-frames-review {
-  0% { transform: translateX(0%); }
-  14.563107% { transform: translateX(-12.5%); }
-  29.126214% { transform: translateX(-25%); }
-  43.689320% { transform: translateX(-37.5%); }
-  58.252427% { transform: translateX(-50%); }
-  72.815534%, 100% { transform: translateX(-62.5%); }
-}
-
 @keyframes airview-halo {
   0%, 25% { opacity: .22; transform: scale(.7); }
   80%, 100% { opacity: 0; transform: scale(1.8); }
@@ -1233,7 +1179,7 @@ button { font: inherit; letter-spacing: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .airview-dot, .airview-halo, .traffic-dot, .pet-sprite-sheet { animation: none; }
+  .airview-dot, .airview-halo, .traffic-dot { animation: none; }
 }
 
 @media (max-width: 480px) {

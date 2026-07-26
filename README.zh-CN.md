@@ -14,10 +14,10 @@ Home Assistant 和专用 Android Kiosk。
 `.env`，敏感值单独放在 `secrets/`。路由器指标是可选项：只需要 Codex 与宠物
 状态时可使用 `codex-only` 模式。
 
-正式版 `v0.1.6` 已提供：
+正式版 `v0.1.7` 已提供：
 
 - 公开的 `linux/amd64` 与 `linux/arm64` 镜像
-  `ghcr.io/gaofeng21cn/ambient-ops:0.1.6`
+  `ghcr.io/gaofeng21cn/ambient-ops:0.1.7`
 - 由项目固定证书签名的 `Ambient-Ops-Kiosk-1.2.1.apk` 及 SHA-256 校验文件
 - NAS 匿名拉取镜像；正常部署不需要 GitHub Token，也不在 NAS 上构建源码
 
@@ -86,7 +86,7 @@ SNMP”就认定兼容。完整边界和验证方法见 [`docs/unifi.md`](docs/u
 
 ## 安装 Android Kiosk
 
-从 [Ambient Ops v0.1.6 Release][ambient-ops-v0.1.6]
+从 [Ambient Ops v0.1.7 Release][ambient-ops-v0.1.7]
 下载 APK 和同名 `.sha256`：
 
 ```bash
@@ -143,4 +143,4 @@ npm run build
 
 MIT
 
-[ambient-ops-v0.1.6]: https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.6
+[ambient-ops-v0.1.7]: https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.7

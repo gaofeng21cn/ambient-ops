@@ -58,7 +58,7 @@ valid for operators who deliberately manage identity and secret generation
 themselves.
 
 Set `AMBIENT_OPS_IMAGE` in `.env` to the reviewed release, for example
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.6`. The GitHub Container Registry package
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.7`. The GitHub Container Registry package
 is public, so Synology can pull the image without a GitHub token:
 
 ```bash
