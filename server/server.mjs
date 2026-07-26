@@ -1,5 +1,4 @@
 import { createServer } from "node:http";
-import { timingSafeEqual } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
@@ -14,6 +13,14 @@ import { updateDemo } from "./demo.mjs";
 import { HomeAssistantBridge } from "./home-assistant.mjs";
 import { renderPrometheus } from "./prometheus.mjs";
 import { createDiscoveryPublisher, resolveInstanceId } from "./discovery.mjs";
+import {
+  authorizedBearer,
+  missingPetAssets,
+  PetAssetStore,
+  petAssetUrl,
+  readPetAssetBody,
+  validatePetUpload,
+} from "./pet-assets.mjs";
 import packageMetadata from "../package.json" with { type: "json" };
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -60,9 +67,12 @@ const contentTypes = new Map([
   [".json", "application/json; charset=utf-8"],
   [".svg", "image/svg+xml"],
   [".png", "image/png"],
+  [".webp", "image/webp"],
 ]);
 const store = new StatusStore(config.dataDir);
 await store.load();
+const petAssets = new PetAssetStore(config.dataDir);
+await petAssets.load();
 await pruneStaleMachines();
 const instanceId = await resolveInstanceId(config.dataDir, config.instanceId);
 if (config.demo) updateDemo(store);
@@ -102,7 +112,10 @@ function dashboard() {
       network: store.network,
       history: store.networkHistory,
       demo: config.demo,
-    }, config),
+    }, {
+      ...config,
+      petAssetUrl: (pet) => petAssetUrl(pet, petAssets),
+    }),
   };
 }
 
@@ -174,14 +187,66 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/metrics") {
       return text(response, 200, renderPrometheus(dashboard()), "text/plain; version=0.0.4; charset=utf-8");
     }
+    const petReadMatch = ["GET", "HEAD"].includes(request.method)
+      && url.pathname.match(/^\/api\/v1\/pets\/([a-f0-9]{64})\.webp$/);
+    if (petReadMatch) {
+      const hash = petReadMatch[1];
+      const body = await petAssets.read(hash);
+      const headers = {
+        "content-type": "image/webp",
+        "content-length": body.length,
+        "cache-control": "public, max-age=31536000, immutable",
+        etag: `"${hash}"`,
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+      };
+      if (request.headers["if-none-match"] === headers.etag) {
+        response.writeHead(304, headers);
+        return response.end();
+      }
+      response.writeHead(200, headers);
+      return response.end(request.method === "HEAD" ? undefined : body);
+    }
     const pushMatch = request.method === "POST" && url.pathname.match(/^\/api\/v1\/agents\/([a-zA-Z0-9._-]{1,80})\/snapshot$/);
     if (pushMatch) {
       if (!config.pushToken) return json(response, 503, { error: "Agent push is not configured" });
-      if (!authorized(request, config.pushToken)) return json(response, 401, { error: "Unauthorized" });
+      if (!authorizedBearer(request.headers.authorization, config.pushToken)) return json(response, 401, { error: "Unauthorized" });
       const body = await readJson(request, 64 * 1024);
       const snapshot = normalizeSnapshot(pushMatch[1], body);
       await store.setMachine(snapshot);
-      return json(response, 202, { accepted: true, machineId: snapshot.machineId, generatedAt: snapshot.generatedAt });
+      return json(response, 202, {
+        accepted: true,
+        machineId: snapshot.machineId,
+        generatedAt: snapshot.generatedAt,
+        missingPetAssets: missingPetAssets(snapshot, petAssets),
+      });
+    }
+    const petUploadMatch = request.method === "PUT"
+      && url.pathname.match(/^\/api\/v1\/agents\/([a-zA-Z0-9._-]{1,80})\/pets\/([a-f0-9]{64})$/);
+    if (petUploadMatch) {
+      if (!config.pushToken) return json(response, 503, { error: "Agent push is not configured" });
+      if (!authorizedBearer(request.headers.authorization, config.pushToken)) return json(response, 401, { error: "Unauthorized" });
+      const [machineId, hash] = petUploadMatch.slice(1);
+      validatePetUpload({
+        machine: store.machines.get(machineId),
+        machineId,
+        hash,
+        contentType: request.headers["content-type"],
+        contentEncoding: request.headers["content-encoding"],
+      });
+      const body = await readPetAssetBody(request);
+      const stored = await petAssets.put(hash, body);
+      const location = `/api/v1/pets/${hash}.webp`;
+      if (!stored.created) {
+        response.writeHead(204, { ...responseHeaders("image/webp"), location, etag: `"${hash}"` });
+        return response.end();
+      }
+      return json(response, 201, {
+        stored: true,
+        assetHash: hash,
+        assetUrl: location,
+      }, { location, etag: `"${hash}"` });
     }
     if (url.pathname.startsWith("/api/")) return json(response, 404, { error: "Not found" });
     if (request.method !== "GET" && request.method !== "HEAD") return json(response, 405, { error: "Method not allowed" });
@@ -232,13 +297,6 @@ async function pruneStaleMachines() {
 process.once("SIGTERM", () => shutdown("SIGTERM"));
 process.once("SIGINT", () => shutdown("SIGINT"));
 
-function authorized(request, token) {
-  const header = request.headers.authorization || "";
-  const expected = Buffer.from(`Bearer ${token}`);
-  const actual = Buffer.from(header);
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
-}
-
 async function readJson(request, limit) {
   let body = "";
   for await (const chunk of request) {
@@ -271,8 +329,8 @@ async function serveApp(pathname, response, headOnly) {
   response.end(headOnly ? undefined : body);
 }
 
-function json(response, statusCode, payload) {
-  response.writeHead(statusCode, responseHeaders("application/json; charset=utf-8"));
+function json(response, statusCode, payload, extraHeaders = {}) {
+  response.writeHead(statusCode, { ...responseHeaders("application/json; charset=utf-8"), ...extraHeaders });
   response.end(JSON.stringify(payload));
 }
 

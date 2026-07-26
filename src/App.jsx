@@ -23,6 +23,7 @@ import {
   smoothTrafficValues,
   trafficScale,
 } from "./traffic-chart.mjs";
+import { petSpriteKey, resolvePetSpriteUrl, selectDisplayMachine } from "./pet-display.mjs";
 
 const VIEWS = ["overview", "network", "machines", "pet"];
 const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", pet: "Pet" };
@@ -101,15 +102,7 @@ function Dashboard({ status, connection }) {
     () => localStorage.getItem("ambient-ops-machine-mode") === "fixed" ? "fixed" : "auto",
   );
   const pointerStart = useRef(null);
-  const autoMachine = [...status.machines].sort((a, b) => {
-    if (a.status === "live" && b.status !== "live") return -1;
-    if (a.status !== "live" && b.status === "live") return 1;
-    return new Date(b.generatedAt).valueOf() - new Date(a.generatedAt).valueOf();
-  })[0];
-  const fixedMachine = status.machines.find((machine) => machine.machineId === selectedMachineId);
-  const selectedMachine = machineFollowMode === "auto"
-    ? autoMachine
-    : fixedMachine || autoMachine;
+  const selectedMachine = selectDisplayMachine(status.machines, selectedMachineId, machineFollowMode);
 
   useEffect(() => {
     const next = `/display/${view}`;
@@ -385,6 +378,7 @@ function DeviceMachinesView({ machines, selected, onSelect }) {
 function PetView({ machines, selected, followMode, onFollowMode, onSelect }) {
   if (!selected) return <section className="pet-view"><EmptyState /></section>;
   const pet = selected.pet;
+  const spriteUrl = resolvePetSpriteUrl(pet);
   return (
     <section className={`pet-view ${pet ? "" : "pet-unconfigured"}`}>
       <div className="pet-stage">
@@ -395,9 +389,14 @@ function PetView({ machines, selected, followMode, onFollowMode, onSelect }) {
           onFollowMode={onFollowMode}
           onSelect={onSelect}
         />
-        {pet ? (
+        {pet && spriteUrl ? (
           <>
-            <PetSprite pet={pet} machineName={selected.machineName} />
+            <PetSprite
+              key={petSpriteKey(selected, pet)}
+              pet={pet}
+              machineName={selected.machineName}
+              spriteUrl={spriteUrl}
+            />
             <div className="pet-identity">
               <strong>{pet.displayName}</strong>
               <span>{PET_STATE_LABELS[pet.state] || pet.state.toUpperCase()}</span>
@@ -406,6 +405,12 @@ function PetView({ machines, selected, followMode, onFollowMode, onSelect }) {
               <MachineTrendChart values={selected.tpsHistory?.map((sample) => sample.tps) || []} />
             </div>
           </>
+        ) : pet ? (
+          <div className="pet-empty">
+            <Bird size={58} />
+            <strong>Syncing pet</strong>
+            <span>{selected.machineName}</span>
+          </div>
         ) : (
           <div className="pet-empty">
             <Bird size={58} />
@@ -497,7 +502,7 @@ function PetMachineControl({ machines, selected, followMode, onFollowMode, onSel
   );
 }
 
-function PetSprite({ pet, machineName }) {
+function PetSprite({ pet, machineName, spriteUrl }) {
   const animation = PET_ANIMATIONS[pet.state] || PET_ANIMATIONS.idle;
   const reduceMotion = useMemo(
     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
@@ -518,7 +523,7 @@ function PetSprite({ pet, machineName }) {
       role="img"
       aria-label={`${pet.displayName} on ${machineName}, ${PET_STATE_LABELS[pet.state] || pet.state}`}
       style={{
-        backgroundImage: `url(/pets/${encodeURIComponent(pet.id)}/spritesheet.webp)`,
+        backgroundImage: `url(${spriteUrl})`,
         backgroundPosition: `${frame * 100 / 7}% ${animation.row * 100 / 8}%`,
       }}
     />
