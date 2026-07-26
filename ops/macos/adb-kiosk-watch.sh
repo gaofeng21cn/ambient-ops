@@ -1,11 +1,16 @@
 #!/bin/zsh
 set -u
 
-ADB_PATH="${ADB_PATH:-/opt/homebrew/bin/adb}"
+ADB_PATH="${ADB_PATH:-$(command -v adb 2>/dev/null || true)}"
 DEVICE_SERIAL="${ANDROID_SERIAL:-}"
 KIOSK_COMPONENT="cn.gaofeng.ambientops.kiosk/.MainActivity"
 REVERSE_SPEC="tcp:8791 tcp:8791"
 configured_connection=0
+
+if [[ -z "$ADB_PATH" || ! -x "$ADB_PATH" ]]; then
+  print -u2 "adb is unavailable; set ADB_PATH to the Android platform-tools executable."
+  exit 69
+fi
 
 adb_device() {
   if [[ -n "$DEVICE_SERIAL" ]]; then

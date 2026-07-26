@@ -2,20 +2,21 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <!-- Template rendered by install-runtime.sh. Do not install this file directly. -->
   <key>Label</key>
   <string>cn.gaofeng.ambient-ops.adb-kiosk</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/gaofeng/Library/Application Support/Ambient Ops/runtime/current/bin/adb-kiosk-watch.sh</string>
+    <string>__ADB_KIOSK_WATCH_PATH__</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>__EXECUTABLE_PATH__</string>
     <key>ADB_PATH</key>
-    <string>/opt/homebrew/bin/adb</string>
+    <string>__ADB_PATH__</string>
     <key>ANDROID_SERIAL</key>
-    <string>FA0611N00402</string>
+    <string>__ANDROID_SERIAL__</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
@@ -26,8 +27,8 @@
   <key>ProcessType</key>
   <string>Background</string>
   <key>StandardOutPath</key>
-  <string>/Users/gaofeng/Library/Application Support/Ambient Ops/logs/adb-kiosk.out.log</string>
+  <string>__LOG_DIR__/adb-kiosk.out.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/gaofeng/Library/Application Support/Ambient Ops/logs/adb-kiosk.err.log</string>
+  <string>__LOG_DIR__/adb-kiosk.err.log</string>
 </dict>
 </plist>
