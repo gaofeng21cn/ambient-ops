@@ -168,15 +168,40 @@ jobs:
             echo "Android signing certificate does not match the established upgrade key." >&2
             exit 1
           }
-          aapt="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
-          test -x "$aapt"
-          package_line="$("$aapt" dump badging "$apk" | sed -n '1p')"
-          package_name="$(printf '%s\n' "$package_line" | sed -n "s/.*name='\([^']*\)'.*/\1/p")"
-          version_code="$(printf '%s\n' "$package_line" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")"
-          version_name="$(printf '%s\n' "$package_line" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
-          test "$package_name" = "cn.gaofeng.ambientops.kiosk"
-          test -n "$version_code"
-          test -n "$version_name"
+          metadata="android-kiosk/app/build/outputs/apk/release/output-metadata.json"
+          test -f "$metadata" || {
+            echo "Android Gradle output metadata is missing." >&2
+            exit 1
+          }
+          node --input-type=module - "$metadata" "$apk" \
+            > "$RUNNER_TEMP/kiosk-apk-metadata.tsv" <<'NODE'
+          import { readFile } from "node:fs/promises";
+          import { basename } from "node:path";
+
+          const [metadataPath, apkPath] = process.argv.slice(2);
+          const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+          if (metadata.applicationId !== "cn.gaofeng.ambientops.kiosk") {
+            throw new Error(`Unexpected applicationId: ${metadata.applicationId}`);
+          }
+          if (!Array.isArray(metadata.elements) || metadata.elements.length !== 1) {
+            throw new Error("Expected exactly one Android release artifact");
+          }
+          const [artifact] = metadata.elements;
+          if (artifact.outputFile !== basename(apkPath)) {
+            throw new Error(
+              `Gradle metadata points to ${artifact.outputFile}, not ${basename(apkPath)}`,
+            );
+          }
+          if (!Number.isSafeInteger(artifact.versionCode) || artifact.versionCode <= 0) {
+            throw new Error(`Invalid versionCode: ${artifact.versionCode}`);
+          }
+          if (!/^[a-zA-Z0-9._-]{1,40}$/.test(artifact.versionName)) {
+            throw new Error(`Invalid versionName: ${artifact.versionName}`);
+          }
+          process.stdout.write(`${artifact.versionCode}\t${artifact.versionName}\n`);
+          NODE
+          IFS=$'\t' read -r version_code version_name \
+            < "$RUNNER_TEMP/kiosk-apk-metadata.tsv"
           artifact="Ambient-Ops-Kiosk-${version_name}.apk"
           cp "$apk" "$artifact"
           artifact_sha256="$(sha256sum "$artifact" | awk '{print $1}')"
