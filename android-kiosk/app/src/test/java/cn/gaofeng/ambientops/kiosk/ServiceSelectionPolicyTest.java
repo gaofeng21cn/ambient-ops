@@ -8,32 +8,59 @@ import org.junit.Test;
 public final class ServiceSelectionPolicyTest {
     @Test
     public void healthyRememberedInstanceRejectsAnotherInstance() {
-        assertFalse(ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", true));
+        assertFalse(
+            ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", true, false)
+        );
     }
 
     @Test
     public void healthyRememberedInstanceAcceptsItsUpdatedEndpoint() {
-        assertTrue(ServiceSelectionPolicy.shouldAccept("home-ops", "home-ops", true));
+        assertTrue(
+            ServiceSelectionPolicy.shouldAccept("home-ops", "home-ops", true, false)
+        );
     }
 
     @Test
     public void healthyRememberedInstanceRejectsAnonymousCandidate() {
-        assertFalse(ServiceSelectionPolicy.shouldAccept("home-ops", null, true));
+        assertFalse(ServiceSelectionPolicy.shouldAccept("home-ops", null, true, false));
     }
 
     @Test
     public void failedPageAcceptsAnotherInstance() {
-        assertTrue(ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", false));
+        assertTrue(
+            ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", false, false)
+        );
     }
 
     @Test
     public void pendingRememberedEndpointRejectsAnotherInstance() {
-        assertFalse(ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", true));
+        assertFalse(
+            ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", true, false)
+        );
     }
 
     @Test
     public void firstHealthyDiscoveryIsAcceptedWithoutRememberedInstance() {
-        assertTrue(ServiceSelectionPolicy.shouldAccept(null, "home-ops", true));
+        assertTrue(ServiceSelectionPolicy.shouldAccept(null, "home-ops", true, false));
+    }
+
+    @Test
+    public void explicitBindingRejectsFailoverAfterPageFailure() {
+        assertFalse(
+            ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", false, true)
+        );
+    }
+
+    @Test
+    public void explicitBindingAcceptsSameInstanceAfterPageFailure() {
+        assertTrue(
+            ServiceSelectionPolicy.shouldAccept("home-ops", "home-ops", false, true)
+        );
+    }
+
+    @Test
+    public void explicitUrlWithoutInstanceIdRejectsDiscoveryReplacement() {
+        assertFalse(ServiceSelectionPolicy.shouldAccept(null, "backup-ops", false, true));
     }
 
     @Test
