@@ -26,6 +26,7 @@ import {
   KIOSK_UPDATE_PATH,
   KioskReleaseStore,
 } from "./kiosk-release.mjs";
+import { sendBody } from "./http-response.mjs";
 import {
   readUiRevision,
   UI_REVISION_PATH,
@@ -197,7 +198,7 @@ const server = createServer(async (request, response) => {
   try {
     if (request.method === "GET" && url.pathname === "/healthz") {
       const current = dashboard();
-      return json(response, 200, {
+      return await json(response, 200, {
         ok: true,
         mode: config.demo ? "demo" : "live",
         status: current.overallStatus,
@@ -217,72 +218,76 @@ const server = createServer(async (request, response) => {
       });
     }
     if (request.method === "GET" && url.pathname === "/api/status") {
-      return json(response, 200, dashboard());
+      return await json(response, 200, dashboard());
     }
     if (["GET", "HEAD"].includes(request.method) && url.pathname === UI_REVISION_PATH) {
       const body = Buffer.from(JSON.stringify({ revision: uiRevision }));
-      response.writeHead(200, {
-        ...responseHeaders("application/json; charset=utf-8"),
-        "content-length": body.length,
+      return await sendBody(response, 200, body, {
+        headers: responseHeaders("application/json; charset=utf-8"),
+        headOnly: request.method === "HEAD",
       });
-      return response.end(request.method === "HEAD" ? undefined : body);
     }
     if (request.method === "GET" && url.pathname === "/metrics") {
-      return text(response, 200, renderPrometheus(dashboard()), "text/plain; version=0.0.4; charset=utf-8");
+      return await text(
+        response,
+        200,
+        renderPrometheus(dashboard()),
+        "text/plain; version=0.0.4; charset=utf-8",
+      );
     }
     if (["GET", "HEAD"].includes(request.method) && url.pathname === KIOSK_UPDATE_PATH) {
       if (!kioskReleases.manifest) {
-        return json(response, 404, { error: "Kiosk update is not available" });
+        return await json(response, 404, { error: "Kiosk update is not available" });
       }
       const body = Buffer.from(JSON.stringify(kioskReleases.manifest));
-      response.writeHead(200, {
-        ...responseHeaders("application/json; charset=utf-8"),
-        "content-length": body.length,
+      return await sendBody(response, 200, body, {
+        headers: responseHeaders("application/json; charset=utf-8"),
+        headOnly: request.method === "HEAD",
       });
-      return response.end(request.method === "HEAD" ? undefined : body);
     }
     if (["GET", "HEAD"].includes(request.method) && kioskReleases.matchesArtifact(url.pathname)) {
       const body = await kioskReleases.readArtifact();
-      response.writeHead(200, {
-        "content-type": "application/vnd.android.package-archive",
-        "content-length": kioskReleases.artifactSize,
-        "cache-control": "public, max-age=31536000, immutable",
-        etag: `"${kioskReleases.manifest.sha256}"`,
-        "referrer-policy": "no-referrer",
-        "x-content-type-options": "nosniff",
-        "x-frame-options": "SAMEORIGIN",
+      return await sendBody(response, 200, body, {
+        headers: {
+          "content-type": "application/vnd.android.package-archive",
+          "cache-control": "public, max-age=31536000, immutable",
+          etag: `"${kioskReleases.manifest.sha256}"`,
+          "referrer-policy": "no-referrer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+        },
+        headOnly: request.method === "HEAD",
       });
-      return response.end(request.method === "HEAD" ? undefined : body);
     }
     if (config.pairingEnabled && request.method === "POST" && url.pathname === "/api/v1/pairings") {
       const body = await readJson(request, 16 * 1024);
       const paired = await pairingStore.request(body, {
         preauthorized: authorizedBearer(request.headers.authorization, config.pushToken),
       });
-      return json(response, 202, paired);
+      return await json(response, 202, paired);
     }
     const pairingMatch = config.pairingEnabled
       && url.pathname.match(/^\/api\/v1\/pairings\/([a-zA-Z0-9_-]{32,80})$/);
     if (pairingMatch && request.method === "GET") {
       const pairing = pairingStore.get(pairingMatch[1]);
       return pairing
-        ? json(response, 200, pairing)
-        : json(response, 404, { error: "Pairing request not found or expired" });
+        ? await json(response, 200, pairing)
+        : await json(response, 404, { error: "Pairing request not found or expired" });
     }
     if (pairingMatch && request.method === "POST") {
       if (!sameOriginApproval(request)) {
-        return json(response, 403, { error: "Pairing approval must come from this Ambient Ops page" });
+        return await json(response, 403, { error: "Pairing approval must come from this Ambient Ops page" });
       }
       const body = await readJson(request, 4 * 1024);
       if (!["approve", "reject"].includes(body.action)) {
-        return json(response, 400, { error: "Pairing action must be approve or reject" });
+        return await json(response, 400, { error: "Pairing action must be approve or reject" });
       }
       const pairing = body.action === "reject"
         ? pairingStore.reject(pairingMatch[1])
         : await pairingStore.approve(pairingMatch[1], body.verificationCode);
       return pairing
-        ? json(response, 200, pairing)
-        : json(response, 404, { error: "Pairing request not found or expired" });
+        ? await json(response, 200, pairing)
+        : await json(response, 404, { error: "Pairing request not found or expired" });
     }
     const petReadMatch = ["GET", "HEAD"].includes(request.method)
       && url.pathname.match(/^\/api\/v1\/pets\/([a-f0-9]{64})\.webp$/);
@@ -302,18 +307,20 @@ const server = createServer(async (request, response) => {
         response.writeHead(304, headers);
         return response.end();
       }
-      response.writeHead(200, headers);
-      return response.end(request.method === "HEAD" ? undefined : body);
+      return await sendBody(response, 200, body, {
+        headers,
+        headOnly: request.method === "HEAD",
+      });
     }
     const pushMatch = request.method === "POST" && url.pathname.match(/^\/api\/v1\/agents\/([a-zA-Z0-9._-]{1,80})\/snapshot$/);
     if (pushMatch) {
       const body = await readJsonBody(request, 64 * 1024);
       if (!authorizedAgentRequest(request, pushMatch[1], url.pathname, body.raw)) {
-        return json(response, 401, { error: "Unauthorized" });
+        return await json(response, 401, { error: "Unauthorized" });
       }
       const snapshot = normalizeSnapshot(pushMatch[1], body.value);
       await store.setMachine(snapshot);
-      return json(response, 202, {
+      return await json(response, 202, {
         accepted: true,
         machineId: snapshot.machineId,
         generatedAt: snapshot.generatedAt,
@@ -326,7 +333,7 @@ const server = createServer(async (request, response) => {
       const [machineId, hash] = petUploadMatch.slice(1);
       const body = await readPetAssetBody(request);
       if (!authorizedAgentRequest(request, machineId, url.pathname, body)) {
-        return json(response, 401, { error: "Unauthorized" });
+        return await json(response, 401, { error: "Unauthorized" });
       }
       validatePetUpload({
         machine: store.machines.get(machineId),
@@ -343,19 +350,32 @@ const server = createServer(async (request, response) => {
         response.writeHead(204, { ...responseHeaders("image/webp"), location, etag: `"${hash}"` });
         return response.end();
       }
-      return json(response, 201, {
+      return await json(response, 201, {
         stored: true,
         assetHash: hash,
         assetUrl: location,
       }, { location, etag: `"${hash}"` });
     }
-    if (url.pathname.startsWith("/api/")) return json(response, 404, { error: "Not found" });
-    if (request.method !== "GET" && request.method !== "HEAD") return json(response, 405, { error: "Method not allowed" });
-    return serveApp(url.pathname, response, request.method === "HEAD");
+    if (url.pathname.startsWith("/api/")) return await json(response, 404, { error: "Not found" });
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return await json(response, 405, { error: "Method not allowed" });
+    }
+    return await serveApp(url.pathname, response, request.method === "HEAD");
   } catch (error) {
     const statusCode = error.statusCode || 500;
     if (statusCode >= 500) console.error(error);
-    return json(response, statusCode, { error: statusCode >= 500 ? "Internal server error" : error.message });
+    if (response.headersSent) {
+      response.destroy(error);
+      return;
+    }
+    try {
+      await json(response, statusCode, {
+        error: statusCode >= 500 ? "Internal server error" : error.message,
+      });
+    } catch (writeError) {
+      console.error(writeError);
+      response.destroy(writeError);
+    }
   }
 });
 
@@ -429,24 +449,28 @@ async function serveApp(pathname, response, headOnly) {
     path = join(dist, "index.html");
   }
   const body = await readFile(path);
-  response.writeHead(200, {
-    "content-type": contentTypes.get(extname(path)) || "application/octet-stream",
-    "cache-control": extname(path) === ".html" ? "no-store" : "public, max-age=31536000, immutable",
-    "referrer-policy": "no-referrer",
-    "x-content-type-options": "nosniff",
-    "x-frame-options": "SAMEORIGIN",
+  return sendBody(response, 200, body, {
+    headers: {
+      "content-type": contentTypes.get(extname(path)) || "application/octet-stream",
+      "cache-control": extname(path) === ".html" ? "no-store" : "public, max-age=31536000, immutable",
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN",
+    },
+    headOnly,
   });
-  response.end(headOnly ? undefined : body);
 }
 
 function json(response, statusCode, payload, extraHeaders = {}) {
-  response.writeHead(statusCode, { ...responseHeaders("application/json; charset=utf-8"), ...extraHeaders });
-  response.end(JSON.stringify(payload));
+  return sendBody(response, statusCode, JSON.stringify(payload), {
+    headers: { ...responseHeaders("application/json; charset=utf-8"), ...extraHeaders },
+  });
 }
 
 function text(response, statusCode, body, contentType) {
-  response.writeHead(statusCode, responseHeaders(contentType));
-  response.end(body);
+  return sendBody(response, statusCode, body, {
+    headers: responseHeaders(contentType),
+  });
 }
 
 function responseHeaders(contentType) {

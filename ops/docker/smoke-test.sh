@@ -85,6 +85,9 @@ revision_headers="$temporary_dir/ui-revision.headers"
 status_file="$temporary_dir/status.json"
 persisted_file="$temporary_dir/persisted.json"
 served_sprite="$temporary_dir/spritesheet.webp"
+ui_file="$temporary_dir/ui.html"
+ui_asset_file="$temporary_dir/ui-asset.js"
+ui_asset_headers="$temporary_dir/ui-asset.headers"
 
 curl --fail --silent --show-error "$base_url/healthz" > "$health_file"
 curl --fail --silent --show-error \
@@ -157,7 +160,32 @@ node -e '
   }
 ' "$status_file"
 
-curl --fail --silent --show-error "$base_url/display/pet" | grep -q '<div id="root"></div>'
+curl --fail --silent --show-error "$base_url/display/pet" > "$ui_file"
+grep -q '<div id="root"></div>' "$ui_file"
+ui_asset_path=$(node -e '
+  const html = require("fs").readFileSync(process.argv[1], "utf8");
+  const match = html.match(/<script[^>]+src="([^"]+\.js)"/);
+  if (!match) throw new Error("built UI did not reference a JavaScript asset");
+  process.stdout.write(match[1]);
+' "$ui_file")
+curl --fail --silent --show-error \
+  --dump-header "$ui_asset_headers" \
+  "$base_url$ui_asset_path" > "$ui_asset_file"
+node -e '
+  const fs = require("fs");
+  const headers = fs.readFileSync(process.argv[1], "utf8").toLowerCase();
+  const size = fs.statSync(process.argv[2]).size;
+  const declared = headers.match(/^content-length:\s*(\d+)\s*$/m);
+  if (!declared || Number(declared[1]) !== size) {
+    throw new Error(`UI asset length mismatch: declared=${declared?.[1]} actual=${size}`);
+  }
+  if (/^transfer-encoding:/m.test(headers)) {
+    throw new Error("UI asset unexpectedly used transfer encoding");
+  }
+  if (size <= 65536) {
+    throw new Error(`UI asset is too small to exercise large response delivery: ${size}`);
+  }
+' "$ui_asset_headers" "$ui_asset_file"
 curl --fail --silent --show-error "$base_url/pets/ledger-owl/spritesheet.webp" > "$served_sprite"
 cmp "$repo_root/public/pets/ledger-owl/spritesheet.webp" "$served_sprite"
 
