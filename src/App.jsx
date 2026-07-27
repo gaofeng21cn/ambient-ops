@@ -352,8 +352,9 @@ function DeviceOverview({ status }) {
 }
 
 function DeviceMetric({ label, value, unit, accent, className = "" }) {
+  const density = metricDensity(value);
   return (
-    <div className={`device-metric ${accent || ""} ${className}`}>
+    <div className={`device-metric ${accent || ""} ${className}`} data-density={density}>
       <span>{label}</span>
       <div><strong>{value}</strong>{unit ? <small>{unit}</small> : null}</div>
     </div>
@@ -372,7 +373,9 @@ function DeviceStat({ label, value, unit, accent = "" }) {
 function AirViewChart({ points = [], allowSampleData = false }) {
   const chartId = useId().replace(/:/g, "");
   const fillId = `${chartId}-airview-fill`;
-  const glowId = `${chartId}-airview-glow`;
+  const uploadFillId = `${chartId}-airview-upload-fill`;
+  const downloadStrokeId = `${chartId}-airview-download-stroke`;
+  const uploadStrokeId = `${chartId}-airview-upload-stroke`;
   const data = trafficData(points, allowSampleData);
   if (data.length === 0) return <div className="airview-empty">Waiting for WAN samples</div>;
   const downloadValues = smoothTrafficValues(data.map((point) => point.downloadMbps || 0));
@@ -383,24 +386,47 @@ function AirViewChart({ points = [], allowSampleData = false }) {
   const lastDownloadY = scaledTrafficY(downloadValues.at(-1), max, 100);
   const lastUploadY = scaledTrafficY(uploadValues.at(-1), max, 100);
   return (
-    <svg className="airview-chart" viewBox="0 0 1000 100" preserveAspectRatio="none" role="img" aria-label="Live WAN throughput">
-      <defs>
-        <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38bdf8" stopOpacity=".24" /><stop offset="1" stopColor="#38bdf8" stopOpacity=".04" /></linearGradient>
-        <filter id={glowId} x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2.5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-      </defs>
-      <g className="airview-grid"><line x1="0" y1="25" x2="1000" y2="25" /><line x1="0" y1="50" x2="1000" y2="50" /><line x1="0" y1="75" x2="1000" y2="75" /></g>
-      <line className="airview-baseline" x1="0" y1="99" x2="1000" y2="99" />
-      <path className="airview-fill" fill={`url(#${fillId})`} d={`${download} L 1000 100 L 0 100 Z`} />
-      <path className="airview-download" d={download} />
-      <path className="airview-upload" d={upload} />
-      <line className="airview-cursor" x1="998" y1="0" x2="998" y2="100" />
-      <g className="airview-live-edge" filter={`url(#${glowId})`}>
-        <circle className="airview-halo download" cx="998" cy={lastDownloadY} r="7" />
-        <circle className="airview-dot download" cx="998" cy={lastDownloadY} r="3.2" />
-        <circle className="airview-halo upload" cx="998" cy={lastUploadY} r="5.5" />
-        <circle className="airview-dot upload" cx="998" cy={lastUploadY} r="2.5" />
-      </g>
-    </svg>
+    <div className="airview-frame">
+      <div className="airview-meta" aria-hidden="true">
+        <span>{formatScale(max)} Mbps</span>
+        <span>{historyWindowSeconds(data)}s</span>
+      </div>
+      <svg
+        className="airview-chart"
+        viewBox="0 0 1000 100"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Live WAN throughput, ${formatMetric(downloadValues.at(-1))} Mbps download and ${formatMetric(uploadValues.at(-1))} Mbps upload`}
+      >
+        <defs>
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#38bdf8" stopOpacity=".2" /><stop offset="1" stopColor="#38bdf8" stopOpacity=".015" /></linearGradient>
+          <linearGradient id={uploadFillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#b264eb" stopOpacity=".12" /><stop offset="1" stopColor="#b264eb" stopOpacity="0" /></linearGradient>
+          <linearGradient id={downloadStrokeId} x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#70b9ff" stopOpacity=".58" /><stop offset=".7" stopColor="#70b9ff" stopOpacity=".88" /><stop offset="1" stopColor="#8bc7ff" /></linearGradient>
+          <linearGradient id={uploadStrokeId} x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#a85fe1" stopOpacity=".54" /><stop offset=".7" stopColor="#b264eb" stopOpacity=".86" /><stop offset="1" stopColor="#c47df5" /></linearGradient>
+        </defs>
+        <g className="airview-grid">
+          <line x1="0" y1="25" x2="1000" y2="25" />
+          <line x1="0" y1="50" x2="1000" y2="50" />
+          <line x1="0" y1="75" x2="1000" y2="75" />
+          <line x1="200" y1="0" x2="200" y2="100" />
+          <line x1="400" y1="0" x2="400" y2="100" />
+          <line x1="600" y1="0" x2="600" y2="100" />
+          <line x1="800" y1="0" x2="800" y2="100" />
+        </g>
+        <line className="airview-baseline" x1="0" y1="99" x2="1000" y2="99" />
+        <path className="airview-fill" fill={`url(#${fillId})`} d={`${download} L 1000 100 L 0 100 Z`} />
+        <path className="airview-upload-fill" fill={`url(#${uploadFillId})`} d={`${upload} L 1000 100 L 0 100 Z`} />
+        <path className="airview-download" style={{ stroke: `url(#${downloadStrokeId})` }} d={download} />
+        <path className="airview-upload" style={{ stroke: `url(#${uploadStrokeId})` }} d={upload} />
+        <line className="airview-cursor" x1="998" y1="0" x2="998" y2="100" />
+        <g className="airview-live-edge">
+          <circle className="airview-halo download" cx="998" cy={lastDownloadY} r="7" />
+          <circle className="airview-dot download" cx="998" cy={lastDownloadY} r="3.2" />
+          <circle className="airview-halo upload" cx="998" cy={lastUploadY} r="5.5" />
+          <circle className="airview-dot upload" cx="998" cy={lastUploadY} r="2.5" />
+        </g>
+      </svg>
+    </div>
   );
 }
 
@@ -993,6 +1019,17 @@ function machineIcon(platform = "") {
 
 function formatMetric(value) {
   return Number.isFinite(Number(value)) ? Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--";
+}
+
+function formatScale(value) {
+  return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: Number(value) < 10 ? 1 : 0 });
+}
+
+function metricDensity(value) {
+  const length = String(value ?? "").replace(/\s/g, "").length;
+  if (length >= 9) return "tight";
+  if (length >= 7) return "compact";
+  return "normal";
 }
 
 function formatTps(value) {
