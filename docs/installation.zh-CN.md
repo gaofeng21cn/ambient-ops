@@ -15,7 +15,7 @@ NAS 不在本地构建应用源码。
 - 可选：Docker 主机可通过 IPv4/UDP 161 访问经过验证的 SNMPv3 路由器
 - 首次安装 Android 时可使用一台装有 `adb` 的电脑
 
-当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.12`，同时支持
+当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.13`，同时支持
 `linux/amd64` 与 `linux/arm64`。该镜像公开可拉取；正常安装不要创建或配置
 GitHub Token。
 
@@ -45,7 +45,7 @@ git rev-parse HEAD
 确认这些值：
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.12
+AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.13
 AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Asia/Shanghai
@@ -74,16 +74,26 @@ AMBIENT_OPS_NETWORK_MODE=snmpv3
 UNIFI_SNMP_HOST=192.168.1.1
 UNIFI_SNMP_USER=ambient-ops
 UNIFI_SNMP_INTERFACES=WAN
+UNIFI_SNMP_CLIENT_INTERFACES=LAN
 UNIFI_SNMP_PORT=161
 UNIFI_SNMP_AUTH_PROTOCOL=sha
 UNIFI_SNMP_PRIV_PROTOCOL=aes
 UNIFI_POLL_MS=250
 UNIFI_RATE_WINDOW_MS=2000
+NETWORK_LATENCY_HOST=1.1.1.1
+NETWORK_LATENCY_PORT=443
+NETWORK_LATENCY_TIMEOUT_MS=1500
+NETWORK_AUXILIARY_POLL_MS=5000
 ```
 
 `UNIFI_SNMP_INTERFACES` 是精确的 IF-MIB 索引、`ifName` 或 `ifAlias`，匹配时
 不区分大小写。多个独立 WAN 用逗号分隔；不要把承载同一流量的 VLAN、PPPoE、
 隧道与物理层重复计数。
+
+`UNIFI_SNMP_CLIENT_INTERFACES` 是可选的 LAN 接口选择器，读取标准 IPv4
+邻居表并按动态条目的唯一 MAC 去重。因此显示值是活跃邻居估计，不等于控制器
+维护的完整客户端清单；路由器不提供 `ipNetToMediaTable` 时保持为空即可。
+TCP 延迟探针同样可选，应填写一个确实希望监测的稳定目标；它不需要 raw socket。
 
 用交互式命令录入两个密码，避免写入 shell 历史：
 
@@ -168,7 +178,7 @@ macOS 私钥保存在登录 Keychain，Windows 私钥保存为当前用户 DPAPI
 
 ## 6. 安装 Android Kiosk
 
-从 [Ambient Ops v0.1.12](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.12)
+从 [Ambient Ops v0.1.13](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.13)
 下载：
 
 - `Ambient-Ops-Kiosk-1.2.7.apk`

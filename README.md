@@ -17,10 +17,10 @@ Docker. It is not zero-configuration, but normal installation is intentionally
 limited to one `.env` file plus private files under `secrets/`. Router metrics
 are optional; Codex and pet status can run in `codex-only` mode.
 
-Published release `v0.1.12` includes:
+Published release `v0.1.13` includes:
 
 - public `linux/amd64` and `linux/arm64` image
-  `ghcr.io/gaofeng21cn/ambient-ops:0.1.12`
+  `ghcr.io/gaofeng21cn/ambient-ops:0.1.13`
 - one-click macOS and Windows device pairing without copying the shared agent token
 - owner-signed `Ambient-Ops-Kiosk-1.2.7.apk` with a sibling SHA-256 file
 - no GitHub token and no NAS-local source build for a normal deployment
@@ -111,6 +111,14 @@ historical. A non-UniFi router can work only when all of these are true:
   same bytes must not both be selected.
 - Hardware/software flow offload does not bypass the exported counters.
 
+The Network page can also show two optional, vendor-neutral auxiliary metrics.
+`UNIFI_SNMP_CLIENT_INTERFACES` selects exact LAN interfaces in the standard
+IPv4 `ipNetToMediaTable`; Ambient Ops counts unique dynamic MAC addresses on
+those interfaces. This is an active-neighbor estimate, not a controller client
+inventory. `NETWORK_LATENCY_HOST` enables a TCP-handshake probe to the
+configured host and port without ICMP or raw-socket privileges. Both values
+remain unavailable unless their explicit configuration and runtime probe pass.
+
 SNMP v1/v2c, SNMPv3 without privacy, IPv6-only SNMP endpoints, 32-bit-only
 interface counters, proprietary MIBs, and router APIs such as OpenWrt `ubus`
 are not supported by the current collector. Do not assume that enabling an
@@ -170,12 +178,12 @@ git rev-parse HEAD
 
 Published tags provide one immutable multi-platform image for `linux/amd64`
 and `linux/arm64`. The default Compose image is pinned to
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.12`; set `AMBIENT_OPS_IMAGE` in `.env` to
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.13`; set `AMBIENT_OPS_IMAGE` in `.env` to
 the reviewed release tag. The GHCR package is public, so a Docker host pulls it
 anonymously:
 
 ```bash
-docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.12
+docker pull ghcr.io/gaofeng21cn/ambient-ops:0.1.13
 ```
 
 Do not add GitHub credentials to `.env`, Compose, or the repository for normal
@@ -288,9 +296,14 @@ UNIFI_SNMP_USER=<snmp-v3-user>
 UNIFI_SNMP_AUTH_PROTOCOL=sha
 UNIFI_SNMP_PRIV_PROTOCOL=aes
 UNIFI_SNMP_INTERFACES=<exact-wan-name-index-or-alias>
+UNIFI_SNMP_CLIENT_INTERFACES=<exact-lan-name-index-or-alias>
 UNIFI_SNMP_TIMEOUT_MS=3000
 UNIFI_POLL_MS=250
 UNIFI_RATE_WINDOW_MS=2000
+NETWORK_LATENCY_HOST=<tcp-probe-host>
+NETWORK_LATENCY_PORT=443
+NETWORK_LATENCY_TIMEOUT_MS=1500
+NETWORK_AUXILIARY_POLL_MS=5000
 
 # Leave the UniFi API fallback empty when SNMPv3 is used.
 UNIFI_BASE_URL=

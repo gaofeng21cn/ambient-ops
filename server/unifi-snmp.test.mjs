@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateThroughput, counter64, createUnifiSnmpPoller, selectInterfaces } from "./unifi-snmp.mjs";
+import {
+  calculateThroughput,
+  countDynamicClients,
+  counter64,
+  createUnifiSnmpPoller,
+  selectInterfaces,
+} from "./unifi-snmp.mjs";
 
 const sample = (at, interfaces) => ({ sampledAt: new Date(at), interfaces });
 
@@ -32,6 +38,22 @@ test("calculates aggregate dual-WAN throughput from Counter64 deltas", () => {
   assert.equal(result.interfaces.length, 2);
 });
 
+test("counts unique dynamic clients on selected LAN interfaces", () => {
+  const table = {
+    "28.192.168.1.10": { 1: 28, 2: Buffer.from("001122334455", "hex"), 4: 3 },
+    "28.192.168.1.11": { 1: 28, 2: Buffer.from("001122334455", "hex"), 4: 3 },
+    "28.192.168.1.12": { 1: 28, 2: Buffer.from("aabbccddeeff", "hex"), 4: 3 },
+    "29.192.168.2.10": { 1: 29, 2: Buffer.from("112233445566", "hex"), 4: 3 },
+    "23.10.0.0.1": { 1: 23, 2: Buffer.from("deadbeef0001", "hex"), 4: 3 },
+    "28.192.168.1.1": { 1: 28, 2: Buffer.from("deadbeef0002", "hex"), 4: 4 },
+    "28.192.168.1.2": { 1: 28, 2: Buffer.alloc(6), 4: 3 },
+  };
+
+  assert.equal(countDynamicClients(table, [28, 29]), 3);
+  assert.equal(countDynamicClients(table, [23]), 1);
+  assert.equal(countDynamicClients(table, []), 0);
+});
+
 test("poller establishes a baseline before returning live data", async () => {
   const samples = [
     sample("2026-07-25T00:00:00.000Z", [
@@ -50,6 +72,37 @@ test("poller establishes a baseline before returning live data", async () => {
   assert.equal(result.source, "unifi-snmp-v3");
   assert.equal(result.downloadMbps, 1000);
   assert.equal(result.uploadMbps, 100);
+});
+
+test("poller adds optional LAN client count without changing WAN selection", async () => {
+  const samples = [
+    sample("2026-07-25T00:00:00.000Z", [
+      { index: 8, name: "eth8", alias: "WAN", inOctets: 0n, outOctets: 0n },
+      { index: 28, name: "br0", alias: "LAN", inOctets: 0n, outOctets: 0n },
+    ]),
+    sample("2026-07-25T00:00:01.000Z", [
+      { index: 8, name: "eth8", alias: "WAN", inOctets: 125_000_000n, outOctets: 12_500_000n },
+      { index: 28, name: "br0", alias: "LAN", inOctets: 0n, outOctets: 0n },
+    ]),
+  ];
+  const client = {
+    readInterfaces: async () => samples.shift(),
+    readClientCount: async (indexes) => {
+      assert.deepEqual(indexes, [28]);
+      return 42;
+    },
+  };
+  const poll = createUnifiSnmpPoller({
+    interfaces: ["eth8"],
+    clientInterfaces: ["br0"],
+    pollMs: 1,
+  }, client);
+
+  const result = await poll();
+  assert.equal(result.clients, 42);
+  assert.equal(result.latencyMs, null);
+  assert.equal(result.interfaces.length, 1);
+  assert.equal(result.interfaces[0].index, 8);
 });
 
 test("poller smooths one-second counter updates across four output samples", async () => {

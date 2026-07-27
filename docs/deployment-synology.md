@@ -58,7 +58,7 @@ valid for operators who deliberately manage identity and secret generation
 themselves.
 
 Set `AMBIENT_OPS_IMAGE` in `.env` to the reviewed release, for example
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.12`. The GitHub Container Registry package
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.13`. The GitHub Container Registry package
 is public, so Synology can pull the image without a GitHub token:
 
 ```bash
@@ -82,8 +82,13 @@ INSTANCE_ID=<stable-existing-or-new-id>
 UNIFI_SNMP_HOST=<gateway-address>
 UNIFI_SNMP_USER=<snmp-v3-user>
 UNIFI_SNMP_INTERFACES=<wan-interface-or-index>,<second-wan-if-used>
+UNIFI_SNMP_CLIENT_INTERFACES=<lan-interface-or-index>,<second-lan-if-used>
 UNIFI_POLL_MS=250
 UNIFI_RATE_WINDOW_MS=2000
+NETWORK_LATENCY_HOST=<tcp-probe-host>
+NETWORK_LATENCY_PORT=443
+NETWORK_LATENCY_TIMEOUT_MS=1500
+NETWORK_AUXILIARY_POLL_MS=5000
 ```
 
 Write SNMPv3 credentials to:
