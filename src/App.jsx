@@ -343,7 +343,7 @@ function DeviceOverview({ status }) {
         <AirViewChart points={status.network.history} allowSampleData={status.demo} />
       </section>
       <div className="device-summary-grid">
-        <DeviceStat label="5 MIN" value={formatTps(status.codex.fiveMinuteTps)} unit="TPS" />
+        <DeviceStat label="CODEX 5M" value={formatTps(status.codex.fiveMinuteTps)} unit="TPS" />
         <DeviceStat label="CACHE" value={status.codex.cachePercent} unit="%" />
         <DeviceStat label="LIVE" value={`${liveMachines}/${status.machines.length}`} accent={liveMachines === status.machines.length ? "green" : "amber"} />
       </div>
@@ -431,6 +431,8 @@ function AirViewChart({ points = [], allowSampleData = false }) {
 }
 
 function NetworkView({ network }) {
+  const clients = networkClientsMetric(network);
+  const latency = networkLatencyMetric(network);
   return (
     <>
       <DeviceNetworkView network={network} />
@@ -439,8 +441,8 @@ function NetworkView({ network }) {
           <div className="section-heading"><Globe2 size={26} /><h2>Internet</h2><StatusLabel status={network.status} /></div>
           <ThroughputSummary network={network} large />
           <div className="network-facts">
-            <Fact label="Connected clients" value={network.clients ?? "--"} />
-            <Fact label="Probe latency" value={network.latencyMs == null ? "--" : `${network.latencyMs} ms`} />
+            <Fact label="Connected clients" value={clients.value} />
+            <Fact label="Probe latency" value={`${latency.value}${latency.unit ? ` ${latency.unit}` : ""}`} accent={latency.accent} />
             <Fact label="Data source" value={network.source === "unifi" ? "UniFi Gateway" : network.source === "unifi-snmp-v3" ? "UniFi SNMPv3" : network.source === "demo" ? "Demonstration" : "Unconfigured"} />
             <Fact label="Last update" value={formatAge(network.updatedAt)} />
           </div>
@@ -456,6 +458,8 @@ function NetworkView({ network }) {
 }
 
 function DeviceNetworkView({ network }) {
+  const clients = networkClientsMetric(network);
+  const latency = networkLatencyMetric(network);
   return (
     <section className="device-network-view">
       <div className="device-network-metrics">
@@ -464,8 +468,8 @@ function DeviceNetworkView({ network }) {
       </div>
       <section className="device-airview network-airview"><AirViewChart points={network.history} allowSampleData={network.source === "demo"} /></section>
       <div className="device-summary-grid network-summary">
-        <DeviceStat label="CLIENTS" value={network.clients ?? "--"} />
-        <DeviceStat label="LATENCY" value={network.latencyMs ?? "--"} unit="ms" />
+        <DeviceStat label="CLIENTS" value={clients.value} />
+        <DeviceStat label="LATENCY" value={latency.value} unit={latency.unit} accent={latency.accent} />
       </div>
     </section>
   );
@@ -490,15 +494,28 @@ function MachinesView({ machines, selected, onSelect }) {
 
 function DeviceMachinesView({ machines, selected, onSelect }) {
   if (!selected) return <section className="device-machines-view"><EmptyState /></section>;
+  const activity = machineActivity(selected);
   return (
     <section className="device-machines-view">
       <div className="device-machine-tabs">
-        {machines.map((machine) => <button className={selected.machineId === machine.machineId ? "selected" : ""} key={machine.machineId} onClick={() => onSelect(machine.machineId)}><i className={machine.status} />{machine.machineName}</button>)}
+        {machines.map((machine) => (
+          <button
+            className={selected.machineId === machine.machineId ? "selected" : ""}
+            key={machine.machineId}
+            onClick={() => onSelect(machine.machineId)}
+            title={machine.machineName}
+          >
+            <i className={machine.status} />
+            <span>{machine.machineName}</span>
+          </button>
+        ))}
       </div>
       <div className="device-machine-body">
         <div className="device-machine-primary">
-          <span>1 MIN · {selected.platform}</span>
-          <DeviceMetric label="1 min" value={formatTps(selected.oneMinute.tps)} unit="TPS" accent="codex" className="machine-tps-primary" />
+          <span className={`device-machine-activity ${activity.active ? "working" : "idle"}`}>
+            <strong>{activity.label}</strong> · {activity.detail}
+          </span>
+          <DeviceMetric label="1 min" value={formatTps(selected.oneMinute.tps)} unit="TPS" accent={activity.active ? "codex" : "idle"} className="machine-tps-primary" />
         </div>
         <div className="device-machine-secondary">
           <DeviceStat label="5 MIN" value={formatTps(selected.fiveMinutes.tps)} unit="TPS" />
@@ -515,8 +532,9 @@ function PetView({ machines, selected, followMode, onFollowMode, onSelect }) {
   if (!selected) return <section className="pet-view"><EmptyState /></section>;
   const pet = selected.pet;
   const spriteUrl = resolvePetSpriteUrl(pet);
+  const petState = pet?.state || "idle";
   return (
-    <section className={`pet-view ${pet ? "" : "pet-unconfigured"}`}>
+    <section className={`pet-view pet-state-${petState} ${pet ? "" : "pet-unconfigured"}`}>
       <div className="pet-stage">
         {pet && spriteUrl ? (
           <>
@@ -531,7 +549,7 @@ function PetView({ machines, selected, followMode, onFollowMode, onSelect }) {
               <span>{PET_STATE_LABELS[pet.state] || pet.state.toUpperCase()}</span>
             </div>
             <div className="pet-trend" aria-hidden="true">
-              <MachineTrendChart values={selected.tpsHistory?.map((sample) => sample.tps) || []} />
+              <MachineTrendChart values={selected.tpsHistory?.map((sample) => sample.tps) || []} emptyLabel={false} />
             </div>
           </>
         ) : pet ? (
@@ -721,8 +739,20 @@ function usePrefersReducedMotion() {
   return preferred;
 }
 
-function MachineTrendChart({ values = [] }) {
+function MachineTrendChart({ values = [], emptyLabel = true }) {
   const fillId = useId().replace(/:/g, "");
+  const hasActivity = values.some((value) => Number(value) > 0.005);
+  if (!hasActivity) {
+    return (
+      <div className={`machine-trend-empty ${emptyLabel ? "" : "compact"}`} role="img" aria-label="No machine activity in the last five minutes">
+        {emptyLabel ? <span>NO ACTIVITY · 5 MIN</span> : null}
+        <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+          <line x1="0" y1="72" x2="1000" y2="72" />
+          <circle cx="998" cy="72" r="3" />
+        </svg>
+      </div>
+    );
+  }
   const max = Math.max(1, ...values);
   const points = linePoints(values, max, 1000, 100);
   return (
@@ -828,8 +858,8 @@ function Metric({ label, value, unit, accent }) {
   );
 }
 
-function Fact({ label, value }) {
-  return <div className="fact"><span>{label}</span><strong>{value}</strong></div>;
+function Fact({ label, value, accent = "" }) {
+  return <div className="fact"><span>{label}</span><strong className={accent}>{value}</strong></div>;
 }
 
 function TokenBar({ label, value, max, color }) {
@@ -919,6 +949,50 @@ function historyWindowSeconds(points = []) {
   return Math.max(1, points.length - 1);
 }
 
+function networkUnavailableLabel(network) {
+  return !network.source || network.source === "unconfigured" || network.status === "error" ? "N/A" : "WAIT";
+}
+
+function networkClientsMetric(network) {
+  if (network.clients !== null && network.clients !== undefined && Number.isFinite(Number(network.clients))) {
+    return { value: Math.max(0, Math.round(Number(network.clients))) };
+  }
+  return { value: networkUnavailableLabel(network) };
+}
+
+function networkLatencyMetric(network) {
+  if (network.latencyMs === null || network.latencyMs === undefined || !Number.isFinite(Number(network.latencyMs))) {
+    return { value: networkUnavailableLabel(network), unit: "", accent: "" };
+  }
+  const value = Math.max(0, Number(network.latencyMs));
+  const accent = value < 30 ? "green" : value < 80 ? "amber" : "red";
+  return { value: value.toFixed(2), unit: "ms", accent };
+}
+
+function machineActivity(machine) {
+  const currentTps = Number(machine.oneMinute?.tps || 0);
+  if (currentTps > 0.005) return { active: true, label: "WORKING", detail: machine.platform };
+
+  const history = Array.isArray(machine.tpsHistory) ? machine.tpsHistory : [];
+  const latestAt = new Date(history.at(-1)?.at || machine.generatedAt).valueOf();
+  let lastActive = null;
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const sample = history[index];
+    if (Number(sample.tps) > 0.005 && Number.isFinite(new Date(sample.at).valueOf())) {
+      lastActive = sample;
+      break;
+    }
+  }
+  if (lastActive && Number.isFinite(latestAt)) {
+    const ageSeconds = Math.max(0, Math.round((latestAt - new Date(lastActive.at).valueOf()) / 1000));
+    return { active: false, label: "IDLE", detail: `LAST ${formatDuration(ageSeconds).toUpperCase()} AGO` };
+  }
+  if (Number(machine.fiveMinutes?.tps || 0) > 0.005) {
+    return { active: false, label: "IDLE", detail: "ACTIVE <5M" };
+  }
+  return { active: false, label: "IDLE", detail: "5M NO ACTIVITY" };
+}
+
 function BottomNav({ view, setView, status, connection }) {
   const items = [
     ["overview", LayoutDashboard],
@@ -926,12 +1000,14 @@ function BottomNav({ view, setView, status, connection }) {
     ["machines", Monitor],
     ["pet", Bird],
   ];
+  const displayStatus = connection === "live" ? status.overallStatus : "stale";
+  const showFreshness = displayStatus !== "live";
   return (
-    <nav className="bottom-nav">
+    <nav className={`bottom-nav ${showFreshness ? "has-alert" : ""}`}>
       <div className="nav-tabs">
         {items.map(([id, Icon]) => <button key={id} aria-label={VIEW_LABELS[id]} className={view === id ? "active" : ""} onClick={() => setView(id)}><Icon size={24} /><span>{VIEW_LABELS[id]}</span></button>)}
       </div>
-      <div className="freshness"><span>Data freshness</span><StatusLabel status={connection === "live" ? status.overallStatus : "stale"} /><span className="divider" /><span>Updated: {formatAge(status.generatedAt, true)}</span></div>
+      {showFreshness ? <div className="freshness"><span>Data freshness</span><StatusLabel status={displayStatus} /><span className="divider" /><span>Updated: {formatAge(status.generatedAt, true)}</span></div> : null}
     </nav>
   );
 }
