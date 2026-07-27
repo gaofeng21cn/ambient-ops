@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDashboard, freshness, networkFreshness, normalizeSnapshot } from "./status-model.mjs";
+import {
+  bindPairedIdentity,
+  buildDashboard,
+  freshness,
+  networkFreshness,
+  normalizeSnapshot,
+  reconcilePairedMachineIdentities,
+} from "./status-model.mjs";
 
 test("normalizes a machine snapshot without retaining unknown content", () => {
   const snapshot = normalizeSnapshot("mac", {
@@ -11,6 +18,44 @@ test("normalizes a machine snapshot without retaining unknown content", () => {
   }, new Date("2026-07-25T00:00:01.000Z"));
   assert.equal(snapshot.oneMinute.tps, 12.5);
   assert.equal(snapshot.prompt, undefined);
+});
+
+test("binds a paired machine name over an untrusted snapshot name", () => {
+  const snapshot = normalizeSnapshot("gaofeng-worksta", {
+    machineName: "Gaofeng-WS",
+    generatedAt: "2026-07-25T00:00:00.000Z",
+  });
+  const bound = bindPairedIdentity(snapshot, {
+    machineId: "gaofeng-worksta",
+    machineName: "GAOFENG-WORKSTA",
+    platform: "Windows",
+  });
+
+  assert.equal(bound.machineId, "gaofeng-worksta");
+  assert.equal(bound.machineName, "GAOFENG-WORKSTA");
+  assert.equal(bound.platform, "unknown");
+});
+
+test("reconciles persisted snapshots to paired names at startup", () => {
+  const machines = new Map([
+    ["gaofeng-worksta", normalizeSnapshot("gaofeng-worksta", {
+      machineName: "Gaofeng-WS",
+      generatedAt: "2026-07-25T00:00:00.000Z",
+    })],
+    ["unpaired", normalizeSnapshot("unpaired", {
+      machineName: "Unpaired host",
+      generatedAt: "2026-07-25T00:00:00.000Z",
+    })],
+  ]);
+
+  assert.equal(reconcilePairedMachineIdentities(machines, (machineId) => (
+    machineId === "gaofeng-worksta"
+      ? { machineName: "GAOFENG-WORKSTA" }
+      : null
+  )), true);
+  assert.equal(machines.get("gaofeng-worksta").machineName, "GAOFENG-WORKSTA");
+  assert.equal(machines.get("unpaired").machineName, "Unpaired host");
+  assert.equal(reconcilePairedMachineIdentities(machines, () => null), false);
 });
 
 test("normalizes only supported host pet fields", () => {

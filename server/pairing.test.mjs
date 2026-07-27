@@ -41,6 +41,31 @@ test("requires approval, persists only public device material, and reloads it", 
     const reloaded = new DevicePairingStore(dataDir, { now: () => now });
     await reloaded.load();
     assert.equal(reloaded.pairedDeviceCount, 1);
+    assert.deepEqual(reloaded.pairedIdentity("windows-pc"), {
+      machineId: "windows-pc",
+      machineName: "Windows PC",
+      platform: "Windows",
+    });
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("keeps the approved machine name when the same key requests pairing again", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ambient-ops-pairing-"));
+  try {
+    const keys = keyPair();
+    const store = new DevicePairingStore(dataDir);
+    await store.load();
+    await store.request(pairingPayload(keys.publicKey), { preauthorized: true });
+
+    const repeated = await store.request({
+      ...pairingPayload(keys.publicKey),
+      machineName: "Untrusted rename",
+    });
+    assert.equal(repeated.status, "approved");
+    assert.equal(repeated.machineName, "Windows PC");
+    assert.equal(store.pairedIdentity("windows-pc").machineName, "Windows PC");
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

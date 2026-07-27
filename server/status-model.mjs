@@ -28,6 +28,26 @@ export function normalizeSnapshot(machineId, payload, receivedAt = new Date()) {
   };
 }
 
+export function bindPairedIdentity(snapshot, identity) {
+  if (!identity?.machineName) return snapshot;
+  return {
+    ...snapshot,
+    machineName: String(identity.machineName).slice(0, 80),
+  };
+}
+
+export function reconcilePairedMachineIdentities(machines, pairedIdentityForMachine) {
+  let changed = false;
+  for (const [machineId, snapshot] of machines) {
+    const reconciled = bindPairedIdentity(snapshot, pairedIdentityForMachine(machineId));
+    if (reconciled.machineName !== snapshot.machineName) {
+      machines.set(machineId, reconciled);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 function normalizeWindow(window) {
   return {
     tps: Math.max(0, finite(window.tps)),
