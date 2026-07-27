@@ -38,9 +38,11 @@ import {
   shouldReducePetMotion,
 } from "./pet-display.mjs";
 import { fetchWithTimeout } from "./http.mjs";
+import { connectionAfterFailure } from "./status-connection.mjs";
 
 const VIEWS = ["overview", "network", "machines", "pet"];
 const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", pet: "Pet" };
+const CONNECTION_STALE_GRACE_MS = 5_000;
 const PET_STATE_LABELS = {
   idle: "IDLE",
   failed: "OFFLINE",
@@ -174,6 +176,7 @@ function useStatus() {
   }, []);
   const [status, setStatus] = useState(cached || EMPTY_STATUS);
   const [connection, setConnection] = useState(cached ? "stale" : "loading");
+  const lastSuccessAt = useRef(0);
 
   useEffect(() => {
     let stopped = false;
@@ -189,9 +192,12 @@ function useStatus() {
           localStorage.setItem("home-status-last", JSON.stringify(merged));
           return merged;
         });
+        lastSuccessAt.current = Date.now();
         setConnection("live");
       } catch {
-        if (!stopped) setConnection("stale");
+        if (!stopped) {
+          setConnection(connectionAfterFailure(lastSuccessAt.current, Date.now(), CONNECTION_STALE_GRACE_MS));
+        }
       } finally {
         if (!stopped) timer = setTimeout(refresh, 250);
       }
