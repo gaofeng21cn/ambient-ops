@@ -6,7 +6,12 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { StatusStore } from "./store.mjs";
-import { buildDashboard, normalizeSnapshot } from "./status-model.mjs";
+import {
+  bindPairedIdentity,
+  buildDashboard,
+  normalizeSnapshot,
+  reconcilePairedMachineIdentities,
+} from "./status-model.mjs";
 import { pollUnifi } from "./unifi.mjs";
 import { createUnifiSnmpPoller } from "./unifi-snmp.mjs";
 import { updateDemo } from "./demo.mjs";
@@ -92,6 +97,7 @@ const petAssets = new PetAssetStore(config.dataDir);
 await petAssets.load();
 const pairingStore = new DevicePairingStore(config.dataDir);
 await pairingStore.load();
+await reconcilePersistedPairedMachineIdentities();
 const kioskReleases = new KioskReleaseStore(config.kioskReleaseDir);
 await kioskReleases.load();
 const uiRevision = await readUiRevision(dist);
@@ -318,7 +324,10 @@ const server = createServer(async (request, response) => {
       if (!authorizedAgentRequest(request, pushMatch[1], url.pathname, body.raw)) {
         return await json(response, 401, { error: "Unauthorized" });
       }
-      const snapshot = normalizeSnapshot(pushMatch[1], body.value);
+      const snapshot = bindPairedIdentity(
+        normalizeSnapshot(pushMatch[1], body.value),
+        pairingStore.pairedIdentity(pushMatch[1]),
+      );
       await store.setMachine(snapshot);
       return await json(response, 202, {
         accepted: true,
@@ -414,6 +423,14 @@ async function pruneStaleMachines() {
   const cutoff = new Date(Date.now() - config.staleAfterSeconds * 1000);
   const removed = await store.pruneMachines(cutoff);
   if (removed.length) console.log(`Retired inactive machines: ${removed.join(", ")}`);
+}
+
+async function reconcilePersistedPairedMachineIdentities() {
+  const changed = reconcilePairedMachineIdentities(
+    store.machines,
+    (machineId) => pairingStore.pairedIdentity(machineId),
+  );
+  if (changed) await store.persist();
 }
 
 process.once("SIGTERM", () => shutdown("SIGTERM"));

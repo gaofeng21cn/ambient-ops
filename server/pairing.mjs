@@ -33,6 +33,16 @@ export class DevicePairingStore {
     return this.devices.size;
   }
 
+  pairedIdentity(machineId) {
+    const device = this.devices.get(String(machineId || ""));
+    if (!device) return null;
+    return {
+      machineId: device.machineId,
+      machineName: device.machineName,
+      platform: device.platform,
+    };
+  }
+
   async load() {
     await mkdir(dirname(this.path), { recursive: true });
     try {
@@ -53,7 +63,7 @@ export class DevicePairingStore {
     const candidate = normalizePairingRequest(payload);
     const existing = this.devices.get(candidate.machineId);
     if (existing?.publicKey === candidate.publicKey) {
-      return this.completedRequest(candidate, existing.approvedAt);
+      return this.completedRequest(existing);
     }
 
     const pending = [...this.requests.values()].find(
@@ -170,17 +180,17 @@ export class DevicePairingStore {
     return this.persistChain;
   }
 
-  completedRequest(candidate, approvedAt) {
+  completedRequest(device) {
     const now = this.now();
     const request = {
       requestId: randomBytes(32).toString("base64url"),
-      ...candidate,
-      verificationCode: verificationCode(candidate.publicKey),
+      ...device,
+      verificationCode: verificationCode(device.publicKey),
       status: "approved",
       replacement: false,
       createdAt: now.toISOString(),
       expiresAt: new Date(now.valueOf() + this.requestTtlMs).toISOString(),
-      approvedAt,
+      approvedAt: device.approvedAt,
     };
     this.requests.set(request.requestId, request);
     return publicRequest(request);
