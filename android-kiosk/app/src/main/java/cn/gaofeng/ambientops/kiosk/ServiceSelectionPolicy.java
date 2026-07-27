@@ -6,8 +6,13 @@ final class ServiceSelectionPolicy {
     static boolean shouldAccept(
         String rememberedInstanceId,
         String candidateInstanceId,
-        boolean keepRememberedInstance
+        boolean keepRememberedInstance,
+        boolean explicitBinding
     ) {
+        if (explicitBinding) {
+            return rememberedInstanceId != null
+                && rememberedInstanceId.equals(candidateInstanceId);
+        }
         if (!keepRememberedInstance || rememberedInstanceId == null) {
             return true;
         }

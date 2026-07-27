@@ -71,8 +71,8 @@ owner key used by the macOS helper, plus a sibling SHA-256 file. Download both
 files from the release, then verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.5.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.5.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.6.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.6.apk
 ```
 
 The GitHub Release APK and checksum are public downloads. A future release
@@ -147,8 +147,11 @@ leaves the installed version untouched and is retried at a later check.
 The remembered endpoint has priority while its first load is pending and is
 retained when a page load fails. After that explicit failure, it remains a retry
 candidate while Android NSD searches for the logical instance at a new address.
-Each NSD resolve is bounded by a five-second timeout to prevent an Android 9
-resolver failure from leaving the kiosk permanently at "searching".
+An explicitly configured rescue URL remains pinned to its logical instance and
+cannot fail over to an unrelated development server. A Wi-Fi availability
+callback retries the endpoint during boot and wake recovery, while a ten-second
+page-load watchdog and five-second NSD resolve timeout prevent Android 9 from
+leaving the kiosk permanently at "searching".
 
 ## Cold-boot acceptance
 

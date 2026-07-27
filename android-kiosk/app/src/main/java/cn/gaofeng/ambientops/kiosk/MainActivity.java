@@ -5,6 +5,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.os.Bundle;
@@ -33,6 +37,7 @@ public final class MainActivity extends Activity {
     private static final String EXTRA_URL = "ambient_ops_url";
     private static final String EXTRA_INSTANCE_ID = "ambient_ops_instance_id";
     private static final long RETRY_DELAY_MS = 2_000L;
+    private static final long LOAD_TIMEOUT_MS = 10_000L;
     private static final long RESOLVE_TIMEOUT_MS = 5_000L;
     private static final long UPDATE_INITIAL_DELAY_MS = 10_000L;
     private static final long UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1_000L;
@@ -47,6 +52,8 @@ public final class MainActivity extends Activity {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private WebView webView;
+    private ConnectivityManager connectivityManager;
+    private ConnectivityManager.NetworkCallback networkCallback;
     private NsdManager nsdManager;
     private NsdManager.DiscoveryListener discoveryListener;
     private SharedPreferences preferences;
@@ -57,12 +64,20 @@ public final class MainActivity extends Activity {
     private boolean resolving;
 
     private final Runnable retry = () -> {
-        if (currentEndpoint != null) {
-            loadEndpoint(currentEndpoint);
+        String endpoint = preferredEndpoint();
+        if (endpoint != null) {
+            loadEndpoint(endpoint);
         } else {
             showDiscoveryState("正在查找 Ambient Ops");
             startDiscovery();
         }
+    };
+    private final Runnable loadTimeout = () -> {
+        if (pageLoaded || !endpointAttemptInProgress || webView == null) {
+            return;
+        }
+        webView.stopLoading();
+        handleLoadFailure();
     };
     private final Runnable resolveTimeout = () -> {
         if (!resolving) {
@@ -108,14 +123,7 @@ public final class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (ServiceSelectionPolicy.shouldMarkPageHealthy(currentEndpoint, url)) {
-                    pageLoaded = true;
-                    endpointAttemptInProgress = false;
-                    handler.removeCallbacks(retry);
-                    preferences.edit().putString(PREF_ENDPOINT, url).apply();
-                    handler.removeCallbacks(updateCheck);
-                    handler.postDelayed(updateCheck, UPDATE_INITIAL_DELAY_MS);
-                }
+                verifyPageHealthy(view, url);
                 enterImmersiveMode();
             }
 
@@ -143,22 +151,19 @@ public final class MainActivity extends Activity {
         });
         setContentView(webView);
 
-        String rememberedEndpoint = preferences.getString(PREF_ENDPOINT, null);
-        String manualUrl = preferences.getString(PREF_MANUAL_URL, null);
         String requestedUrl = getIntent() == null
             ? null
             : getIntent().getStringExtra(EXTRA_URL);
         currentEndpoint = validHttpUrl(requestedUrl)
             ? requestedUrl
-            : validHttpUrl(rememberedEndpoint)
-                ? rememberedEndpoint
-                : validHttpUrl(manualUrl) ? manualUrl : null;
+            : preferredEndpoint();
         if (currentEndpoint != null) {
             loadEndpoint(currentEndpoint);
         } else {
             showDiscoveryState("正在查找 Ambient Ops");
         }
         startDiscovery();
+        registerNetworkRetry();
     }
 
     @Override
@@ -169,6 +174,8 @@ public final class MainActivity extends Activity {
         String requestedUrl = intent == null ? null : intent.getStringExtra(EXTRA_URL);
         if (validHttpUrl(requestedUrl)) {
             loadEndpoint(requestedUrl);
+        } else if (!pageLoaded && !endpointAttemptInProgress) {
+            handler.post(retry);
         }
     }
 
@@ -176,7 +183,7 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         enterImmersiveMode();
-        if (webView != null && webView.getUrl() == null) {
+        if (webView != null && !pageLoaded && !endpointAttemptInProgress) {
             handler.post(retry);
         }
     }
@@ -199,6 +206,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        unregisterNetworkRetry();
         stopDiscovery();
         if (kioskUpdater != null) {
             kioskUpdater.close();
@@ -291,11 +299,15 @@ public final class MainActivity extends Activity {
         handler.removeCallbacks(resolveTimeout);
         String instanceId = attribute(resolved, "id");
         String preferredId = preferences.getString(PREF_INSTANCE_ID, null);
+        boolean explicitBinding = validHttpUrl(
+            preferences.getString(PREF_MANUAL_URL, null)
+        );
         if (
             !ServiceSelectionPolicy.shouldAccept(
                 preferredId,
                 instanceId,
-                pageLoaded || endpointAttemptInProgress
+                pageLoaded || endpointAttemptInProgress,
+                explicitBinding
             )
         ) {
             return;
@@ -351,12 +363,43 @@ public final class MainActivity extends Activity {
         pageLoaded = false;
         endpointAttemptInProgress = true;
         handler.removeCallbacks(retry);
+        handler.removeCallbacks(loadTimeout);
+        handler.postDelayed(loadTimeout, LOAD_TIMEOUT_MS);
         webView.loadUrl(endpoint);
+    }
+
+    private void verifyPageHealthy(WebView view, String url) {
+        if (!ServiceSelectionPolicy.shouldMarkPageHealthy(currentEndpoint, url)) {
+            return;
+        }
+        view.evaluateJavascript(
+            "document.getElementById('root') !== null",
+            result -> {
+                if (
+                    view != webView
+                        || !"true".equals(result)
+                        || !ServiceSelectionPolicy.shouldMarkPageHealthy(
+                            currentEndpoint,
+                            url
+                        )
+                ) {
+                    return;
+                }
+                pageLoaded = true;
+                endpointAttemptInProgress = false;
+                handler.removeCallbacks(retry);
+                handler.removeCallbacks(loadTimeout);
+                preferences.edit().putString(PREF_ENDPOINT, url).apply();
+                handler.removeCallbacks(updateCheck);
+                handler.postDelayed(updateCheck, UPDATE_INITIAL_DELAY_MS);
+            }
+        );
     }
 
     private void handleLoadFailure() {
         pageLoaded = false;
         endpointAttemptInProgress = false;
+        handler.removeCallbacks(loadTimeout);
         handler.removeCallbacks(updateCheck);
         showDiscoveryState("Ambient Ops 暂时不可用，正在重新查找");
         startDiscovery();
@@ -366,6 +409,62 @@ public final class MainActivity extends Activity {
     private void scheduleRetry() {
         handler.removeCallbacks(retry);
         handler.postDelayed(retry, RETRY_DELAY_MS);
+    }
+
+    private void registerNetworkRetry() {
+        connectivityManager =
+            (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (connectivityManager == null) {
+            return;
+        }
+        networkCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(Network network) {
+                handler.post(() -> {
+                    if (!pageLoaded && !endpointAttemptInProgress) {
+                        handler.post(retry);
+                    }
+                });
+            }
+        };
+        try {
+            connectivityManager.registerNetworkCallback(
+                new NetworkRequest.Builder()
+                    .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                    .build(),
+                networkCallback
+            );
+        } catch (RuntimeException error) {
+            networkCallback = null;
+        }
+    }
+
+    private void unregisterNetworkRetry() {
+        if (connectivityManager == null || networkCallback == null) {
+            return;
+        }
+        try {
+            connectivityManager.unregisterNetworkCallback(networkCallback);
+        } catch (RuntimeException ignored) {
+            // Android may already have released callbacks while shutting down.
+        }
+        networkCallback = null;
+    }
+
+    private String preferredEndpoint() {
+        String manualUrl = preferences == null
+            ? null
+            : preferences.getString(PREF_MANUAL_URL, null);
+        if (validHttpUrl(manualUrl)) {
+            return manualUrl;
+        }
+        if (validHttpUrl(currentEndpoint)) {
+            return currentEndpoint;
+        }
+        String rememberedEndpoint = preferences == null
+            ? null
+            : preferences.getString(PREF_ENDPOINT, null);
+        return validHttpUrl(rememberedEndpoint) ? rememberedEndpoint : null;
     }
 
     private void showDiscoveryState(String message) {
