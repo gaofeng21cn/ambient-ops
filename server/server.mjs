@@ -26,6 +26,10 @@ import {
   KIOSK_UPDATE_PATH,
   KioskReleaseStore,
 } from "./kiosk-release.mjs";
+import {
+  readUiRevision,
+  UI_REVISION_PATH,
+} from "./ui-revision.mjs";
 import packageMetadata from "../package.json" with { type: "json" };
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -84,6 +88,7 @@ const pairingStore = new DevicePairingStore(config.dataDir);
 await pairingStore.load();
 const kioskReleases = new KioskReleaseStore(config.kioskReleaseDir);
 await kioskReleases.load();
+const uiRevision = await readUiRevision(dist);
 await pruneStaleMachines();
 const instanceId = await resolveInstanceId(config.dataDir, config.instanceId);
 if (config.demo) updateDemo(store);
@@ -192,6 +197,7 @@ const server = createServer(async (request, response) => {
         devicePairing: config.pairingEnabled,
         pairedDevices: pairingStore.pairedDeviceCount,
         homeAssistant: haBridge.health(),
+        uiRevision,
         kioskUpdate: kioskReleases.manifest
           ? {
               versionCode: kioskReleases.manifest.versionCode,
@@ -202,6 +208,14 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && url.pathname === "/api/status") {
       return json(response, 200, dashboard());
+    }
+    if (["GET", "HEAD"].includes(request.method) && url.pathname === UI_REVISION_PATH) {
+      const body = Buffer.from(JSON.stringify({ revision: uiRevision }));
+      response.writeHead(200, {
+        ...responseHeaders("application/json; charset=utf-8"),
+        "content-length": body.length,
+      });
+      return response.end(request.method === "HEAD" ? undefined : body);
     }
     if (request.method === "GET" && url.pathname === "/metrics") {
       return text(response, 200, renderPrometheus(dashboard()), "text/plain; version=0.0.4; charset=utf-8");

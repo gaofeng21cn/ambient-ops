@@ -41,6 +41,8 @@ public final class MainActivity extends Activity {
     private static final long RESOLVE_TIMEOUT_MS = 5_000L;
     private static final long UPDATE_INITIAL_DELAY_MS = 10_000L;
     private static final long UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1_000L;
+    private static final long UI_REVISION_INITIAL_DELAY_MS = 2_000L;
+    private static final long UI_REVISION_INTERVAL_MS = 15_000L;
     private static final float DEFAULT_SCREEN_BRIGHTNESS = 0.5f;
     private static final int IMMERSIVE_FLAGS =
         View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -58,10 +60,12 @@ public final class MainActivity extends Activity {
     private NsdManager.DiscoveryListener discoveryListener;
     private SharedPreferences preferences;
     private KioskUpdater kioskUpdater;
+    private UiRevisionMonitor uiRevisionMonitor;
     private String currentEndpoint;
     private boolean pageLoaded;
     private boolean endpointAttemptInProgress;
     private boolean resolving;
+    private boolean activityResumed;
 
     private final Runnable retry = () -> {
         String endpoint = preferredEndpoint();
@@ -96,6 +100,24 @@ public final class MainActivity extends Activity {
             handler.postDelayed(this, UPDATE_INTERVAL_MS);
         }
     };
+    private final Runnable uiRevisionCheck = new Runnable() {
+        @Override
+        public void run() {
+            if (
+                uiRevisionMonitor != null
+                    && activityResumed
+                    && pageLoaded
+                    && currentEndpoint != null
+            ) {
+                String endpoint = currentEndpoint;
+                uiRevisionMonitor.check(
+                    endpoint,
+                    () -> handler.post(() -> reloadForUiRevision(endpoint))
+                );
+                handler.postDelayed(this, UI_REVISION_INTERVAL_MS);
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,6 +131,7 @@ public final class MainActivity extends Activity {
 
         preferences = getSharedPreferences(PREFS, MODE_PRIVATE);
         kioskUpdater = new KioskUpdater(this);
+        uiRevisionMonitor = new UiRevisionMonitor();
         applyConfiguration(getIntent());
         nsdManager = (NsdManager) getSystemService(Context.NSD_SERVICE);
 
@@ -118,7 +141,9 @@ public final class MainActivity extends Activity {
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
         webView.getSettings().setUserAgentString(
-            webView.getSettings().getUserAgentString() + " AmbientOpsKiosk/1.1"
+            webView.getSettings().getUserAgentString()
+                + " AmbientOpsKiosk/"
+                + BuildConfig.VERSION_NAME
         );
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -182,10 +207,20 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        activityResumed = true;
         enterImmersiveMode();
         if (webView != null && !pageLoaded && !endpointAttemptInProgress) {
             handler.post(retry);
+        } else if (pageLoaded) {
+            scheduleUiRevisionCheck();
         }
+    }
+
+    @Override
+    protected void onPause() {
+        activityResumed = false;
+        handler.removeCallbacks(uiRevisionCheck);
+        super.onPause();
     }
 
     @Override
@@ -211,6 +246,10 @@ public final class MainActivity extends Activity {
         if (kioskUpdater != null) {
             kioskUpdater.close();
             kioskUpdater = null;
+        }
+        if (uiRevisionMonitor != null) {
+            uiRevisionMonitor.close();
+            uiRevisionMonitor = null;
         }
         if (webView != null) {
             webView.destroy();
@@ -359,11 +398,15 @@ public final class MainActivity extends Activity {
         if (!validHttpUrl(endpoint)) {
             return;
         }
+        if (uiRevisionMonitor != null) {
+            uiRevisionMonitor.selectEndpoint(endpoint);
+        }
         currentEndpoint = endpoint;
         pageLoaded = false;
         endpointAttemptInProgress = true;
         handler.removeCallbacks(retry);
         handler.removeCallbacks(loadTimeout);
+        handler.removeCallbacks(uiRevisionCheck);
         handler.postDelayed(loadTimeout, LOAD_TIMEOUT_MS);
         webView.loadUrl(endpoint);
     }
@@ -392,8 +435,33 @@ public final class MainActivity extends Activity {
                 preferences.edit().putString(PREF_ENDPOINT, url).apply();
                 handler.removeCallbacks(updateCheck);
                 handler.postDelayed(updateCheck, UPDATE_INITIAL_DELAY_MS);
+                scheduleUiRevisionCheck();
             }
         );
+    }
+
+    private void scheduleUiRevisionCheck() {
+        handler.removeCallbacks(uiRevisionCheck);
+        if (activityResumed && pageLoaded) {
+            handler.postDelayed(uiRevisionCheck, UI_REVISION_INITIAL_DELAY_MS);
+        }
+    }
+
+    private void reloadForUiRevision(String endpoint) {
+        if (
+            !activityResumed
+                || webView == null
+                || !pageLoaded
+                || !endpoint.equals(currentEndpoint)
+        ) {
+            return;
+        }
+        pageLoaded = false;
+        endpointAttemptInProgress = true;
+        handler.removeCallbacks(uiRevisionCheck);
+        handler.removeCallbacks(loadTimeout);
+        handler.postDelayed(loadTimeout, LOAD_TIMEOUT_MS);
+        webView.reload();
     }
 
     private void handleLoadFailure() {
@@ -401,6 +469,7 @@ public final class MainActivity extends Activity {
         endpointAttemptInProgress = false;
         handler.removeCallbacks(loadTimeout);
         handler.removeCallbacks(updateCheck);
+        handler.removeCallbacks(uiRevisionCheck);
         showDiscoveryState("Ambient Ops 暂时不可用，正在重新查找");
         startDiscovery();
         scheduleRetry();

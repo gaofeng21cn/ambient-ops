@@ -80,20 +80,39 @@ base_url="http://127.0.0.1:$port"
 wait_for_http "$base_url/healthz"
 
 health_file="$temporary_dir/health.json"
+revision_file="$temporary_dir/ui-revision.json"
+revision_headers="$temporary_dir/ui-revision.headers"
 status_file="$temporary_dir/status.json"
 persisted_file="$temporary_dir/persisted.json"
 served_sprite="$temporary_dir/spritesheet.webp"
 
 curl --fail --silent --show-error "$base_url/healthz" > "$health_file"
+curl --fail --silent --show-error \
+  --dump-header "$revision_headers" \
+  "$base_url/api/v1/ui/revision" > "$revision_file"
+container_id=$(compose ps --quiet ambient-ops)
 node -e '
   const health = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-  if (!health.ok || health.mode !== "live") {
+  const revision = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8"));
+  if (!health.ok || health.mode !== "live" || !/^[a-f0-9]{64}$/.test(health.uiRevision)) {
     throw new Error("unexpected health payload: " + JSON.stringify(health));
+  }
+  if (revision.revision !== health.uiRevision) {
+    throw new Error("UI revision endpoint does not match health");
   }
   if (health.kioskUpdate !== null) {
     throw new Error("source smoke image unexpectedly contains a kiosk release");
   }
-' "$health_file"
+' "$health_file" "$revision_file"
+grep -qi '^cache-control: no-store' "$revision_headers"
+expected_revision=$(docker exec "$container_id" sha256sum /app/dist/index.html | cut -d' ' -f1)
+actual_revision=$(node -p \
+  "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).revision" \
+  "$revision_file")
+if [ "$actual_revision" != "$expected_revision" ]; then
+  echo "UI revision does not identify the built index" >&2
+  exit 1
+fi
 update_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
   "$base_url/api/v1/kiosk/update")
 if [ "$update_status" != 404 ]; then
@@ -142,7 +161,6 @@ curl --fail --silent --show-error "$base_url/display/pet" | grep -q '<div id="ro
 curl --fail --silent --show-error "$base_url/pets/ledger-owl/spritesheet.webp" > "$served_sprite"
 cmp "$repo_root/public/pets/ledger-owl/spritesheet.webp" "$served_sprite"
 
-container_id=$(compose ps --quiet ambient-ops)
 docker exec "$container_id" test -s /data/state.json
 if docker exec "$container_id" touch /app/should-not-be-writable 2>/dev/null; then
   echo "container root filesystem is unexpectedly writable" >&2
