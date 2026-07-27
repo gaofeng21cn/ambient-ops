@@ -22,6 +22,14 @@ The current collector requires all of the following:
 | Selector | Exact case-insensitive match on interface index, `ifName`, or `ifAlias` |
 | Counter semantics | Monotonic Counter64 values that include the real WAN traffic |
 
+Two optional capabilities are independent from the WAN counter contract:
+
+- Client count reads IPv4 IP-MIB `ipNetToMediaTable`,
+  `1.3.6.1.2.1.4.22`, only on exact configured LAN interfaces. It counts
+  unique dynamic physical addresses and is an active-neighbor estimate.
+- Latency opens a TCP connection to an exact configured host and port. It does
+  not use SNMP, ICMP, elevated capabilities, or a router API.
+
 The collector does not currently support:
 
 - SNMP v1/v2c
@@ -41,6 +49,12 @@ Use a dedicated user with `authPriv` and a read-only view containing at least:
 
 ```text
 1.3.6.1.2.1.31.1.1
+```
+
+If client counting is enabled, the same read-only view must also include:
+
+```text
+1.3.6.1.2.1.4.22
 ```
 
 Record these private values outside Git:
@@ -117,10 +131,19 @@ UNIFI_SNMP_USER=<snmp-v3-user>
 UNIFI_SNMP_AUTH_PROTOCOL=sha
 UNIFI_SNMP_PRIV_PROTOCOL=aes
 UNIFI_SNMP_INTERFACES=<exact-name-index-or-alias>
+UNIFI_SNMP_CLIENT_INTERFACES=<exact-lan-name-index-or-alias>
 UNIFI_POLL_MS=250
 UNIFI_RATE_WINDOW_MS=2000
 UNIFI_SNMP_TIMEOUT_MS=3000
+NETWORK_LATENCY_HOST=<tcp-probe-host>
+NETWORK_LATENCY_PORT=443
+NETWORK_LATENCY_TIMEOUT_MS=1500
+NETWORK_AUXILIARY_POLL_MS=5000
 ```
+
+Both auxiliary metrics are opt-in. Leave `UNIFI_SNMP_CLIENT_INTERFACES` empty
+unless the selected router exposes a qualified `ipNetToMediaTable`; leave
+`NETWORK_LATENCY_HOST` empty unless a stable TCP target has been chosen.
 
 Store the two passwords in ignored files:
 

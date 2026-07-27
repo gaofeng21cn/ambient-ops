@@ -1,12 +1,22 @@
 import snmp from "net-snmp";
+import { measureTcpLatency } from "./latency-probe.mjs";
 
 const IF_X_TABLE = "1.3.6.1.2.1.31.1.1";
 const IF_X_COLUMNS = [1, 6, 10, 15, 18];
+const IP_NET_TO_MEDIA_TABLE = "1.3.6.1.2.1.4.22";
+const IP_NET_TO_MEDIA_COLUMNS = [1, 2, 4];
 
 export function createUnifiSnmpPoller(config, initialClient) {
   let client = initialClient || new NetSnmpClient(config);
   let samples = [];
   const rateWindowMs = Math.max(1000, config.rateWindowMs || config.pollMs * 8);
+  const auxiliaryPollMs = Math.max(1000, config.auxiliaryPollMs || 5000);
+  const auxiliary = {
+    clients: null,
+    latencyMs: null,
+    refreshedAt: 0,
+    inFlight: null,
+  };
 
   async function readInterfaces() {
     try {
@@ -17,6 +27,44 @@ export function createUnifiSnmpPoller(config, initialClient) {
       if (!initialClient) client = new NetSnmpClient(config);
       throw error;
     }
+  }
+
+  async function refreshAuxiliary(interfaceSample, waitForResult = false) {
+    const clientSelectors = config.clientInterfaces || [];
+    const clientIndexes = selectInterfaces(interfaceSample, clientSelectors)
+      .map((entry) => entry.index);
+    const hasClientProbe = clientIndexes.length > 0 && typeof client.readClientCount === "function";
+    const hasLatencyProbe = Boolean(config.latencyHost);
+    if (!hasClientProbe && !hasLatencyProbe) return;
+
+    if (auxiliary.inFlight) {
+      if (waitForResult) await auxiliary.inFlight;
+      return;
+    }
+    if (auxiliary.refreshedAt && Date.now() - auxiliary.refreshedAt < auxiliaryPollMs) return;
+
+    const request = Promise.allSettled([
+      hasClientProbe ? client.readClientCount(clientIndexes) : Promise.resolve(null),
+      hasLatencyProbe
+        ? measureTcpLatency({
+            host: config.latencyHost,
+            port: config.latencyPort,
+            timeoutMs: config.latencyTimeoutMs,
+          })
+        : Promise.resolve(null),
+    ]).then(([clients, latency]) => {
+      if (clients.status === "fulfilled" && Number.isInteger(clients.value)) {
+        auxiliary.clients = clients.value;
+      }
+      if (latency.status === "fulfilled" && Number.isFinite(latency.value)) {
+        auxiliary.latencyMs = latency.value;
+      }
+      auxiliary.refreshedAt = Date.now();
+    }).finally(() => {
+      auxiliary.inFlight = null;
+    });
+    auxiliary.inFlight = request;
+    if (waitForResult) await request;
   }
 
   return async function poll() {
@@ -35,6 +83,7 @@ export function createUnifiSnmpPoller(config, initialClient) {
       const next = samples.at(-1) === current ? await readInterfaces() : current;
       samples.push(next);
       trimRateWindow(samples, next.sampledAt.valueOf() - rateWindowMs);
+      await refreshAuxiliary(next, auxiliary.refreshedAt === 0);
 
       try {
         const measurement = calculateThroughput(
@@ -47,8 +96,8 @@ export function createUnifiSnmpPoller(config, initialClient) {
           source: "unifi-snmp-v3",
           downloadMbps: measurement.downloadMbps,
           uploadMbps: measurement.uploadMbps,
-          clients: null,
-          latencyMs: null,
+          clients: auxiliary.clients,
+          latencyMs: auxiliary.latencyMs,
           interfaces: measurement.interfaces,
           updatedAt: next.sampledAt.toISOString(),
           error: null,
@@ -109,6 +158,18 @@ export function calculateThroughput(previous, current, indexes) {
     uploadMbps: bitsPerSecond(outboundBytes, elapsedSeconds),
     interfaces,
   };
+}
+
+export function countDynamicClients(table, indexes) {
+  const selected = new Set(indexes.map(Number));
+  const clients = new Set();
+  for (const row of Object.values(table || {})) {
+    if (!selected.has(Number(row[1])) || Number(row[4]) !== 3) continue;
+    const mac = Buffer.isBuffer(row[2]) ? row[2] : Buffer.from(row[2] || []);
+    if (mac.length < 6 || mac.every((byte) => byte === 0) || mac.every((byte) => byte === 0xff)) continue;
+    clients.add(mac.toString("hex"));
+  }
+  return clients.size;
 }
 
 export function counter64(value) {
@@ -176,6 +237,24 @@ class NetSnmpClient {
           reject(parseError);
         }
       });
+    });
+  }
+
+  readClientCount(indexes) {
+    return new Promise((resolve, reject) => {
+      this.session.tableColumns(
+        IP_NET_TO_MEDIA_TABLE,
+        IP_NET_TO_MEDIA_COLUMNS,
+        20,
+        (error, table) => {
+          if (error) return reject(error);
+          try {
+            resolve(countDynamicClients(table, indexes));
+          } catch (parseError) {
+            reject(parseError);
+          }
+        },
+      );
     });
   }
 

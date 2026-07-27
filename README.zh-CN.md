@@ -14,10 +14,10 @@ Home Assistant 和专用 Android Kiosk。
 `.env`，敏感值单独放在 `secrets/`。路由器指标是可选项：只需要 Codex 与宠物
 状态时可使用 `codex-only` 模式。
 
-正式版 `v0.1.12` 已提供：
+正式版 `v0.1.13` 已提供：
 
 - 公开的 `linux/amd64` 与 `linux/arm64` 镜像
-  `ghcr.io/gaofeng21cn/ambient-ops:0.1.12`
+  `ghcr.io/gaofeng21cn/ambient-ops:0.1.13`
 - macOS 与 Windows 桌面版一次性设备配对，不复制共享 agent token
 - 由项目固定证书签名的 `Ambient-Ops-Kiosk-1.2.7.apk` 及 SHA-256 校验文件
 - NAS 匿名拉取镜像；正常部署不需要 GitHub Token，也不在 NAS 上构建源码
@@ -90,9 +90,15 @@ SNMP 采集基于标准 IF-MIB，而不是 UniFi 私有 MIB，因此并不绑定
 流量卸载不能绕开这些计数器。OpenWrt 等设备需要按实机验证，不能仅凭“已启用
 SNMP”就认定兼容。完整边界和验证方法见 [`docs/unifi.md`](docs/unifi.md)。
 
+网络页的客户端数和延迟是两个可选的通用辅助指标。
+`UNIFI_SNMP_CLIENT_INTERFACES` 精确选择标准 IPv4 `ipNetToMediaTable`
+中的 LAN 接口，按动态邻居的唯一 MAC 去重；它是活跃邻居估计，不等同于控制器
+维护的完整客户端清单。`NETWORK_LATENCY_HOST` 使用普通 TCP 握手测量指定目标，
+不需要 ICMP 或 raw socket 权限。未配置或实测失败时仍显示 `--`，不会生成假值。
+
 ## 安装 Android Kiosk
 
-从 [Ambient Ops v0.1.12 Release][ambient-ops-v0.1.12]
+从 [Ambient Ops v0.1.13 Release][ambient-ops-v0.1.13]
 下载 APK 和同名 `.sha256`：
 
 ```bash
@@ -153,4 +159,4 @@ npm run build
 
 MIT
 
-[ambient-ops-v0.1.12]: https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.12
+[ambient-ops-v0.1.13]: https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.13

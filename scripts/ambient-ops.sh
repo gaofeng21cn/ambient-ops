@@ -224,6 +224,7 @@ validate_config() {
 
   local duplicates image image_lower image_tail image_version
   local port demo instance_id network_mode poll_ms rate_window_ms ha_enabled
+  local latency_port latency_timeout_ms auxiliary_poll_ms
   duplicates="$(duplicate_env_keys)"
   [ -z "$duplicates" ] || die "Duplicate keys in $ENV_FILE: $(printf '%s' "$duplicates" | tr '\n' ' ')"
   image="$(require_value AMBIENT_OPS_IMAGE)"
@@ -237,6 +238,12 @@ validate_config() {
   network_mode="$(require_value AMBIENT_OPS_NETWORK_MODE)"
   poll_ms="$(require_value UNIFI_POLL_MS)"
   rate_window_ms="$(require_value UNIFI_RATE_WINDOW_MS)"
+  latency_port="$(value_or_empty NETWORK_LATENCY_PORT)"
+  latency_port="${latency_port:-443}"
+  latency_timeout_ms="$(value_or_empty NETWORK_LATENCY_TIMEOUT_MS)"
+  latency_timeout_ms="${latency_timeout_ms:-1500}"
+  auxiliary_poll_ms="$(value_or_empty NETWORK_AUXILIARY_POLL_MS)"
+  auxiliary_poll_ms="${auxiliary_poll_ms:-5000}"
   ha_enabled="$(require_value HA_ENABLED)"
 
   case "$image_lower" in
@@ -264,6 +271,12 @@ validate_config() {
     die "UNIFI_POLL_MS must be an integer of at least 200"
   [[ "$rate_window_ms" =~ ^[0-9]+$ ]] && [ "$rate_window_ms" -ge "$poll_ms" ] ||
     die "UNIFI_RATE_WINDOW_MS must be an integer no smaller than UNIFI_POLL_MS"
+  [[ "$latency_port" =~ ^[0-9]+$ ]] && [ "$latency_port" -ge 1 ] && [ "$latency_port" -le 65535 ] ||
+    die "NETWORK_LATENCY_PORT must be an integer from 1 to 65535"
+  [[ "$latency_timeout_ms" =~ ^[0-9]+$ ]] && [ "$latency_timeout_ms" -ge 100 ] ||
+    die "NETWORK_LATENCY_TIMEOUT_MS must be an integer of at least 100"
+  [[ "$auxiliary_poll_ms" =~ ^[0-9]+$ ]] && [ "$auxiliary_poll_ms" -ge 1000 ] ||
+    die "NETWORK_AUXILIARY_POLL_MS must be an integer of at least 1000"
 
   require_secret agent_push_token
   case "$network_mode" in
@@ -271,6 +284,8 @@ validate_config() {
       require_empty UNIFI_SNMP_HOST
       require_empty UNIFI_SNMP_USER
       require_empty UNIFI_SNMP_INTERFACES
+      require_empty UNIFI_SNMP_CLIENT_INTERFACES
+      require_empty NETWORK_LATENCY_HOST
       require_empty UNIFI_BASE_URL
       ;;
     snmpv3)
@@ -287,6 +302,8 @@ validate_config() {
       require_empty UNIFI_SNMP_HOST
       require_empty UNIFI_SNMP_USER
       require_empty UNIFI_SNMP_INTERFACES
+      require_empty UNIFI_SNMP_CLIENT_INTERFACES
+      require_empty NETWORK_LATENCY_HOST
       ;;
     *)
       die "AMBIENT_OPS_NETWORK_MODE must be codex-only, snmpv3, or unifi-api"

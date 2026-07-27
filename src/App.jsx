@@ -440,7 +440,7 @@ function NetworkView({ network }) {
           <ThroughputSummary network={network} large />
           <div className="network-facts">
             <Fact label="Connected clients" value={network.clients ?? "--"} />
-            <Fact label="Gateway latency" value={network.latencyMs == null ? "--" : `${network.latencyMs} ms`} />
+            <Fact label="Probe latency" value={network.latencyMs == null ? "--" : `${network.latencyMs} ms`} />
             <Fact label="Data source" value={network.source === "unifi" ? "UniFi Gateway" : network.source === "unifi-snmp-v3" ? "UniFi SNMPv3" : network.source === "demo" ? "Demonstration" : "Unconfigured"} />
             <Fact label="Last update" value={formatAge(network.updatedAt)} />
           </div>

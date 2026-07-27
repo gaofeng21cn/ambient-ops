@@ -17,7 +17,7 @@ application from source.
 - Optional for initial Android installation: a computer with `adb`
 
 The current published server image is
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.12` for both `linux/amd64` and
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.13` for both `linux/amd64` and
 `linux/arm64`. The package is public. Do not create or configure a GitHub token
 for a normal pull.
 
@@ -48,7 +48,7 @@ Open `.env` in a local text editor. For a Codex-only screen, these are the only
 values most users review:
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.12
+AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.13
 AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Etc/UTC
@@ -77,16 +77,28 @@ AMBIENT_OPS_NETWORK_MODE=snmpv3
 UNIFI_SNMP_HOST=192.168.1.1
 UNIFI_SNMP_USER=ambient-ops
 UNIFI_SNMP_INTERFACES=WAN
+UNIFI_SNMP_CLIENT_INTERFACES=LAN
 UNIFI_SNMP_PORT=161
 UNIFI_SNMP_AUTH_PROTOCOL=sha
 UNIFI_SNMP_PRIV_PROTOCOL=aes
 UNIFI_POLL_MS=250
 UNIFI_RATE_WINDOW_MS=2000
+NETWORK_LATENCY_HOST=1.1.1.1
+NETWORK_LATENCY_PORT=443
+NETWORK_LATENCY_TIMEOUT_MS=1500
+NETWORK_AUXILIARY_POLL_MS=5000
 ```
 
 `UNIFI_SNMP_INTERFACES` is an exact case-insensitive IF-MIB index, `ifName`, or
 `ifAlias`. Separate distinct WAN uplinks with commas. Do not count VLAN,
 PPPoE, tunnel, and physical layers carrying the same traffic more than once.
+
+`UNIFI_SNMP_CLIENT_INTERFACES` is optional and selects exact LAN interfaces
+from the standard IPv4 neighbor table. The displayed client count deduplicates
+dynamic entries by MAC address, so it is an active-neighbor estimate rather
+than a controller inventory. Leave it empty when the router does not expose
+`ipNetToMediaTable`. The optional TCP latency target must be a stable endpoint
+you intentionally want to measure; it does not require raw-socket privileges.
 
 Enter the two passwords without putting them in shell history:
 
@@ -177,7 +189,7 @@ live state repeatedly.
 ## 6. Install the Android kiosk
 
 Download these assets from
-[Ambient Ops v0.1.12](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.12):
+[Ambient Ops v0.1.13](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.13):
 
 - `Ambient-Ops-Kiosk-1.2.7.apk`
 - `Ambient-Ops-Kiosk-1.2.7.apk.sha256`

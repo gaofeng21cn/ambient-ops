@@ -48,12 +48,22 @@
     <string>aes</string>
     <key>UNIFI_SNMP_INTERFACES</key>
     <string>__SNMP_INTERFACES__</string>
+    <key>UNIFI_SNMP_CLIENT_INTERFACES</key>
+    <string></string>
     <key>UNIFI_SNMP_TIMEOUT_MS</key>
     <string>3000</string>
     <key>UNIFI_POLL_MS</key>
     <string>250</string>
     <key>UNIFI_RATE_WINDOW_MS</key>
     <string>2000</string>
+    <key>NETWORK_LATENCY_HOST</key>
+    <string></string>
+    <key>NETWORK_LATENCY_PORT</key>
+    <string>443</string>
+    <key>NETWORK_LATENCY_TIMEOUT_MS</key>
+    <string>1500</string>
+    <key>NETWORK_AUXILIARY_POLL_MS</key>
+    <string>5000</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
