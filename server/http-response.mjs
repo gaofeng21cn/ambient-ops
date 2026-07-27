@@ -65,7 +65,6 @@ function waitFor(response, event, timeoutMs) {
       "ERR_HTTP_RESPONSE_STALLED",
       `HTTP response stalled waiting for ${event} after ${timeoutMs} ms`,
     )), timeoutMs);
-    timer.unref?.();
   });
 }
 
