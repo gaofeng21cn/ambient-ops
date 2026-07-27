@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark;
   font-family: Inter, "SF Pro Display", "Segoe UI", "Noto Sans SC", sans-serif;
-  font-synthesis: none;
+  font-synthesis: weight;
   --bg: #080a0c;
   --surface: #11151a;
   --surface-raised: #151a20;
@@ -582,6 +582,7 @@ button { font: inherit; letter-spacing: 0; }
     min-height: 0;
     overflow: hidden;
   }
+  body { font-weight: 500; }
   .app-shell {
     height: 100dvh;
     min-height: 0;
@@ -592,10 +593,15 @@ button { font: inherit; letter-spacing: 0; }
   .top-header {
     grid-template-columns: 1fr auto;
   }
-  .top-header time { font-size: 17px; }
+  .top-header time {
+    font-size: 17px;
+    font-weight: 700;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
   .top-header h1, .source-label { display: none; }
   .header-status { gap: 8px; }
-  .mode-label { padding: 2px 5px; color: #aeb6c0; border-color: #4b5561; font-size: 9px; }
+  .mode-label { padding: 2px 5px; color: #aeb6c0; border-color: #4b5561; font-size: 9px; font-weight: 700; }
+  .header-status .status-label { font-weight: 700; }
   .divider { height: 20px; }
   .icon-button { width: 30px; height: 30px; }
   .icon-button svg { width: 17px; height: 17px; }
@@ -631,34 +637,35 @@ button { font: inherit; letter-spacing: 0; }
     min-width: 0;
     display: grid;
     align-content: center;
-    padding: 7px 18px;
+    padding: 7px 8px;
     border-right: 1px solid var(--line);
   }
   .device-metric:last-child { border-right: 0; }
   .device-metric > span {
     color: var(--muted);
     font-size: 12px;
-    font-weight: 620;
+    font-weight: 700;
     text-transform: uppercase;
   }
   .device-metric > div {
     display: flex;
     align-items: baseline;
-    gap: 6px;
+    gap: 4px;
     margin-top: 4px;
     min-width: 0;
   }
   .device-metric strong {
     color: var(--text);
-    font-size: 45px;
+    font-size: 40px;
     line-height: .9;
-    font-weight: 610;
-    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-variant-numeric: lining-nums tabular-nums;
     white-space: nowrap;
   }
   .device-metric small {
     color: #c3c9d0;
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 600;
   }
   .device-metric.download > span,
   .device-metric.download strong { color: #38bdf8; }
@@ -708,10 +715,10 @@ button { font: inherit; letter-spacing: 0; }
     border-right: 1px solid var(--line-soft);
   }
   .device-stat:last-child { border-right: 0; }
-  .device-stat > span { color: var(--muted); font-size: 11px; font-weight: 600; }
+  .device-stat > span { color: var(--muted); font-size: 11px; font-weight: 700; }
   .device-stat > div { display: flex; align-items: baseline; gap: 3px; }
-  .device-stat strong { color: #e4e8ec; font-size: 25px; font-weight: 570; white-space: nowrap; }
-  .device-stat small { color: var(--muted); font-size: 11px; }
+  .device-stat strong { color: #e4e8ec; font-size: 25px; font-weight: 700; font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
+  .device-stat small { color: var(--muted); font-size: 11px; font-weight: 600; }
   .device-stat strong.blue { color: var(--blue); }
   .device-stat strong.green { color: var(--green); }
   .device-stat strong.amber { color: var(--amber); }
@@ -887,6 +894,7 @@ button { font: inherit; letter-spacing: 0; }
     gap: 14px;
     padding: 0 12px 4px;
     font-size: 8px;
+    font-weight: 600;
   }
   .legend { gap: 5px; }
   .legend i { width: 14px; height: 2px; }
@@ -1058,13 +1066,14 @@ button { font: inherit; letter-spacing: 0; }
   .nav-tabs {
     grid-template-columns: repeat(4, minmax(56px, 1fr));
   }
-  .nav-tabs button { gap: 0; }
+  .nav-tabs button { gap: 0; font-weight: 600; }
   .nav-tabs button svg { width: 21px; height: 21px; }
   .nav-tabs button span { display: none; }
   .freshness {
     padding: 0 14px;
     gap: 7px;
     font-size: 10px;
+    font-weight: 600;
   }
   .freshness > span:first-child, .freshness .divider, .freshness > span:last-child { display: none; }
   .freshness .status-label { font-size: 10px; }
