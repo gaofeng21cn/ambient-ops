@@ -14,17 +14,22 @@ Home Assistant 和专用 Android Kiosk。
 `.env`，敏感值单独放在 `secrets/`。路由器指标是可选项：只需要 Codex 与宠物
 状态时可使用 `codex-only` 模式。
 
-正式版 `v0.1.11` 已提供：
+正式版 `v0.1.12` 已提供：
 
 - 公开的 `linux/amd64` 与 `linux/arm64` 镜像
-  `ghcr.io/gaofeng21cn/ambient-ops:0.1.11`
+  `ghcr.io/gaofeng21cn/ambient-ops:0.1.12`
 - macOS 与 Windows 桌面版一次性设备配对，不复制共享 agent token
-- 由项目固定证书签名的 `Ambient-Ops-Kiosk-1.2.6.apk` 及 SHA-256 校验文件
+- 由项目固定证书签名的 `Ambient-Ops-Kiosk-1.2.7.apk` 及 SHA-256 校验文件
 - NAS 匿名拉取镜像；正常部署不需要 GitHub Token，也不在 NAS 上构建源码
 
 同一个版本化 Docker 镜像内置了 GitHub Release 中完全相同的签名 APK。首次安装
 后，已 root 的 Kiosk 可以从当前选中的局域网服务器获取后续版本，不再依赖 USB；
 它只接受固定包名、固定项目证书、递增 `versionCode` 和 SHA-256 完全匹配的 APK。
+
+Kiosk `1.2.7` 还会读取当前服务器由前端构建内容生成的 UI revision。Docker
+替换导致页面内容变化后，客户端连续两次确认新 revision，再执行一次 WebView
+刷新；查询失败时保留当前画面。因此后续更新 Docker 即可让所有在线 Kiosk
+自行刷新，不需要 USB，也不会固定周期盲目重载。
 
 ## 架构
 
@@ -87,12 +92,12 @@ SNMP”就认定兼容。完整边界和验证方法见 [`docs/unifi.md`](docs/u
 
 ## 安装 Android Kiosk
 
-从 [Ambient Ops v0.1.11 Release][ambient-ops-v0.1.11]
+从 [Ambient Ops v0.1.12 Release][ambient-ops-v0.1.12]
 下载 APK 和同名 `.sha256`：
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.6.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.6.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.7.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.7.apk
 adb shell cmd package set-home-activity \
   cn.gaofeng.ambientops.kiosk/.MainActivity
 ```
@@ -102,6 +107,10 @@ adb shell cmd package set-home-activity \
 随后每 6 小时检查一次；只在接入外部电源且 Wi-Fi 在线时下载。无人值守安装需要 Magisk
 root，并首次永久允许 Kiosk 的 `su` 请求。没有 root 时仍可手工校验 Release 后
 执行 `adb install -r`。日常运行和自动更新都不需要 USB 或 GitHub 凭据。
+
+`1.2.7` 在页面可见时每 15 秒检查一次 `/api/v1/ui/revision`。首次响应只建立
+基线；revision 变化并连续确认两次后只刷新一次。断网或异常响应不会覆盖当前
+页面。
 
 ## 验收
 
@@ -144,4 +153,4 @@ npm run build
 
 MIT
 
-[ambient-ops-v0.1.11]: https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.11
+[ambient-ops-v0.1.12]: https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.12

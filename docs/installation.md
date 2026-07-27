@@ -17,7 +17,7 @@ application from source.
 - Optional for initial Android installation: a computer with `adb`
 
 The current published server image is
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.11` for both `linux/amd64` and
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.12` for both `linux/amd64` and
 `linux/arm64`. The package is public. Do not create or configure a GitHub token
 for a normal pull.
 
@@ -48,7 +48,7 @@ Open `.env` in a local text editor. For a Codex-only screen, these are the only
 values most users review:
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.11
+AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.12
 AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Etc/UTC
@@ -177,16 +177,16 @@ live state repeatedly.
 ## 6. Install the Android kiosk
 
 Download these assets from
-[Ambient Ops v0.1.11](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.11):
+[Ambient Ops v0.1.12](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.12):
 
-- `Ambient-Ops-Kiosk-1.2.6.apk`
-- `Ambient-Ops-Kiosk-1.2.6.apk.sha256`
+- `Ambient-Ops-Kiosk-1.2.7.apk`
+- `Ambient-Ops-Kiosk-1.2.7.apk.sha256`
 
 Verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.6.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.6.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.7.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.7.apk
 adb shell cmd package set-home-activity \
   cn.gaofeng.ambientops.kiosk/.MainActivity
 adb shell am start -n cn.gaofeng.ambientops.kiosk/.MainActivity
@@ -208,6 +208,12 @@ credential.
 Once installed, USB is not part of normal operation. The kiosk uses Wi-Fi mDNS,
 remembers the logical instance, stays immersive, and retries after network
 changes.
+
+Kiosk `1.2.7` checks the selected server's content-derived UI revision every
+15 seconds while visible. Two stable observations of a changed revision reload
+the WebView once. Network failures preserve the current page, so replacing the
+versioned Docker image propagates a new dashboard without USB or blind periodic
+reloads.
 
 ## 7. Accept the installation
 

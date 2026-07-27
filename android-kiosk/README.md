@@ -71,8 +71,8 @@ owner key used by the macOS helper, plus a sibling SHA-256 file. Download both
 files from the release, then verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.6.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.6.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.7.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.7.apk
 ```
 
 The GitHub Release APK and checksum are public downloads. A future release
@@ -143,6 +143,12 @@ Magisk root and a one-time permanent root grant to the kiosk. A failed download,
 signature mismatch, downgrade, missing root grant, or package-manager failure
 leaves the installed version untouched and is retried at a later check.
 `MY_PACKAGE_REPLACED` restarts the Home activity after a successful replacement.
+
+Version `1.2.7` also checks `/api/v1/ui/revision` every 15 seconds while the
+dashboard activity is visible. The first successful response establishes a
+baseline. Two consecutive observations of a different content revision trigger
+one WebView reload; network errors and invalid responses preserve the current
+page. Selecting a different Ambient Ops endpoint resets the baseline.
 
 The remembered endpoint has priority while its first load is pending and is
 retained when a page load fails. After that explicit failure, it remains a retry
