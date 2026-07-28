@@ -91,6 +91,19 @@ total TPS = inputTokens / windowSeconds + outputTokens / windowSeconds
 Do not add `cachedInputTokens` or `reasoningOutputTokens` again. They are
 breakdowns, not extra usage.
 
+Agents may also include optional host telemetry for the Ambient Ops Load view:
+
+```json
+{
+  "cpuPercent": 67.4,
+  "memoryPercent": 54.1
+}
+```
+
+Both values are percentages in the inclusive range `0..100`. They are
+aggregated only from live machines; when a client does not report them, the
+display shows `N/A` rather than treating the host as idle.
+
 `pet` is optional. Accepted states are `idle`, `running`, `waiting`, `review`,
 and `failed`. The server retains only the fields shown above, validates the pet
 ID and asset hash, and projects a stale/error machine to `waiting`/`failed`

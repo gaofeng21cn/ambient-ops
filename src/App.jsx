@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Cpu,
   Expand,
   Gauge,
   Globe2,
@@ -39,9 +40,10 @@ import {
 } from "./pet-display.mjs";
 import { fetchWithTimeout } from "./http.mjs";
 import { connectionAfterFailure } from "./status-connection.mjs";
+import { singleMachineLoad, loadState } from "./load-model.mjs";
 
-const VIEWS = ["overview", "network", "machines", "pet"];
-const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", pet: "Pet" };
+const VIEWS = ["overview", "network", "machines", "load", "pet"];
+const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", load: "Load", pet: "Pet" };
 const CONNECTION_STALE_GRACE_MS = 5_000;
 const PET_STATE_LABELS = {
   idle: "IDLE",
@@ -56,7 +58,7 @@ const EMPTY_STATUS = {
   demo: false,
   overallStatus: "error",
   network: { status: "error", history: [] },
-  codex: { status: "error", oneMinuteTps: 0, fiveMinuteTps: 0, cachePercent: 0, activeSessions: 0, machineCount: 0 },
+  codex: { status: "error", oneMinuteTps: 0, fiveMinuteTps: 0, cachePercent: 0, activeSessions: 0, cpuPercent: null, machineCount: 0 },
   machines: [],
 };
 
@@ -260,7 +262,7 @@ function Dashboard({ status, connection }) {
 
   return (
     <div className="app-shell" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-      <Header status={status} connection={connection} />
+      <Header status={status} connection={connection} onPet={() => setView("pet")} />
       <main className="view-stage">
         {view === "overview" ? <Overview status={status} onMachine={goToMachine} onAllMachines={() => setView("machines")} /> : null}
         {view === "network" ? <NetworkView network={status.network} /> : null}
@@ -268,6 +270,15 @@ function Dashboard({ status, connection }) {
           <MachinesView
             machines={status.machines}
             selected={selectedMachine}
+            onSelect={selectMachine}
+          />
+        ) : null}
+        {view === "load" ? (
+          <LoadView
+            machines={status.machines}
+            selected={selectedMachine}
+            followMode={machineFollowMode}
+            onFollowMode={setMachineFollowMode}
             onSelect={selectMachine}
           />
         ) : null}
@@ -291,7 +302,7 @@ function initialView() {
   return VIEWS.includes(route) ? route : "overview";
 }
 
-function Header({ status, connection }) {
+function Header({ status, connection, onPet }) {
   const now = useClock();
   return (
     <header className="top-header">
@@ -299,12 +310,137 @@ function Header({ status, connection }) {
       <h1>{status.site?.name || "Ambient Ops"}</h1>
       <div className="header-status">
         {status.demo ? <span className="mode-label">DEMO</span> : null}
+        {location.pathname === "/display/load" ? <button type="button" className="header-view-link" onClick={onPet}>View Pet</button> : null}
         <StatusLabel status={connection === "live" ? status.overallStatus : "stale"} />
         <span className="divider" />
         <span className="source-label">Gateway &amp; Codex Agents</span>
         <FullscreenButton />
       </div>
     </header>
+  );
+}
+
+function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
+  if (!selected) return <section className="load-view"><EmptyState /></section>;
+  const Icon = machineIcon(selected.platform);
+  const load = singleMachineLoad(selected);
+  const state = loadState(load.score).definition;
+
+  return (
+    <section className={`load-view load-state-${state.id}`}>
+      <div className="load-canvas">
+        <div className="load-canvas-head">
+          <div className="load-machine-picker">
+            <Icon size={17} />
+            <PetMachineControl machines={machines} selected={selected} followMode={followMode} onFollowMode={onFollowMode} onSelect={onSelect} ariaLabel="Load host" />
+          </div>
+          <div className="load-canvas-title">
+            <span>DEVELOPMENT LOAD</span>
+            <strong>{state.label}</strong>
+          </div>
+        </div>
+        <div className="load-channel-header">
+          <span>WORK FIELD</span>
+          <div><span className="ingress">INGRESS</span><span>PLAN</span><span>EXECUTE</span><span>VERIFY</span><span>COMMIT</span></div>
+        </div>
+        <LoadPixelField state={state} machineName={selected.machineName} load={load} />
+        <div className="load-canvas-footer">
+          <LoadScale score={load.score} />
+          <span>{load.laneCount} FLOW CHANNELS · {formatTps(load.tps)} TOKENS / SEC</span>
+        </div>
+      </div>
+      <aside className="load-side-metrics">
+        <div className="load-side-primary">
+          <span>1 MINUTE</span>
+          <div><strong>{formatTps(load.tps)}</strong><small>TPS</small></div>
+          <Sparkline values={selected.tpsHistory?.map((sample) => sample.tps) || []} color="green" />
+        </div>
+        <div className="load-side-stats">
+          <LoadStat label="ACTIVE" value={load.sessions} unit="CONVERSATIONS" accent="green" />
+          <LoadStat label="CPU" value={load.cpu === null ? "N/A" : `${Math.round(load.cpu)}%`} unit="HOST" accent={load.cpu === null ? "muted" : load.cpu > 80 ? "amber" : "green"} />
+          <LoadStat label="CACHE" value={`${selected.cachePercent || 0}%`} />
+        </div>
+        <div className="load-side-trend">
+          <div><span>5 MIN TREND</span><small>{formatTps(selected.fiveMinutes.tps)} TPS AVG</small></div>
+          <Sparkline values={selected.tpsHistory?.map((sample) => sample.tps) || []} color="green" />
+          <div className="load-side-axis"><span>-5m</span><span>-3m</span><span>-1m</span><span>now</span></div>
+        </div>
+        <div className="load-side-host">
+          <StatusLabel status={selected.status} age={selected.ageSeconds} />
+          <span>{selected.platform} · {formatAge(selected.generatedAt, true)}</span>
+          <span className="load-side-note"><Cpu size={14} /> {load.cpu === null ? "CPU unavailable until TPS host telemetry is enabled." : "Host CPU is optional telemetry."}</span>
+        </div>
+      </aside>
+    </section>
+  );
+}
+
+function LoadScale({ score }) {
+  return (
+    <div className="load-scale" aria-label={`Relative load ${Math.round(score * 100)} percent`}>
+      <div className="load-scale-bar"><i style={{ width: `${Math.max(3, score * 100)}%` }} /></div>
+      <div><span>QUIET</span><span>FLOWING</span><span>HEAVY</span><span>SATURATED</span></div>
+    </div>
+  );
+}
+
+function LoadPixelField({ state, machineName, load }) {
+  return (
+    <div
+      className={`load-pixel-field load-pixel-${state.id}`}
+      role="img"
+      aria-label={`${state.label} pixel workload animation for ${machineName}`}
+      style={{
+        "--pixel-density": load.density,
+        "--pixel-score": load.score,
+      }}
+    >
+      <div className="load-pixel-lanes">
+        {Array.from({ length: 5 }, (_, index) => (
+          <LoadPixelLane key={index} index={index} active={index < load.laneCount} load={load} />
+        ))}
+      </div>
+      <div className="load-pixel-scanline" aria-hidden="true" />
+    </div>
+  );
+}
+
+function LoadPixelLane({ index, active, load }) {
+  const intensity = Math.max(.12, load.density * (0.78 + (index % 3) * .08));
+  const packetCount = active ? Math.max(7, Math.min(28, Math.round(7 + intensity * 21))) : 0;
+  const travelSeconds = load.travelSeconds * (1 + index * .06);
+  return (
+    <div className={`load-pixel-lane ${active ? "active" : "inactive"}`}>
+      <span className="load-pixel-port" aria-hidden="true" />
+      <div className="load-pixel-track" style={{ "--lane-speed": `${travelSeconds}s`, "--lane-density": intensity }}>
+        <span className="load-pixel-track-line" aria-hidden="true" />
+        {Array.from({ length: 5 }, (_, checkpointIndex) => (
+          <span key={checkpointIndex} className={`load-pixel-stage-node ${checkpointIndex === 0 ? "ingress" : ""}`} style={{ "--checkpoint-index": checkpointIndex }} aria-hidden="true" />
+        ))}
+        {Array.from({ length: packetCount }, (_, packetIndex) => (
+          <b
+            key={packetIndex}
+            className="load-pixel-particle"
+            style={{
+              "--particle-delay": `${-((packetIndex / packetCount) * travelSeconds).toFixed(2)}s`,
+              "--particle-y": `${(packetIndex % 3 - 1) * 5}px`,
+              "--particle-size": `${packetIndex % 5 === 0 ? 7 : 4}px`,
+            }}
+            aria-hidden="true"
+          />
+        ))}
+      </div>
+      <ChevronRight className="load-pixel-arrow" size={18} strokeWidth={2.4} aria-hidden="true" />
+    </div>
+  );
+}
+
+function LoadStat({ label, value, unit, accent = "" }) {
+  return (
+    <div className={`load-side-stat ${accent}`}>
+      <span>{label}</span>
+      <div><strong>{value}</strong>{unit ? <small>{unit}</small> : null}</div>
+    </div>
   );
 }
 
@@ -623,7 +759,7 @@ function PetTokenStat({ label, value, unit, detail }) {
   );
 }
 
-function PetMachineControl({ machines, selected, followMode, onFollowMode, onSelect }) {
+function PetMachineControl({ machines, selected, followMode, onFollowMode, onSelect, ariaLabel = "Pet host" }) {
   if (machines.length <= 1) {
     return (
       <div className="pet-machine-label">
@@ -646,7 +782,7 @@ function PetMachineControl({ machines, selected, followMode, onFollowMode, onSel
       </button>
       <label>
         <select
-          aria-label="Pet host"
+          aria-label={ariaLabel}
           value={selected.machineId}
           onChange={(event) => onSelect(event.target.value)}
         >
@@ -1004,6 +1140,7 @@ function BottomNav({ view, setView, status, connection }) {
     ["overview", LayoutDashboard],
     ["network", Globe2],
     ["machines", Monitor],
+    ["load", Gauge],
     ["pet", Bird],
   ];
   const displayStatus = connection === "live" ? status.overallStatus : "stale";

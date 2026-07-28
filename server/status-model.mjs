@@ -24,6 +24,8 @@ export function normalizeSnapshot(machineId, payload, receivedAt = new Date()) {
     oneMinute: normalizeWindow(oneMinute),
     fiveMinutes: normalizeWindow(fiveMinutes),
     activeSessions: Math.max(0, finite(payload.activeSessions)),
+    cpuPercent: optionalPercent(payload.cpuPercent),
+    memoryPercent: optionalPercent(payload.memoryPercent),
     pet: normalizePet(payload.pet, safeGeneratedAt),
   };
 }
@@ -57,6 +59,11 @@ function normalizeWindow(window) {
     reasoningOutputTokens: Math.max(0, finite(window.reasoningOutputTokens)),
     requests: Math.max(0, finite(window.requests)),
   };
+}
+
+function optionalPercent(value) {
+  if (value === null || value === undefined || value === "") return null;
+  return Math.max(0, Math.min(100, finite(value, 0)));
 }
 
 function normalizePet(pet, generatedAt) {
@@ -121,6 +128,10 @@ export function buildDashboard({ machines, network, history, demo }, options = {
   let activeSessions = 0;
   let weightedCache = 0;
   let cacheWeight = 0;
+  let cpuTotal = 0;
+  let cpuReportedMachineCount = 0;
+  let memoryTotal = 0;
+  let memoryReportedMachineCount = 0;
   for (const machine of aggregateMachines) {
     oneMinuteTps += machine.oneMinute.tps;
     fiveMinuteTps += machine.fiveMinutes.tps;
@@ -128,6 +139,14 @@ export function buildDashboard({ machines, network, history, demo }, options = {
     const weight = Math.max(machine.oneMinute.inputTokens, 1);
     weightedCache += machine.cachePercent * weight;
     cacheWeight += weight;
+    if (machine.cpuPercent !== null) {
+      cpuTotal += machine.cpuPercent;
+      cpuReportedMachineCount += 1;
+    }
+    if (machine.memoryPercent !== null) {
+      memoryTotal += machine.memoryPercent;
+      memoryReportedMachineCount += 1;
+    }
   }
 
   const liveMachines = renderedMachines.filter((machine) => machine.status === "live").length;
@@ -147,6 +166,10 @@ export function buildDashboard({ machines, network, history, demo }, options = {
       fiveMinuteTps,
       cachePercent: cacheWeight ? Math.round(weightedCache / cacheWeight) : 0,
       activeSessions,
+      cpuPercent: cpuReportedMachineCount ? Math.round(cpuTotal / cpuReportedMachineCount) : null,
+      cpuReportedMachineCount,
+      memoryPercent: memoryReportedMachineCount ? Math.round(memoryTotal / memoryReportedMachineCount) : null,
+      memoryReportedMachineCount,
       machineCount: renderedMachines.length,
       liveMachineCount: liveMachines,
       staleMachineCount: staleMachines,

@@ -84,7 +84,7 @@ not contain collection credentials or aggregation logic.
 
 ### What you get
 
-- Overview, Network, Machines, Pet, and e-ink display surfaces
+- Overview, Network, Machines, single-machine Load, Pet, and e-ink display surfaces
 - Aggregate Codex throughput, active-session, and freshness state across machines
 - Standard IF-MIB `Counter64` download/upload metrics and optional latency
 - Prometheus text metrics and optional Home Assistant synchronization

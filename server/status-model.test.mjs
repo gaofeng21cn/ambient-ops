@@ -113,6 +113,36 @@ test("dashboard aggregates machine throughput", () => {
   assert.equal(dashboard.codex.activeSessions, 5);
 });
 
+test("keeps optional host telemetry bounded and aggregates only reported live hosts", () => {
+  const now = new Date("2026-07-25T00:00:10.000Z");
+  const machines = new Map([
+    ["a", normalizeSnapshot("a", {
+      generatedAt: now,
+      cpuPercent: 72,
+      memoryPercent: 44,
+      oneMinute: { tps: 10 },
+    }, now)],
+    ["b", normalizeSnapshot("b", {
+      generatedAt: now,
+      cpuPercent: 140,
+      memoryPercent: -10,
+      oneMinute: { tps: 20 },
+    }, now)],
+    ["c", normalizeSnapshot("c", {
+      generatedAt: "2026-07-24T23:59:00.000Z",
+      cpuPercent: 99,
+      oneMinute: { tps: 999 },
+    }, now)],
+  ]);
+  const dashboard = buildDashboard({ machines, network: { status: "live" }, history: [], demo: false }, { now });
+  assert.equal(dashboard.machines.find((machine) => machine.machineId === "b").cpuPercent, 100);
+  assert.equal(dashboard.machines.find((machine) => machine.machineId === "b").memoryPercent, 0);
+  assert.equal(dashboard.codex.cpuPercent, 86);
+  assert.equal(dashboard.codex.cpuReportedMachineCount, 2);
+  assert.equal(dashboard.codex.memoryPercent, 22);
+  assert.equal(dashboard.codex.memoryReportedMachineCount, 2);
+});
+
 test("an expired machine is retired from the dashboard and aggregate", () => {
   const now = new Date("2026-07-25T00:10:00.000Z");
   const machines = new Map([

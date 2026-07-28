@@ -44,6 +44,8 @@ export function updateDemo(store, tick = Date.now()) {
       },
       fiveMinutes: { tps: seed.base * 0.93 + pulse * 0.4 },
       activeSessions: seed.sessions,
+      cpuPercent: Math.max(18, Math.min(97, 34 + seed.base / 18 + Math.sin(phase * 1.6 + index) * 8)),
+      memoryPercent: Math.max(22, Math.min(92, 38 + index * 10 + Math.cos(phase * 1.2) * 4)),
     }, new Date()));
   });
 }
