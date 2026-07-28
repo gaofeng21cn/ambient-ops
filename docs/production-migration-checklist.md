@@ -76,15 +76,17 @@ Optional state continuity:
 - if imported, copy it while the Mac service is stopped or from a consistent
   backup; do not merge two live stores
 
-## 3. Stage with discovery disabled
+## 3. Stage without taking the LAN owner
 
-Keep the Mac as canonical owner. On Synology, use only the base Compose file:
+Keep the Mac as canonical owner. Do not start a second discovery owner on the NAS.
+Validate the single-file production definition without starting it:
 
 ```bash
-docker compose -p ambient-ops -f compose.yaml config
-docker compose -p ambient-ops -f compose.yaml pull
-docker compose -p ambient-ops -f compose.yaml up -d
-docker compose -p ambient-ops -f compose.yaml ps
+docker compose -p ambient-ops -f compose.yaml config --quiet
+docker compose -p ambient-ops -f compose.yaml config --format json | \
+  jq -e '.services["ambient-ops"].network_mode == "host" and
+    .services["ambient-ops"].environment.DISCOVERY_ENABLED == "true" and
+    (.services["ambient-ops"].ports == null)'
 ```
 
 Validate live SNMP without expecting Codex to move yet:
@@ -100,8 +102,7 @@ curl -fsS http://127.0.0.1:8787/api/status |
     and (.network.interfaces | length) > 0'
 ```
 
-The base file must have discovery disabled. Do not use the host-network
-override while the Mac is still publishing production discovery.
+Do not run `up` until the Mac owner has been stopped in the cutover step below.
 
 ## 4. Prove volume persistence
 
@@ -125,29 +126,17 @@ Also confirm `/data/state.json` exists after live SNMP sampling. Never use
 
 ## 5. Cut over one owner
 
-Stop the discovery-disabled staging container:
-
-```bash
-docker compose -p ambient-ops -f compose.yaml down
-```
-
 Stop the Mac owner:
 
 ```bash
 launchctl bootout gui/$(id -u)/cn.gaofeng.ambient-ops.server
 ```
 
-Immediately start Synology with host networking:
+Immediately start Synology from the single production file:
 
 ```bash
-docker compose -p ambient-ops \
-  -f compose.yaml \
-  -f compose.host-network.yaml \
-  pull
-docker compose -p ambient-ops \
-  -f compose.yaml \
-  -f compose.host-network.yaml \
-  up -d
+docker compose -p ambient-ops -f compose.yaml pull
+docker compose -p ambient-ops -f compose.yaml up -d
 ```
 
 Do not restart the Mac owner while Synology is publishing. A short collection

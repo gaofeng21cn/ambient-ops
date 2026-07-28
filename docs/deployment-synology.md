@@ -18,28 +18,28 @@ For the shorter ordinary-user path, start with the
 - TCP/8787 access from trusted LAN clients to the NAS
 - UDP/5353 multicast on the client LAN
 - Host networking for Bonjour/mDNS publication to the physical LAN
-- A Compose implementation that accepts the `!reset` tag used by the
-  host-network override
 
 Tagged releases publish one GHCR manifest containing both `linux/amd64` and
 `linux/arm64` images. Intel and ARM Synology models pull the native image; the
 NAS does not build Node or frontend assets locally.
 
-Check the exact Compose merge before copying any secrets:
+The production `compose.yaml` is intentionally self-contained. DSM Container
+Manager projects commonly load only that root file; discovery must therefore not
+depend on an override being selected in the UI. Check the rendered contract before
+copying any secrets:
 
 ```bash
-docker compose -f compose.yaml -f compose.host-network.yaml config --quiet
+docker compose -f compose.yaml config --quiet
+docker compose -f compose.yaml config --format json | \
+  jq -e '.services["ambient-ops"].network_mode == "host" and
+    .services["ambient-ops"].environment.DISCOVERY_ENABLED == "true" and
+    (.services["ambient-ops"].ports == null) and
+    (.services["ambient-ops"].build == null)'
 ```
 
-If Synology Container Manager rejects `!reset`, update it or install a
-compatible Compose v2 CLI. A base-only container can serve HTTP but cannot
-prove physical-LAN mDNS discovery.
-
-The commands below use the Compose CLI over Synology SSH because this preserves
-the repository's two-file merge exactly. Container Manager may still be used to
-observe and restart the resulting container. If a DSM UI release supports the
-same multi-file project definition, compare its rendered configuration with
-the CLI output before treating it as equivalent.
+The compatibility override is still accepted by the repository helper, but it is
+not required by DSM. Container Manager may be used to observe and recreate the
+single-file project after the reviewed files are copied into the project directory.
 
 ## Prepare configuration
 
@@ -58,7 +58,7 @@ valid for operators who deliberately manage identity and secret generation
 themselves.
 
 Set `AMBIENT_OPS_IMAGE` in `.env` to the reviewed release, for example
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.17`. The GitHub Container Registry package
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.20`. The GitHub Container Registry package
 is public, so Synology can pull the image without a GitHub token:
 
 ```bash
@@ -126,13 +126,14 @@ isolated gate on a Docker development/build host:
 ./ops/docker/smoke-test.sh
 ```
 
-## Stage without LAN discovery
+## Validate the single-file LAN instance
 
-The base Compose file publishes TCP/8787 and leaves mDNS disabled. Use it to
-build and check the candidate without competing with a running production
-instance:
+The production file uses host networking and publishes mDNS. Do not start a
+second candidate on the same NAS while another Ambient Ops owner is active. Pull
+and validate the exact image and rendered service in place:
 
 ```bash
+docker compose -p ambient-ops -f compose.yaml config --quiet
 docker compose -p ambient-ops -f compose.yaml pull
 docker compose -p ambient-ops -f compose.yaml up -d
 docker compose -p ambient-ops -f compose.yaml ps
@@ -141,26 +142,18 @@ curl -fsS http://127.0.0.1:8787/api/status
 ```
 
 For a live SNMP configuration, require `mode=live`, `network=live`, and
-`network.source=unifi-snmp-v3`. Codex may remain error during staging because
-the agents must still target the canonical production instance.
+`network.source=unifi-snmp-v3`.
 
 Do not infer source readiness from HTTP 200 or `ok=true` alone. `/healthz`
 separately reports the normalized source state.
 
-## Start the LAN instance
+## Recreate from DSM or SSH
 
-Linux/Synology production needs the host-network override:
+The same single-file project can be recreated from DSM Container Manager or SSH:
 
 ```bash
-docker compose -p ambient-ops -f compose.yaml down
-docker compose -p ambient-ops \
-  -f compose.yaml \
-  -f compose.host-network.yaml \
-  pull
-docker compose -p ambient-ops \
-  -f compose.yaml \
-  -f compose.host-network.yaml \
-  up -d
+docker compose -p ambient-ops -f compose.yaml pull
+docker compose -p ambient-ops -f compose.yaml up -d
 ```
 
 The named `ambient_ops_data` volume is preserved by `down`; never add `-v`
@@ -243,9 +236,9 @@ curl -fsS http://127.0.0.1:8787/api/status
 
 If DSM reports **Unable to build project ambient-ops**, treat that as a project
 definition error. Production uses the public versioned image and must not
-build. Confirm that the project uses `compose.yaml` plus
-`compose.host-network.yaml`, does not include `compose.local-build.yaml`, and
-renders no `build:` key. A GHCR login or DSM scheduled task is not a fix: the
+build. Confirm that the project uses only `compose.yaml`, does not include
+`compose.local-build.yaml`, and renders `network_mode: host`, discovery enabled,
+no ports, and no `build:` key. A GHCR login or DSM scheduled task is not a fix: the
 package is public and `restart: unless-stopped` owns normal container startup.
 
 ## URLs

@@ -1,6 +1,9 @@
+# This is the complete production definition. DSM Container Manager reads this
+# file by itself, so LAN discovery must not depend on a second override file.
 services:
   ambient-ops:
-    image: ${AMBIENT_OPS_IMAGE:-ghcr.io/gaofeng21cn/ambient-ops:0.1.18}
+    image: ${AMBIENT_OPS_IMAGE:-ghcr.io/gaofeng21cn/ambient-ops:0.1.20}
+    network_mode: host
     restart: unless-stopped
     init: true
     read_only: true
@@ -8,15 +11,13 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    ports:
-      - "${AMBIENT_OPS_PORT:-8787}:8787"
     environment:
       PORT: "8787"
       DATA_DIR: /data
       DEMO_MODE: ${DEMO_MODE:-true}
       SITE_NAME: ${SITE_NAME:-Ambient Ops}
       DISPLAY_TIME_ZONE: ${DISPLAY_TIME_ZONE:-Asia/Shanghai}
-      DISCOVERY_ENABLED: ${DISCOVERY_ENABLED:-false}
+      DISCOVERY_ENABLED: "true"
       INSTANCE_ID: ${INSTANCE_ID:-}
       AGENT_PUSH_TOKEN_FILE: /run/secrets/agent_push_token
       DEVICE_PAIRING_ENABLED: ${DEVICE_PAIRING_ENABLED:-true}

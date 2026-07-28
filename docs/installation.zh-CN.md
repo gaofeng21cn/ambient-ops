@@ -15,7 +15,7 @@ NAS 不在本地构建应用源码。
 - 可选：Docker 主机可通过 IPv4/UDP 161 访问经过验证的 SNMPv3 路由器
 - 首次安装 Android 时可使用一台装有 `adb` 的电脑
 
-当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.17`，同时支持
+当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.20`，同时支持
 `linux/amd64` 与 `linux/arm64`。该镜像公开可拉取；正常安装不要创建或配置
 GitHub Token。
 
@@ -180,7 +180,7 @@ macOS 私钥保存在登录 Keychain，Windows 私钥保存为当前用户 DPAPI
 
 ## 6. 安装 Android Kiosk
 
-从 [Ambient Ops v0.1.17](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.17)
+从 [Ambient Ops v0.1.20](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.20)
 下载：
 
 - `Ambient-Ops-Kiosk-1.2.7.apk`
@@ -252,21 +252,20 @@ git rev-parse HEAD
 ## 群晖“无法构建项目”处理
 
 生产部署根本不执行构建。如果 DSM 提示“无法构建项目 ambient-ops”，进入
-Container Manager 日志，并检查项目使用的 Compose 文件。生产组合只能是：
+Container Manager 日志，并检查项目使用的 Compose 文件。DSM 项目只能使用：
 
 ```text
 compose.yaml
-compose.host-network.yaml
 ```
 
-不得包含 `compose.local-build.yaml`，最终渲染内容中也不能有 `build:`。通过 SSH
-验证：
+不得包含 `compose.local-build.yaml`，最终渲染内容必须是 `network_mode: host`、
+`DISCOVERY_ENABLED=true`，且不能有 `ports` 或 `build:`。通过 SSH 验证：
 
 ```bash
 docker compose --env-file .env -p ambient-ops \
-  -f compose.yaml -f compose.host-network.yaml config --quiet
+  -f compose.yaml config --quiet
 docker compose --env-file .env -p ambient-ops \
-  -f compose.yaml -f compose.host-network.yaml config --images
+  -f compose.yaml config --images
 ```
 
 镜像应为 `ghcr.io/gaofeng21cn/ambient-ops:<version>`。它是公开镜像，不需要

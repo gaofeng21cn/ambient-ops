@@ -251,7 +251,7 @@ validate_config() {
   [ -d "$SECRETS_DIR" ] || die "Missing $SECRETS_DIR; run ./scripts/ambient-ops.sh init"
 
   local duplicates image image_lower image_tail image_version
-  local port demo instance_id network_mode poll_ms rate_window_ms ha_enabled
+  local port demo instance_id network_mode discovery_enabled poll_ms rate_window_ms ha_enabled
   local latency_port latency_timeout_ms auxiliary_poll_ms
   duplicates="$(duplicate_env_keys)"
   [ -z "$duplicates" ] || die "Duplicate keys in $ENV_FILE: $(printf '%s' "$duplicates" | tr '\n' ' ')"
@@ -260,6 +260,7 @@ validate_config() {
   image_tail="${image_lower##*/}"
   port="$(value_or_default AMBIENT_OPS_PORT 8787)"
   demo="$(value_or_default DEMO_MODE false)"
+  discovery_enabled="$(value_or_default DISCOVERY_ENABLED true)"
   require_value SITE_NAME >/dev/null
   require_value DISPLAY_TIME_ZONE >/dev/null
   instance_id="$(require_value INSTANCE_ID)"
@@ -292,6 +293,10 @@ validate_config() {
   case "$(lower_value "$demo")" in
     false|0|no|off) ;;
     *) die "Production configuration requires DEMO_MODE=false" ;;
+  esac
+  case "$(lower_value "$discovery_enabled")" in
+    true|1|yes|on) ;;
+    *) die "Production configuration requires DISCOVERY_ENABLED=true" ;;
   esac
   [[ "$instance_id" =~ ^[a-z0-9][a-z0-9._-]{0,79}$ ]] ||
     die "INSTANCE_ID must match ^[a-z0-9][a-z0-9._-]{0,79}$"
@@ -348,7 +353,31 @@ validate_config() {
   esac
 
   docker compose version >/dev/null
-  compose config --quiet
+  local rendered_config
+  rendered_config="$(mktemp "${TMPDIR:-/tmp}/ambient-ops-compose.XXXXXX")"
+  if ! compose config --format json > "$rendered_config"; then
+    rm -f "$rendered_config"
+    die "Unable to render the production Compose configuration"
+  fi
+  if ! node --input-type=module - "$rendered_config" <<'NODE'
+import { readFileSync } from "node:fs";
+
+const path = process.argv[2];
+const config = JSON.parse(readFileSync(path, "utf8"));
+const service = config.services?.["ambient-ops"];
+if (!service) throw new Error("ambient-ops service is missing");
+if (service.network_mode !== "host") throw new Error("production service must use network_mode=host");
+if (Array.isArray(service.ports) && service.ports.length) throw new Error("host-network service must not publish ports");
+if (service.build) throw new Error("production service must not contain build");
+if (String(service.environment?.DISCOVERY_ENABLED).toLowerCase() !== "true") {
+  throw new Error("production service must enable discovery");
+}
+NODE
+  then
+    rm -f "$rendered_config"
+    die "Rendered production Compose configuration violates the host-network contract"
+  fi
+  rm -f "$rendered_config"
   log "Configuration valid: instance=$instance_id network=$network_mode image=$image"
 }
 

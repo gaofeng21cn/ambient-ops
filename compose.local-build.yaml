@@ -2,3 +2,8 @@ services:
   ambient-ops:
     build: .
     image: ${AMBIENT_OPS_LOCAL_IMAGE:-ambient-ops:local}
+    network_mode: bridge
+    ports:
+      - "${AMBIENT_OPS_PORT:-8787}:8787"
+    environment:
+      DISCOVERY_ENABLED: "false"

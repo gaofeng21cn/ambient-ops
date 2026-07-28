@@ -17,7 +17,7 @@ application from source.
 - Optional for initial Android installation: a computer with `adb`
 
 The current published server image is
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.17` for both `linux/amd64` and
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.20` for both `linux/amd64` and
 `linux/arm64`. The package is public. Do not create or configure a GitHub token
 for a normal pull.
 
@@ -195,7 +195,7 @@ live state repeatedly.
 ## 6. Install the Android kiosk
 
 Download these assets from
-[Ambient Ops v0.1.17](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.17):
+[Ambient Ops v0.1.20](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.20):
 
 - `Ambient-Ops-Kiosk-1.2.7.apk`
 - `Ambient-Ops-Kiosk-1.2.7.apk.sha256`
@@ -274,22 +274,21 @@ deployment commit and run the same two commands. Keep `.env`, `secrets/`,
 ## Synology build-error recovery
 
 Production does not build a project. If DSM reports **Unable to build project
-ambient-ops**, inspect Container Manager logs and the project Compose files.
-The production merge must use only:
+ambient-ops**, inspect Container Manager logs and the project Compose file.
+The DSM project must use only:
 
 ```text
 compose.yaml
-compose.host-network.yaml
 ```
 
-It must not include `compose.local-build.yaml`, and rendered Compose must not
-contain `build:`. Verify over SSH:
+It must not include `compose.local-build.yaml`, and rendered Compose must contain
+`network_mode: host`, `DISCOVERY_ENABLED=true`, no `ports`, and no `build:`. Verify over SSH:
 
 ```bash
 docker compose --env-file .env -p ambient-ops \
-  -f compose.yaml -f compose.host-network.yaml config --quiet
+  -f compose.yaml config --quiet
 docker compose --env-file .env -p ambient-ops \
-  -f compose.yaml -f compose.host-network.yaml config --images
+  -f compose.yaml config --images
 ```
 
 The image should be `ghcr.io/gaofeng21cn/ambient-ops:<version>`. It is public,

@@ -1,6 +1,7 @@
 services:
   ambient-ops:
     image: ${AMBIENT_OPS_SMOKE_IMAGE:-ambient-ops:smoke}
+    network_mode: bridge
     ports: !override
       - "127.0.0.1::8787"
     environment:

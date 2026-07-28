@@ -111,9 +111,9 @@ docker compose --env-file .env -p ambient-ops \
   -f compose.yaml -f compose.host-network.yaml config --images
 ```
 
-渲染结果必须是版本化镜像，且不能包含 `build:`。如果 Compose 不支持 `!reset`，
-应在进入生产前升级 owner 支持的 Compose；不能删除 host-network override 来换取
-命令通过，因为那会破坏面向物理局域网的发现路径。
+渲染结果必须是版本化镜像，使用 `network_mode: host`、启用发现、没有 `ports:`
+和 `build:`。根 `compose.yaml` 已可由 DSM 单独读取；`compose.host-network.yaml`
+仅为旧的命令行流程兼容保留。
 
 ### 4. 通过仓库助手启动
 
@@ -173,6 +173,6 @@ git rev-parse HEAD
 ## DSM 构建错误规则
 
 如果 DSM 提示无法“构建” `ambient-ops`，Agent 应检查项目定义和日志。生产项目
-只拉取公开镜像，根本不构建。确认准确项目写集后，只移除误选的
-`compose.local-build.yaml` 或 `build:`；不得用 GHCR Token、DSM 计划任务或在
-NAS 上编译源码来解决。
+只拉取公开镜像，根本不构建。DSM 项目应只包含 `compose.yaml`；确认准确项目写集后，
+只移除误选的 `compose.local-build.yaml` 或 `build:`。不得用 GHCR Token、DSM
+计划任务或在 NAS 上编译源码来解决。

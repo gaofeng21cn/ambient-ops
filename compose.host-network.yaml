@@ -1,3 +1,5 @@
+# Compatibility override for existing operator commands. The root production
+# file is already host-networked so DSM can consume it as a single file.
 services:
   ambient-ops:
     network_mode: host

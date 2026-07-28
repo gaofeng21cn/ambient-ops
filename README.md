@@ -155,8 +155,10 @@ interfaces. “SNMP enabled” is not sufficient; qualify the device with
 ### Important boundaries
 
 - Run exactly one Ambient Ops instance that publishes discovery and accepts snapshots for a site.
-- Production uses `compose.yaml` plus `compose.host-network.yaml`.
-  `compose.local-build.yaml` is for local development only.
+- Production `compose.yaml` is self-contained and uses host networking so DSM
+  Container Manager can load it as a single project file. `compose.host-network.yaml`
+  remains a compatibility override for older operator commands; `compose.local-build.yaml`
+  is for local development only.
 - Do not expose the service directly to the internet.
 - Preserve `.env`, `INSTANCE_ID`, `secrets/`, and the `ambient_ops_data` volume during upgrades.
 - Do not run `docker compose down -v` unless permanent data deletion is intentional.

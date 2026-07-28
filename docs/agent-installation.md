@@ -124,9 +124,10 @@ docker compose --env-file .env -p ambient-ops \
 ```
 
 The rendered image must be versioned and the merge must not contain `build:`.
-If Compose rejects `!reset`, stop before production and update the owner
-supported Compose implementation. Do not delete the override to make the
-command pass because that removes the intended physical-LAN discovery path.
+The root production file is self-contained for DSM. The rendered service must
+use host networking, enable discovery, contain no `ports:` mapping, and contain
+no `build:` key. `compose.host-network.yaml` is only a compatibility override
+for older CLI commands.
 
 ### 4. Start through the repository helper
 
@@ -193,7 +194,7 @@ Android app, or start a second discovery owner as an improvised rollback.
 
 If DSM reports that it cannot **build** `ambient-ops`, the Agent must inspect
 the project definition and logs. This production project pulls a public image;
-it does not build. Remove only an accidentally selected
-`compose.local-build.yaml` or `build:` entry after confirming the exact project
-write set. Do not solve the error with a GHCR token, DSM scheduled task, or
-source compilation on the NAS.
+it does not build. The DSM project should contain only `compose.yaml`; remove an
+accidentally selected `compose.local-build.yaml` or `build:` entry after
+confirming the exact project write set. Do not solve the error with a GHCR token,
+DSM scheduled task, or source compilation on the NAS.

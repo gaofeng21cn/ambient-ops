@@ -143,7 +143,8 @@ SNMP 路径使用标准 IF-MIB，不依赖 UniFi 私有 MIB。设备仍需支持
 ### 重要边界
 
 - 一个站点只应运行一个对外广播并接收上报的 Ambient Ops 实例。
-- 生产环境只使用 `compose.yaml` 与 `compose.host-network.yaml`；
+- 生产环境的 `compose.yaml` 已经是完整的 host-network 定义，DSM
+  Container Manager 可以单独读取；`compose.host-network.yaml` 仅为旧的命令行流程保留，
   `compose.local-build.yaml` 仅用于本地开发。
 - 不要把服务端口直接暴露到互联网。显示页和设备批准页默认信任所在局域网。
 - 升级时保留 `.env`、`INSTANCE_ID`、`secrets/` 和 `ambient_ops_data` 数据卷。
