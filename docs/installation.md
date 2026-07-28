@@ -17,7 +17,7 @@ application from source.
 - Optional for initial Android installation: a computer with `adb`
 
 The current published server image is
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.13` for both `linux/amd64` and
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.17` for both `linux/amd64` and
 `linux/arm64`. The package is public. Do not create or configure a GitHub token
 for a normal pull.
 
@@ -33,9 +33,18 @@ git rev-parse HEAD
 ./scripts/ambient-ops.sh init
 ```
 
+`init` creates the minimal `codex-only` configuration by default. For a new
+installation that needs router telemetry immediately, run this before `.env`
+exists instead:
+
+```bash
+./scripts/ambient-ops.sh init --profile snmpv3
+# or: ./scripts/ambient-ops.sh init --profile unifi-api
+```
+
 `init` refuses to overwrite an existing `.env`. It creates:
 
-- `.env` with a stable generated `INSTANCE_ID`
+- a profile-specific `.env` with a stable generated `INSTANCE_ID`
 - `secrets/agent_push_token` with a random 256-bit token
 - empty optional secret files for SNMPv3, UniFi API, and Home Assistant
 
@@ -44,36 +53,33 @@ upgrading or moving the service.
 
 ## 2. Edit one configuration file
 
-Open `.env` in a local text editor. For a Codex-only screen, these are the only
-values most users review:
+Open `.env` in a local text editor. For a Codex-only screen, most users edit only:
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.13
-AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
-DISPLAY_TIME_ZONE=Etc/UTC
-INSTANCE_ID=ao-generated-and-stable
-DEMO_MODE=false
-AMBIENT_OPS_NETWORK_MODE=codex-only
+DISPLAY_TIME_ZONE=Asia/Shanghai
 ```
 
-Use an IANA time-zone name such as `Asia/Shanghai`, `Europe/London`, or
-`America/Los_Angeles`. Preserve `INSTANCE_ID` exactly after the first start.
+The template already pins a reviewed, versioned image. Change `AMBIENT_OPS_IMAGE`
+only as part of a reviewed upgrade and never use a moving tag. Use an IANA time-zone
+name such as `Asia/Shanghai`, `Europe/London`, or `America/Los_Angeles`. Preserve
+`INSTANCE_ID` exactly after the first start.
 
 Choose one network profile:
 
 | Profile | Use it when | Required additions |
 | --- | --- | --- |
-| `codex-only` | Only Codex and pet pages are required | None |
-| `snmpv3` | SNMPv3 router | Address, user, WAN selector, two passwords |
-| `unifi-api` | UniFi API fallback | Controller URL and API key file |
+| `codex-only` | Only Codex and pet pages are required | Default `init` profile |
+| `snmpv3` | SNMPv3 router | New installs use `init --profile snmpv3`; address, user, WAN selector, two passwords |
+| `unifi-api` | UniFi API fallback | New installs use `init --profile unifi-api`; controller URL and API key file |
 
 ### SNMPv3 profile
 
-Set the non-secret values in `.env`:
+For a new installation, start with `./scripts/ambient-ops.sh init --profile snmpv3`.
+Then set the non-secret values in `.env`. An existing `codex-only` installation may
+add the same fields manually:
 
 ```dotenv
-AMBIENT_OPS_NETWORK_MODE=snmpv3
 UNIFI_SNMP_HOST=192.168.1.1
 UNIFI_SNMP_USER=ambient-ops
 UNIFI_SNMP_INTERFACES=WAN
@@ -113,10 +119,10 @@ verified under real traffic. Follow [Router and SNMP qualification](unifi.md).
 
 ### UniFi API fallback
 
-Set:
+For a new installation, start with `./scripts/ambient-ops.sh init --profile unifi-api`.
+Then set:
 
 ```dotenv
-AMBIENT_OPS_NETWORK_MODE=unifi-api
 UNIFI_BASE_URL=https://192.168.1.1
 UNIFI_SITE=default
 ```
@@ -189,7 +195,7 @@ live state repeatedly.
 ## 6. Install the Android kiosk
 
 Download these assets from
-[Ambient Ops v0.1.13](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.13):
+[Ambient Ops v0.1.17](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.17):
 
 - `Ambient-Ops-Kiosk-1.2.7.apk`
 - `Ambient-Ops-Kiosk-1.2.7.apk.sha256`

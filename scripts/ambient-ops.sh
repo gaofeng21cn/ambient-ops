@@ -12,7 +12,8 @@ usage() {
 Usage: ./scripts/ambient-ops.sh <command>
 
 Commands:
-  init                 Create .env, a stable instance ID, and private secret files.
+  init [--profile <name>]
+                       Create profile-specific .env, a stable instance ID, and private secret files.
   set-secret <name>    Prompt twice for an optional secret without shell history.
   validate             Validate configuration, secrets, and the Compose merge.
   up                   Validate, pull the pinned image, start, and wait for HTTP.
@@ -31,6 +32,11 @@ Environment overrides:
   AMBIENT_OPS_PROJECT_NAME   Compose project name (default: ambient-ops)
 
 This helper never prints secret values and never uses compose.local-build.yaml.
+
+Profiles:
+  codex-only            Default. Codex TPS and display surfaces only.
+  snmpv3                Adds the non-secret fields for a qualified SNMPv3 router.
+  unifi-api             Adds the non-secret fields for the UniFi API fallback.
 USAGE
 }
 
@@ -75,6 +81,12 @@ env_value() {
 
 value_or_empty() {
   env_value "$1" 2>/dev/null || true
+}
+
+value_or_default() {
+  local value
+  value="$(value_or_empty "$1")"
+  printf '%s' "${value:-$2}"
 }
 
 lower_value() {
@@ -150,9 +162,25 @@ compose() {
 }
 
 init_config() {
+  local profile="codex-only" template
+  case "$#" in
+    0) ;;
+    2)
+      [ "$1" = "--profile" ] || die "Usage: ./scripts/ambient-ops.sh init [--profile <codex-only|snmpv3|unifi-api>]"
+      profile="$2"
+      ;;
+    *) die "Usage: ./scripts/ambient-ops.sh init [--profile <codex-only|snmpv3|unifi-api>]" ;;
+  esac
+
+  case "$profile" in
+    codex-only) template="$PROJECT_DIR/.env.example" ;;
+    snmpv3|unifi-api) template="$PROJECT_DIR/config/profiles/${profile}.env.example" ;;
+    *) die "Unsupported profile: $profile (choose codex-only, snmpv3, or unifi-api)" ;;
+  esac
+
   need_command openssl
   [ ! -e "$ENV_FILE" ] || die "$ENV_FILE already exists; refusing to overwrite it"
-  [ -f "$PROJECT_DIR/.env.example" ] || die "Missing .env.example"
+  [ -f "$template" ] || die "Missing profile template: $template"
   if [ -d "$SECRETS_DIR" ] && [ -n "$(find "$SECRETS_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
     die "$SECRETS_DIR already contains files; refusing to overwrite them"
   fi
@@ -163,7 +191,7 @@ init_config() {
   awk -v instance_id="$instance_id" '
     /^INSTANCE_ID=replace-me$/ { print "INSTANCE_ID=" instance_id; next }
     { print }
-  ' "$PROJECT_DIR/.env.example" > "$temporary"
+  ' "$template" > "$temporary"
   chmod 600 "$temporary"
   mv "$temporary" "$ENV_FILE"
 
@@ -180,7 +208,7 @@ init_config() {
     "$SECRETS_DIR/ha_token"
   chmod 600 "$SECRETS_DIR"/*
 
-  log "Created private configuration without printing secrets."
+  log "Created $profile configuration without printing secrets."
   if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" != "1000" ]; then
     log "After setting optional secrets, run: sudo chown -R 1000:1000 '$SECRETS_DIR'"
   fi
@@ -230,21 +258,21 @@ validate_config() {
   image="$(require_value AMBIENT_OPS_IMAGE)"
   image_lower="$(lower_value "$image")"
   image_tail="${image_lower##*/}"
-  port="$(require_value AMBIENT_OPS_PORT)"
-  demo="$(require_value DEMO_MODE)"
+  port="$(value_or_default AMBIENT_OPS_PORT 8787)"
+  demo="$(value_or_default DEMO_MODE false)"
   require_value SITE_NAME >/dev/null
   require_value DISPLAY_TIME_ZONE >/dev/null
   instance_id="$(require_value INSTANCE_ID)"
   network_mode="$(require_value AMBIENT_OPS_NETWORK_MODE)"
-  poll_ms="$(require_value UNIFI_POLL_MS)"
-  rate_window_ms="$(require_value UNIFI_RATE_WINDOW_MS)"
+  poll_ms="$(value_or_default UNIFI_POLL_MS 250)"
+  rate_window_ms="$(value_or_default UNIFI_RATE_WINDOW_MS 2000)"
   latency_port="$(value_or_empty NETWORK_LATENCY_PORT)"
   latency_port="${latency_port:-443}"
   latency_timeout_ms="$(value_or_empty NETWORK_LATENCY_TIMEOUT_MS)"
   latency_timeout_ms="${latency_timeout_ms:-1500}"
   auxiliary_poll_ms="$(value_or_empty NETWORK_AUXILIARY_POLL_MS)"
   auxiliary_poll_ms="${auxiliary_poll_ms:-5000}"
-  ha_enabled="$(require_value HA_ENABLED)"
+  ha_enabled="$(value_or_default HA_ENABLED false)"
 
   case "$image_lower" in
     *:latest|*:main|*:edge) die "AMBIENT_OPS_IMAGE must use a reviewed version tag or digest, not a moving tag" ;;

@@ -97,7 +97,7 @@ For a fresh installation:
 git clone https://github.com/gaofeng21cn/ambient-ops.git <target>
 cd <target>
 git rev-parse HEAD
-./scripts/ambient-ops.sh init
+./scripts/ambient-ops.sh init --profile <codex-only|snmpv3|unifi-api>
 ```
 
 For an existing installation, `init` must not be run. The Agent edits only

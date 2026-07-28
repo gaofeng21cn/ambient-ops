@@ -15,7 +15,7 @@ NAS 不在本地构建应用源码。
 - 可选：Docker 主机可通过 IPv4/UDP 161 访问经过验证的 SNMPv3 路由器
 - 首次安装 Android 时可使用一台装有 `adb` 的电脑
 
-当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.13`，同时支持
+当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.17`，同时支持
 `linux/amd64` 与 `linux/arm64`。该镜像公开可拉取；正常安装不要创建或配置
 GitHub Token。
 
@@ -30,9 +30,17 @@ git rev-parse HEAD
 ./scripts/ambient-ops.sh init
 ```
 
+`init` 默认生成最小的 `codex-only` 配置。若新安装一开始就需要路由器遥测，
+在 `.env` 尚不存在时改用：
+
+```bash
+./scripts/ambient-ops.sh init --profile snmpv3
+# 或者：./scripts/ambient-ops.sh init --profile unifi-api
+```
+
 `init` 会拒绝覆盖已有 `.env`，并创建：
 
-- `.env`，其中包含自动生成且长期稳定的 `INSTANCE_ID`
+- 与所选模式匹配的 `.env`，其中包含自动生成且长期稳定的 `INSTANCE_ID`
 - `secrets/agent_push_token`，包含随机 256 位 token
 - SNMPv3、UniFi API 和 Home Assistant 使用的空白可选 secret 文件
 
@@ -41,36 +49,31 @@ git rev-parse HEAD
 
 ## 2. 只编辑一份配置文件
 
-用本机文本编辑器打开 `.env`。如果只显示 Codex 和宠物页面，普通用户通常只需
-确认这些值：
+用本机文本编辑器打开 `.env`。如果只显示 Codex 和宠物页面，普通用户只需编辑：
 
 ```dotenv
-AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.13
-AMBIENT_OPS_PORT=8787
 SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Asia/Shanghai
-INSTANCE_ID=ao-generated-and-stable
-DEMO_MODE=false
-AMBIENT_OPS_NETWORK_MODE=codex-only
 ```
 
-时区使用 IANA 名称，例如 `Asia/Shanghai`、`Europe/London` 或
-`America/Los_Angeles`。首次启动后不要再修改 `INSTANCE_ID`。
+模板已经固定到经过审查的版本化镜像；升级时才修改 `AMBIENT_OPS_IMAGE`，并且
+不要使用移动标签。时区使用 IANA 名称，例如 `Asia/Shanghai`、`Europe/London`
+或 `America/Los_Angeles`。首次启动后不要再修改 `INSTANCE_ID`。
 
 三种网络模式只能选择一种：
 
 | 模式 | 适用情况 | 额外配置 |
 | --- | --- | --- |
-| `codex-only` | 只需要 Codex 与宠物页面 | 无 |
-| `snmpv3` | SNMPv3 authPriv 路由器 | 地址、用户、WAN 选择器、两份密码 |
-| `unifi-api` | UniFi API 备用路径 | 控制器 URL 与 API key 文件 |
+| `codex-only` | 只需要 Codex 与宠物页面 | `init` 默认模式 |
+| `snmpv3` | SNMPv3 authPriv 路由器 | 新安装使用 `init --profile snmpv3`；地址、用户、WAN 选择器、两份密码 |
+| `unifi-api` | UniFi API 备用路径 | 新安装使用 `init --profile unifi-api`；控制器 URL 与 API key 文件 |
 
 ### SNMPv3 模式
 
-在 `.env` 中填写非敏感信息：
+新安装应先使用 `./scripts/ambient-ops.sh init --profile snmpv3`，再在 `.env`
+中填写非敏感信息。已有 `codex-only` 安装也可手动添加以下字段：
 
 ```dotenv
-AMBIENT_OPS_NETWORK_MODE=snmpv3
 UNIFI_SNMP_HOST=192.168.1.1
 UNIFI_SNMP_USER=ambient-ops
 UNIFI_SNMP_INTERFACES=WAN
@@ -108,10 +111,9 @@ TCP 延迟探针同样可选，应填写一个确实希望监测的稳定目标�
 
 ### UniFi API 备用模式
 
-设置：
+新安装应先使用 `./scripts/ambient-ops.sh init --profile unifi-api`，再设置：
 
 ```dotenv
-AMBIENT_OPS_NETWORK_MODE=unifi-api
 UNIFI_BASE_URL=https://192.168.1.1
 UNIFI_SITE=default
 ```
@@ -178,7 +180,7 @@ macOS 私钥保存在登录 Keychain，Windows 私钥保存为当前用户 DPAPI
 
 ## 6. 安装 Android Kiosk
 
-从 [Ambient Ops v0.1.13](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.13)
+从 [Ambient Ops v0.1.17](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.17)
 下载：
 
 - `Ambient-Ops-Kiosk-1.2.7.apk`

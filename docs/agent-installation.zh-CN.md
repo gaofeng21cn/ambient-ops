@@ -87,7 +87,7 @@ Agent 应先确认：
 git clone https://github.com/gaofeng21cn/ambient-ops.git <target>
 cd <target>
 git rev-parse HEAD
-./scripts/ambient-ops.sh init
+./scripts/ambient-ops.sh init --profile <codex-only|snmpv3|unifi-api>
 ```
 
 已有安装不得运行 `init`。Agent 只能修改文档允许的非敏感 `.env` 字段，并保留

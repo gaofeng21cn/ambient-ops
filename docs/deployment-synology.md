@@ -47,7 +47,7 @@ Clone or copy a reviewed source commit into the persistent project directory:
 
 ```bash
 cd /volume1/docker/ambient-ops
-./scripts/ambient-ops.sh init
+./scripts/ambient-ops.sh init --profile snmpv3
 ```
 
 The helper refuses to overwrite an existing installation, generates a stable
@@ -58,7 +58,7 @@ valid for operators who deliberately manage identity and secret generation
 themselves.
 
 Set `AMBIENT_OPS_IMAGE` in `.env` to the reviewed release, for example
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.13`. The GitHub Container Registry package
+`ghcr.io/gaofeng21cn/ambient-ops:0.1.17`. The GitHub Container Registry package
 is public, so Synology can pull the image without a GitHub token:
 
 ```bash
