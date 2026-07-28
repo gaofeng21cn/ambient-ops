@@ -40,7 +40,13 @@ import {
 } from "./pet-display.mjs";
 import { fetchWithTimeout } from "./http.mjs";
 import { connectionAfterFailure } from "./status-connection.mjs";
-import { singleMachineLoad, loadState } from "./load-model.mjs";
+import {
+  loadFlowChannels,
+  loadParticlePhase,
+  singleMachineLoad,
+  loadState,
+} from "./load-model.mjs";
+import { shouldReduceKioskMotion } from "./kiosk-motion.mjs";
 
 const VIEWS = ["overview", "network", "machines", "load", "pet"];
 const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", load: "Load", pet: "Pet" };
@@ -385,8 +391,19 @@ function LoadScale({ score }) {
 }
 
 function LoadPixelField({ state, machineName, load }) {
+  const fieldRef = useRef(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const reduceMotion = shouldReduceKioskMotion(navigator.userAgent, prefersReducedMotion);
+  const channels = useMemo(
+    () => loadFlowChannels(load),
+    [load.density, load.laneCount, load.travelSeconds],
+  );
+
+  useLoadPixelMotion(fieldRef, channels, reduceMotion);
+
   return (
     <div
+      ref={fieldRef}
       className={`load-pixel-field load-pixel-${state.id}`}
       role="img"
       aria-label={`${state.label} pixel workload animation for ${machineName}`}
@@ -396,8 +413,8 @@ function LoadPixelField({ state, machineName, load }) {
       }}
     >
       <div className="load-pixel-lanes">
-        {Array.from({ length: 5 }, (_, index) => (
-          <LoadPixelLane key={index} index={index} active={index < load.laneCount} load={load} />
+        {channels.map((channel) => (
+          <LoadPixelLane key={channel.index} channel={channel} />
         ))}
       </div>
       <div className="load-pixel-scanline" aria-hidden="true" />
@@ -405,27 +422,82 @@ function LoadPixelField({ state, machineName, load }) {
   );
 }
 
-function LoadPixelLane({ index, active, load }) {
-  const intensity = Math.max(.12, load.density * (0.78 + (index % 3) * .08));
-  const packetCount = active ? Math.max(7, Math.min(28, Math.round(7 + intensity * 21))) : 0;
-  const travelSeconds = load.travelSeconds * (1 + index * .06);
+function useLoadPixelMotion(fieldRef, channels, reduceMotion) {
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!field) return undefined;
+
+    const particles = [...field.querySelectorAll("[data-load-particle]")];
+    const nodes = [...field.querySelectorAll("[data-load-node]")];
+    const startedAt = window.performance.now();
+    let animationFrame = null;
+    let lastPaintAt = -Infinity;
+
+    const paint = (timestamp) => {
+      if (!reduceMotion && timestamp - lastPaintAt < 48) {
+        animationFrame = window.requestAnimationFrame(paint);
+        return;
+      }
+      lastPaintAt = timestamp;
+      const elapsed = timestamp - startedAt;
+
+      for (const particle of particles) {
+        const phase = loadParticlePhase(
+          elapsed,
+          Number(particle.dataset.travelMs),
+          Number(particle.dataset.phaseOffset),
+        );
+        const trackWidth = particle.parentElement?.clientWidth || 0;
+        const x = phase * (trackWidth + 18) - 9;
+        const y = Number(particle.dataset.particleY) || 0;
+        const visible = phase > .035 && phase < .965;
+        particle.style.transform = `translate3d(${x.toFixed(1)}px, ${y}px, 0)`;
+        particle.style.opacity = visible ? "1" : "0";
+      }
+
+      for (const node of nodes) {
+        const phase = (elapsed / 360 + Number(node.dataset.nodeOffset || 0)) % 4;
+        const lit = phase < 1.1;
+        node.style.opacity = lit ? "1" : ".48";
+        node.style.transform = lit ? "translate(1px, -1px)" : "translate(0, 0)";
+        node.style.backgroundColor = lit ? "var(--flow-color)" : "#080c10";
+      }
+
+      if (!reduceMotion) animationFrame = window.requestAnimationFrame(paint);
+    };
+
+    paint(startedAt);
+    return () => {
+      if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
+    };
+  }, [channels, reduceMotion]);
+}
+
+function LoadPixelLane({ channel }) {
+  const { active, index, packetCount, travelMs } = channel;
   return (
     <div className={`load-pixel-lane ${active ? "active" : "inactive"}`}>
       <span className="load-pixel-port" aria-hidden="true" />
-      <div className="load-pixel-track" style={{ "--lane-speed": `${travelSeconds}s`, "--lane-density": intensity }}>
+      <div className="load-pixel-track">
         <span className="load-pixel-track-line" aria-hidden="true" />
         {Array.from({ length: 5 }, (_, checkpointIndex) => (
-          <span key={checkpointIndex} className={`load-pixel-stage-node ${checkpointIndex === 0 ? "ingress" : ""}`} style={{ "--checkpoint-index": checkpointIndex }} aria-hidden="true" />
+          <span
+            key={checkpointIndex}
+            className={`load-pixel-stage-node ${checkpointIndex === 0 ? "ingress" : ""}`}
+            data-load-node={active ? "true" : undefined}
+            data-node-offset={index * .63 + checkpointIndex * .41}
+            aria-hidden="true"
+          />
         ))}
         {Array.from({ length: packetCount }, (_, packetIndex) => (
           <b
             key={packetIndex}
             className="load-pixel-particle"
-            style={{
-              "--particle-delay": `${-((packetIndex / packetCount) * travelSeconds).toFixed(2)}s`,
-              "--particle-y": `${(packetIndex % 3 - 1) * 5}px`,
-              "--particle-size": `${packetIndex % 5 === 0 ? 7 : 4}px`,
-            }}
+            data-load-particle
+            data-travel-ms={travelMs}
+            data-phase-offset={packetIndex / packetCount}
+            data-particle-y={(packetIndex % 3 - 1) * 4}
+            style={{ "--particle-size": `${packetIndex % 5 === 0 ? 7 : 4}px` }}
             aria-hidden="true"
           />
         ))}

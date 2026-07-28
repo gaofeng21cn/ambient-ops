@@ -35,6 +35,34 @@ export function singleMachineLoad(machine) {
   };
 }
 
+const CHANNEL_SPEEDS = Object.freeze([0.94, 1.14, 0.86, 1.07, 0.98]);
+const CHANNEL_DENSITIES = Object.freeze([0.82, 1.08, 0.9, 1.16, 0.98]);
+
+export function loadFlowChannels(load) {
+  const laneCount = Math.max(0, Math.min(5, Math.round(Number(load?.laneCount) || 0)));
+  const baseDensity = clamp(Number(load?.density) || 0, 0, 1);
+  const baseTravelMs = Math.max(300, Number(load?.travelSeconds || 2.8) * 1_000);
+
+  return CHANNEL_SPEEDS.map((speed, index) => {
+    const active = index < laneCount;
+    const density = active ? clamp(baseDensity * CHANNEL_DENSITIES[index], 0.1, 1) : 0;
+    return {
+      active,
+      index,
+      density,
+      travelMs: Math.round(baseTravelMs * speed),
+      packetCount: active ? Math.max(4, Math.min(18, Math.round(4 + density * 14))) : 0,
+    };
+  });
+}
+
+export function loadParticlePhase(elapsedMs, travelMs, phaseOffset = 0) {
+  const duration = Math.max(1, Number(travelMs) || 1);
+  const elapsed = Math.max(0, Number(elapsedMs) || 0);
+  const offset = Number(phaseOffset) || 0;
+  return (elapsed / duration + offset) % 1;
+}
+
 export function loadState(score) {
   const normalized = clamp(Number(score) || 0, 0, 1);
   let definition = LOAD_STATES[0];
