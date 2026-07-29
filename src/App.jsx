@@ -273,7 +273,7 @@ function Dashboard({ status, connection }) {
 
   return (
     <div className="app-shell" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-      <Header status={status} connection={connection} />
+      <Header status={status} connection={connection} view={view} />
       <main className="view-stage">
         {view === "overview" ? <Overview status={status} onMachine={goToMachine} onAllMachines={() => setView("machines")} /> : null}
         {view === "network" ? <NetworkView network={status.network} /> : null}
@@ -313,12 +313,14 @@ function initialView() {
   return VIEWS.includes(route) ? route : "overview";
 }
 
-function Header({ status, connection }) {
+function Header({ status, connection, view }) {
   const now = useClock();
   return (
     <header className="top-header">
-      <time>{formatTime(now, status.site?.timeZone)}</time>
-      <h1>{status.site?.name || "Ambient Ops"}</h1>
+      <div className="header-identity">
+        <h1>{VIEW_LABELS[view] || "Overview"}</h1>
+        <span className="header-site-name">{status.site?.name || "Ambient Ops"}</span>
+      </div>
       <div className="header-status">
         {status.demo ? <span className="mode-label">DEMO</span> : null}
         <StatusLabel status={connection === "live" ? status.overallStatus : "stale"} />
@@ -326,6 +328,7 @@ function Header({ status, connection }) {
         <span className="source-label">Gateway &amp; Codex Agents</span>
         <FullscreenButton />
       </div>
+      <time>{formatTime(now, status.site?.timeZone)}</time>
     </header>
   );
 }
