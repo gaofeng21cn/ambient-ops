@@ -67,6 +67,9 @@ export function loadSceneProfile(load) {
     : 0.2;
   const clusterCount = hasWork ? Math.max(1, Math.min(4, Math.round(1 + parallel * 3))) : 0;
   const activity = hasWork ? clamp(score * 0.72 + parallel * 0.28, 0, 1) : 0;
+  const travelMs = hasWork
+    ? clamp((Number(load?.travelSeconds) || 3.1) * 1_000, 800, 3_100)
+    : 4_800;
   const queueDepth = load?.constrained
     ? clamp(0.24 + pressure * 0.76, 0.24, 1)
     : clamp(Math.max(0, score - 0.68) * 0.7, 0, 0.25);
@@ -75,6 +78,7 @@ export function loadSceneProfile(load) {
     activity,
     parallel,
     tempo,
+    travelMs,
     clusterCount,
     taskDensity: hasWork ? clamp(0.16 + activity * 0.68 + parallel * 0.16, 0.16, 1) : 0,
     pressure,

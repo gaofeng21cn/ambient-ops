@@ -118,6 +118,8 @@ test("maps aggregate load into a bounded pixel work scene", () => {
   assert.ok(active.clusterCount >= 1 && active.clusterCount < heavy.clusterCount);
   assert.ok(heavy.taskDensity > active.taskDensity);
   assert.ok(heavy.tempo > active.tempo);
+  assert.ok(heavy.travelMs < active.travelMs);
+  assert.ok(active.travelMs <= 3_100);
   for (const profile of [idle, active, heavy]) {
     for (const value of Object.values(profile)) assert.ok(Number.isFinite(value));
   }

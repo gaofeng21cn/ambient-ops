@@ -41,6 +41,12 @@ import {
 import { fetchWithTimeout } from "./http.mjs";
 import { connectionAfterFailure } from "./status-connection.mjs";
 import {
+  appendHistorySample,
+  historyValuesInWindow,
+  LOAD_TREND_WINDOW_MS,
+} from "./status-history.mjs";
+import {
+  loadParticlePhase,
   loadSceneProfile,
   singleMachineLoad,
   loadState,
@@ -330,6 +336,11 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
   const baseLoad = singleMachineLoad(selected);
   const load = { ...baseLoad, sceneProfile: loadSceneProfile(baseLoad) };
   const state = loadState(load.score, load).definition;
+  const shortTrendValues = historyValuesInWindow(selected.tpsHistory, 5 * 60 * 1_000);
+  const loadTrendValues = historyValuesInWindow(selected.tpsHistory, LOAD_TREND_WINDOW_MS);
+  const loadTrendAverage = loadTrendValues.length
+    ? loadTrendValues.reduce((total, value) => total + value, 0) / loadTrendValues.length
+    : Number(selected.fiveMinutes.tps || 0);
 
   return (
     <section className={`load-view load-state-${state.id}`}>
@@ -355,14 +366,14 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
         <LoadPixelField state={state} machineName={selected.machineName} load={load} />
         <div className="load-canvas-footer">
           <LoadScale score={load.score} />
-          <span>{load.sceneProfile?.clusterCount ? `${load.sceneProfile.clusterCount} WORK CLUSTERS` : "STANDBY STATION"} · {formatTps(load.tps)} TPS</span>
+          <span>{load.sceneProfile?.clusterCount ? "AGGREGATE FLOW" : "STANDBY STATION"} · {formatTps(load.tps)} TPS</span>
         </div>
       </div>
       <aside className="load-side-metrics">
         <div className="load-side-primary">
           <span>1 MINUTE</span>
           <div><strong>{formatTps(load.tps)}</strong><small>TPS</small></div>
-          <Sparkline values={selected.tpsHistory?.map((sample) => sample.tps) || []} color="green" />
+          <Sparkline values={shortTrendValues} color="green" />
         </div>
         <div className="load-side-stats">
           <LoadStat label="ACTIVE" value={load.sessions} unit="CONVERSATIONS" accent="green" />
@@ -370,13 +381,13 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
           <LoadStat label="CACHE" value={`${selected.cachePercent || 0}%`} />
         </div>
         <div className="load-side-trend">
-          <div><span>5 MIN TREND</span><small>{formatTps(selected.fiveMinutes.tps)} TPS AVG</small></div>
-          <Sparkline values={selected.tpsHistory?.map((sample) => sample.tps) || []} color="green" />
-          <div className="load-side-axis"><span>-5m</span><span>-3m</span><span>-1m</span><span>now</span></div>
+          <div><span>30 MIN TREND</span><small>{formatTps(loadTrendAverage)} TPS AVG</small></div>
+          <Sparkline values={loadTrendValues} color="green" />
+          <div className="load-side-axis"><span>-30m</span><span>-20m</span><span>-10m</span><span>now</span></div>
         </div>
         <div className="load-side-host">
-          <StatusLabel status={selected.status} age={selected.ageSeconds} />
-          <span>{selected.platform} · {formatAge(selected.generatedAt, true)}</span>
+          <span className={`load-host-freshness ${selected.status}`}><i /> HOST · {hostFreshness(selected)}</span>
+          <span className="load-host-platform">{selected.platform}</span>
           <span className="load-side-note"><Cpu size={14} /> {load.cpu === null ? "CPU unavailable until TPS host telemetry is enabled." : "Host CPU is optional telemetry."}</span>
         </div>
       </aside>
@@ -521,7 +532,6 @@ function paintWorkbenchCanvas(context, width, height, elapsed, visual, workstati
 
   const emitterX = Math.min(width * .59, spriteX + spriteSize * .79);
   const emitterY = spriteY + spriteSize * .36;
-  drawWorkClusters(context, width, height, emitterX, emitterY, elapsed, visual, pixel);
   drawWorkPackets(context, width, height, emitterX, emitterY, elapsed, visual, pixel);
   drawPressureQueue(context, emitterX, emitterY, elapsed, queueDepth, pressure, pixel);
   drawComputerHeat(context, spriteX, spriteY, spriteSize, elapsed, heat, pressure, pixel);
@@ -574,58 +584,51 @@ function drawScreenActivity(context, screen, elapsed, activity, pressure, pixel)
   context.restore();
 }
 
-function drawWorkClusters(context, width, height, emitterX, emitterY, elapsed, visual, pixel) {
-  const count = Math.max(0, Math.min(4, Math.round(visual.clusterCount || 0)));
-  const activity = clampVisual(visual.activity);
-  const spread = height * (.08 + activity * .22);
-  for (let cluster = 0; cluster < count; cluster += 1) {
-    const seed = cluster * 17.31 + 4;
-    const progress = .26 + (cluster + 1) / (count + 1) * .55;
-    const x = emitterX + (width - emitterX - 8) * progress;
-    const y = emitterY + (cluster - (count - 1) / 2) * spread * .62;
-    const drift = Math.sin(elapsed / (1_000 + cluster * 170) + seed) * pixel * (1 + activity * 2);
-    const color = cluster % 3 === 0 ? "#39d891" : cluster % 3 === 1 ? "#38bdf8" : "#9ee7bd";
-    context.fillStyle = color;
-    context.globalAlpha = .15 + activity * .22;
-    context.fillRect(Math.round(x), Math.round(y + drift), pixel * 7, 1);
-    context.globalAlpha = .3 + activity * .35;
-    for (let block = 0; block < 4 + Math.round(activity * 4); block += 1) {
-      const offsetX = (pixel * (2 + Math.round(pixelNoise(seed + block) * 9))) + block * pixel * 2;
-      const offsetY = Math.round((pixelNoise(seed + block * 3) - .5) * spread * .22);
-      const blockWidth = pixel * (1 + (block % 3));
-      context.fillRect(Math.round(x + offsetX), Math.round(y + drift + offsetY), blockWidth, pixel);
-    }
-  }
-  context.globalAlpha = 1;
-}
-
 function drawWorkPackets(context, width, height, emitterX, emitterY, elapsed, visual, pixel) {
   const activity = clampVisual(visual.activity);
   const pressure = clampVisual(visual.pressure);
   const parallel = clampVisual(visual.parallel);
   const tempo = Math.max(.2, Number(visual.tempo) || .2);
-  const count = visual.clusterCount ? Math.round(14 + activity * 56 + parallel * 22) : 5;
+  const flowCount = Math.max(0, Math.min(4, Math.round(visual.clusterCount || 0)));
+  if (flowCount === 0) return;
+  const density = clampVisual(visual.taskDensity);
+  const travelMs = Math.max(760, Number(visual.travelMs) || 3_100);
+  const count = Math.round(28 + density * 138 + parallel * 46);
   const endX = Math.max(emitterX + pixel * 10, width - pixel * 4);
   const travel = Math.max(pixel * 10, endX - emitterX);
-  const spread = height * (.08 + activity * .28);
+  const spread = height * (.1 + activity * .38);
   for (let index = 0; index < count; index += 1) {
     const seed = index * 8.173 + 1.7;
-    const phase = (elapsed * .00012 * tempo + pixelNoise(seed) + index * .071) % 1;
-    const progress = phase < .06 ? phase / .06 * .22 : phase;
+    const duration = travelMs * (.82 + (index % 7) * .055);
+    const phase = loadParticlePhase(elapsed, duration, pixelNoise(seed) + index / count);
+    const progress = phase * (1.08 - phase * .08);
     const x = emitterX + travel * progress;
-    const fan = (pixelNoise(seed + 1.3) - .5) * spread * (.35 + progress * .9);
-    const wave = Math.sin(elapsed / (350 + (index % 5) * 64) + seed) * pixel * (1 + activity * 2.4);
-    const y = emitterY + fan + wave;
-    const size = pixel * (index % 9 === 0 ? 2 : index % 4 === 0 ? 1.5 : 1);
-    const hot = pressure > .45 && progress > .55;
-    const color = hot ? (pressure > .78 ? "#ff5d6c" : "#ffbd58") : index % 3 === 0 ? "#38bdf8" : "#39d891";
-    const alpha = .35 + activity * .45 + (index % 4) * .04;
+    const band = index % flowCount;
+    const bandOffset = (band - (flowCount - 1) / 2) * spread * (.32 / Math.max(1, flowCount - 1));
+    const fan = (pixelNoise(seed + 1.3) - .5) * spread * (.18 + progress * .68);
+    const wave = Math.sin(elapsed / (230 + (index % 5) * 47) + seed) * pixel * (.8 + activity * 2.8);
+    const y = emitterY + bandOffset + fan + wave;
+    const size = pixel * (index % 13 === 0 ? 2 : index % 5 === 0 ? 1.5 : 1);
+    const hot = pressure > .28 && progress > .38;
+    const color = hot
+      ? pressure > .74 && progress > .58 ? "#ff5d6c" : "#ffbd58"
+      : index % 4 === 0 ? "#38bdf8" : index % 7 === 0 ? "#9ee7bd" : "#39d891";
+    const envelope = Math.min(1, phase / .055, (1 - phase) / .1);
+    const alpha = envelope * (.42 + activity * .42 + (index % 4) * .035);
+    const tailLength = Math.round(pixel * (1.5 + tempo * 1.7 + (index % 3)));
     context.fillStyle = color;
-    context.globalAlpha = Math.min(.92, alpha);
+    context.globalAlpha = Math.min(.3, alpha * .34);
+    context.fillRect(Math.round(x - tailLength), Math.round(y), tailLength, pixel);
+    context.globalAlpha = Math.min(.96, alpha);
     context.fillRect(Math.round(x), Math.round(y), Math.max(pixel, Math.round(size)), pixel);
-    if (index % 5 === 0 && progress > .08) {
-      context.globalAlpha *= .35;
-      context.fillRect(Math.round(x - pixel * 2), Math.round(y), pixel, pixel);
+    if (index % 9 === 0 && progress > .18) {
+      context.globalAlpha *= .48;
+      context.fillRect(
+        Math.round(x - tailLength - pixel * 2),
+        Math.round(y + (index % 2 ? pixel * 2 : -pixel * 2)),
+        pixel,
+        pixel,
+      );
     }
   }
   context.globalAlpha = 1;
@@ -1467,20 +1470,24 @@ function mergeStatusHistory(previous, next) {
   const previousMachines = new Map((previous?.machines || []).map((machine) => [machine.machineId, machine]));
   const machines = (next.machines || []).map((machine) => {
     const prior = previousMachines.get(machine.machineId);
-    const history = Array.isArray(prior?.tpsHistory) ? [...prior.tpsHistory] : [];
     const sample = { at: machine.generatedAt, tps: Number(machine.oneMinute?.tps || 0) };
-    if (!history.length || history.at(-1).at !== sample.at) history.push(sample);
-    return { ...machine, tpsHistory: history.slice(-60) };
+    return { ...machine, tpsHistory: appendHistorySample(prior?.tpsHistory, sample) };
   });
-  const codexHistory = Array.isArray(previous?.codex?.tpsHistory)
-    ? [...previous.codex.tpsHistory]
-    : [];
-  codexHistory.push({ at: next.generatedAt, tps: Number(next.codex?.oneMinuteTps || 0) });
+  const codexHistory = appendHistorySample(previous?.codex?.tpsHistory, {
+    at: next.generatedAt,
+    tps: Number(next.codex?.oneMinuteTps || 0),
+  });
   return {
     ...next,
-    codex: { ...next.codex, tpsHistory: codexHistory.slice(-120) },
+    codex: { ...next.codex, tpsHistory: codexHistory },
     machines,
   };
+}
+
+function hostFreshness(machine) {
+  if (machine?.status === "error") return "OFFLINE";
+  if (machine?.status === "stale") return `STALE ${formatDuration(machine.ageSeconds || 0).toUpperCase()}`;
+  return Number(machine?.ageSeconds || 0) < 5 ? "NOW" : formatDuration(machine.ageSeconds).toUpperCase();
 }
 
 function machineIcon(platform = "") {
