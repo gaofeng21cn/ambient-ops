@@ -480,7 +480,7 @@ function useLoadPixelMotion(canvasRef, channels, visual, reduceMotion) {
       if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
       observer?.disconnect();
     };
-  }, [channels, reduceMotion]);
+  }, [channels, reduceMotion, visual.score, visual.pressure, visual.stateId]);
 }
 
 function paintLoadCanvas(context, width, height, elapsed, channels, visual) {
