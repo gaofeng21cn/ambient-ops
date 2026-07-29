@@ -410,12 +410,17 @@ function LoadPixelField({ state, machineName, load }) {
     () => loadFlowChannels(load),
     [load.density, load.streamCount, load.cycleSeconds],
   );
-
-  useLoadPixelMotion(canvasRef, channels, {
+  const channelsRef = useRef(channels);
+  const visual = {
     score: load.score,
     pressure: load.backpressure,
     stateId: state.id,
-  }, reduceMotion);
+  };
+  const visualRef = useRef(visual);
+  channelsRef.current = channels;
+  visualRef.current = visual;
+
+  useLoadPixelMotion(canvasRef, channelsRef, visualRef, reduceMotion);
 
   return (
     <div
@@ -434,7 +439,7 @@ function LoadPixelField({ state, machineName, load }) {
   );
 }
 
-function useLoadPixelMotion(canvasRef, channels, visual, reduceMotion) {
+function useLoadPixelMotion(canvasRef, channelsRef, visualRef, reduceMotion) {
   useEffect(() => {
     const canvas = canvasRef.current;
     const field = canvas?.parentElement;
@@ -471,7 +476,7 @@ function useLoadPixelMotion(canvasRef, channels, visual, reduceMotion) {
       }
       lastPaintAt = timestamp;
       const elapsed = timestamp - startedAt;
-      paintLoadCanvas(context, width, height, elapsed, channels, visual);
+      paintLoadCanvas(context, width, height, elapsed, channelsRef.current, visualRef.current);
       animationFrame = window.requestAnimationFrame(paint);
     };
 
@@ -480,7 +485,7 @@ function useLoadPixelMotion(canvasRef, channels, visual, reduceMotion) {
       if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
       observer?.disconnect();
     };
-  }, [channels, reduceMotion, visual.score, visual.pressure, visual.stateId]);
+  }, [canvasRef, channelsRef, visualRef, reduceMotion]);
 }
 
 function paintLoadCanvas(context, width, height, elapsed, channels, visual) {

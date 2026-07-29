@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   loadFlowChannels,
   loadParticlePhase,
+  loadState,
   singleMachineLoad,
 } from "../src/load-model.mjs";
 
@@ -42,6 +43,35 @@ test("keeps missing CPU telemetry distinct from a measured zero", () => {
   assert.equal(singleMachineLoad({ cpuPercent: null }).cpu, null);
   assert.equal(singleMachineLoad({ cpuPercent: "" }).cpu, null);
   assert.equal(singleMachineLoad({ cpuPercent: 0 }).cpu, 0);
+});
+
+test("does not call high token activity constrained when CPU is unknown", () => {
+  const load = singleMachineLoad({
+    oneMinute: { tps: 60_000 },
+    activeSessions: 10,
+    cpuPercent: null,
+  });
+
+  assert.equal(load.constrained, false);
+  assert.notEqual(loadState(load.score, load).definition.id, "constrained");
+});
+
+test("uses measured host pressure for constrained state, including a valid zero", () => {
+  const constrained = singleMachineLoad({
+    oneMinute: { tps: 60_000 },
+    activeSessions: 10,
+    cpuPercent: 97,
+  });
+  const idleZero = singleMachineLoad({
+    oneMinute: { tps: 0 },
+    activeSessions: 0,
+    cpuPercent: 0,
+  });
+
+  assert.equal(constrained.constrained, true);
+  assert.equal(loadState(constrained.score, constrained).definition.id, "constrained");
+  assert.equal(idleZero.cpu, 0);
+  assert.equal(idleZero.constrained, false);
 });
 
 test("maps aggregate work into varied parallel flow without implying per-conversation telemetry", () => {

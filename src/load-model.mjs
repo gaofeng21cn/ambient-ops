@@ -2,7 +2,8 @@ const LOAD_STATES = Object.freeze([
   { id: "quiet", label: "QUIET", min: 0 },
   { id: "active", label: "ACTIVE", min: 0.18 },
   { id: "heavy", label: "HEAVY", min: 0.45 },
-  { id: "constrained", label: "CONSTRAINED", min: 0.75 },
+  // Constraint is a measured host condition, not an activity-score bucket.
+  { id: "constrained", label: "CONSTRAINED", min: Number.POSITIVE_INFINITY },
 ]);
 
 export function finiteOrNull(value) {
