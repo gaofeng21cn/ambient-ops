@@ -1405,7 +1405,18 @@ function BottomNav({ view, setView, status, connection }) {
   return (
     <nav className={`bottom-nav ${showFreshness ? "has-alert" : ""}`}>
       <div className="nav-tabs">
-        {items.map(([id, Icon]) => <button key={id} aria-label={VIEW_LABELS[id]} className={view === id ? "active" : ""} onClick={() => setView(id)}><Icon size={24} /><span>{VIEW_LABELS[id]}</span></button>)}
+        {items.map(([id, Icon]) => (
+          <button
+            key={id}
+            aria-label={VIEW_LABELS[id]}
+            aria-current={view === id ? "page" : undefined}
+            className={view === id ? "active" : ""}
+            onClick={() => setView(id)}
+          >
+            <Icon size={24} />
+            <span>{VIEW_LABELS[id]}</span>
+          </button>
+        ))}
       </div>
       {showFreshness ? <div className="freshness"><span>Data freshness</span><StatusLabel status={displayStatus} /><span className="divider" /><span>Updated: {formatAge(status.generatedAt, true)}</span></div> : null}
     </nav>

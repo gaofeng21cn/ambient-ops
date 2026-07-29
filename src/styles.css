@@ -1894,13 +1894,31 @@ button { font: inherit; letter-spacing: 0; }
   }
 }
 
-/* Keep the kiosk navigation legible without spending five slots on labels. */
+/* Keep all five icons fixed while the active label uses its own row. */
 @media (min-width: 580px) and (max-width: 720px) and (min-height: 320px) and (max-height: 400px) and (orientation: landscape) {
-  .nav-tabs button { gap: 4px; font-size: 8px; }
-  .nav-tabs button span { display: none; }
-  .nav-tabs button.active span { display: block; font-size: 8px; font-weight: 750; }
-  .nav-tabs button.active { gap: 4px; }
-  .nav-tabs button svg { width: 17px; height: 17px; }
+  .nav-tabs button {
+    display: grid;
+    grid-template-rows: 11px 18px;
+    place-items: center;
+    align-content: center;
+    gap: 2px;
+    min-width: 0;
+    padding: 3px 0 4px;
+  }
+  .nav-tabs button span {
+    display: block;
+    grid-row: 1;
+    max-width: 100%;
+    overflow: hidden;
+    visibility: hidden;
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 750;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .nav-tabs button.active span { visibility: visible; }
+  .nav-tabs button svg { grid-row: 2; width: 18px; height: 18px; }
 }
 
 /* Aggregate workload field: one machine, one readable visual language. */
