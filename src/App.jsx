@@ -329,7 +329,7 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
   if (!selected) return <section className="load-view"><EmptyState /></section>;
   const Icon = machineIcon(selected.platform);
   const load = singleMachineLoad(selected);
-  const state = loadState(load.score).definition;
+  const state = loadState(load.score, load).definition;
 
   return (
     <section className={`load-view load-state-${state.id}`}>
@@ -355,7 +355,7 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
         <LoadPixelField state={state} machineName={selected.machineName} load={load} />
         <div className="load-canvas-footer">
           <LoadScale score={load.score} />
-          <span>{load.beamCount ? `${load.beamCount} WORK BANDS` : "NO ACTIVE WORK"} · {formatTps(load.tps)} TPS</span>
+          <span>{load.streamCount ? `${load.streamCount} FIELD PULSES` : "STANDBY FIELD"} · {formatTps(load.tps)} TPS</span>
         </div>
       </div>
       <aside className="load-side-metrics">
@@ -403,19 +403,22 @@ function loadStateDescription(stateId) {
 }
 
 function LoadPixelField({ state, machineName, load }) {
-  const fieldRef = useRef(null);
+  const canvasRef = useRef(null);
   const prefersReducedMotion = usePrefersReducedMotion();
   const reduceMotion = shouldReduceKioskMotion(navigator.userAgent, prefersReducedMotion);
   const channels = useMemo(
     () => loadFlowChannels(load),
-    [load.density, load.beamCount, load.travelSeconds],
+    [load.density, load.streamCount, load.cycleSeconds],
   );
 
-  useLoadPixelMotion(fieldRef, channels, reduceMotion);
+  useLoadPixelMotion(canvasRef, channels, {
+    score: load.score,
+    pressure: load.backpressure,
+    stateId: state.id,
+  }, reduceMotion);
 
   return (
     <div
-      ref={fieldRef}
       className={`load-pixel-field load-pixel-${state.id}`}
       role="img"
       aria-label={`${state.label} pixel workload animation for ${machineName}`}
@@ -424,107 +427,207 @@ function LoadPixelField({ state, machineName, load }) {
         "--pixel-score": load.score,
       }}
     >
-      <div className="load-pixel-grid" aria-hidden="true" />
-      <div className="load-pixel-source" data-load-source aria-hidden="true">
-        <div className="load-pixel-source-screen"><i /><i /><i /></div>
-        <span className="load-pixel-source-port" />
-      </div>
-      <div className="load-pixel-beams">
-        {channels.map((channel) => (
-          <LoadPixelBeam key={channel.index} channel={channel} />
-        ))}
-      </div>
-      <div className="load-pixel-horizon" data-load-horizon aria-hidden="true">
-        {Array.from({ length: 28 }, (_, index) => <i key={index} data-load-horizon-cell />)}
-      </div>
+      <canvas ref={canvasRef} className="load-pixel-canvas" aria-hidden="true" />
+      <span className="load-core-caption" aria-hidden="true">CODEX CORE</span>
       <div className="load-pixel-scanline" aria-hidden="true" />
     </div>
   );
 }
 
-function useLoadPixelMotion(fieldRef, channels, reduceMotion) {
+function useLoadPixelMotion(canvasRef, channels, visual, reduceMotion) {
   useEffect(() => {
-    const field = fieldRef.current;
-    if (!field) return undefined;
+    const canvas = canvasRef.current;
+    const field = canvas?.parentElement;
+    if (!canvas || !field) return undefined;
+    const context = canvas.getContext("2d");
+    if (!context) return undefined;
 
-    const particles = [...field.querySelectorAll("[data-load-particle]")];
-    const source = field.querySelector("[data-load-source]");
-    const horizonCells = [...field.querySelectorAll("[data-load-horizon-cell]")];
+    let width = 0;
+    let height = 0;
+    const resize = () => {
+      const bounds = field.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = Math.max(1, bounds.width);
+      height = Math.max(1, bounds.height);
+      canvas.width = Math.max(1, Math.round(width * dpr));
+      canvas.height = Math.max(1, Math.round(height * dpr));
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.imageSmoothingEnabled = false;
+    };
+    resize();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(resize) : null;
+    observer?.observe(field);
     const startedAt = window.performance.now();
     let animationFrame = null;
     let lastPaintAt = -Infinity;
 
     const paint = (timestamp) => {
-      const frameBudget = reduceMotion ? 120 : 42;
+      const frameBudget = reduceMotion ? 140 : 34;
       if (timestamp - lastPaintAt < frameBudget) {
         animationFrame = window.requestAnimationFrame(paint);
         return;
       }
       lastPaintAt = timestamp;
       const elapsed = timestamp - startedAt;
-
-      for (const particle of particles) {
-        const phase = loadParticlePhase(
-          elapsed,
-          Number(particle.dataset.travelMs),
-          Number(particle.dataset.phaseOffset),
-        );
-        const trackWidth = particle.closest(".load-pixel-beam")?.clientWidth || 0;
-        const x = phase * (trackWidth + 18) - 9;
-        const y = Number(particle.dataset.particleY) || 0;
-        const visible = phase > .035 && phase < .965;
-        particle.style.transform = `translate3d(${x.toFixed(1)}px, ${y}px, 0)`;
-        particle.style.opacity = visible ? "1" : "0";
-      }
-
-      if (source) {
-        source.style.setProperty("--source-pulse", (0.5 + Math.sin(elapsed / 220) * 0.5).toFixed(3));
-      }
-      for (const [index, cell] of horizonCells.entries()) {
-        const phase = (elapsed / (380 + index * 17) + index * .17) % 1;
-        cell.style.opacity = (0.22 + phase * 0.72).toFixed(3);
-        cell.style.transform = `translateY(${Math.round(Math.sin((elapsed / 260) + index) * 2)}px)`;
-      }
-
+      paintLoadCanvas(context, width, height, elapsed, channels, visual);
       animationFrame = window.requestAnimationFrame(paint);
     };
 
     paint(startedAt);
     return () => {
       if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
+      observer?.disconnect();
     };
   }, [channels, reduceMotion]);
 }
 
-function LoadPixelBeam({ channel }) {
-  const { active, index, packetCount, travelMs, center, spread, phaseOffset } = channel;
-  return (
-    <div
-      className={`load-pixel-beam ${active ? "active" : "inactive"}`}
-      style={{
-        "--beam-center": `${center * 100}%`,
-        "--beam-spread": `${spread * 100}%`,
-        "--beam-index": index,
-      }}
-    >
-      <span className="load-pixel-beam-line" aria-hidden="true" />
-      <span className="load-pixel-beam-core" aria-hidden="true" />
-      <div className="load-pixel-packets">
-        {Array.from({ length: packetCount }, (_, packetIndex) => (
-          <b
-            key={packetIndex}
-            className="load-pixel-particle"
-            data-load-particle
-            data-travel-ms={travelMs}
-            data-phase-offset={phaseOffset + packetIndex / packetCount}
-            data-particle-y={(packetIndex % 7 - 3) * (2 + spread * 16)}
-            style={{ "--particle-size": `${packetIndex % 5 === 0 ? 7 : 4}px` }}
-            aria-hidden="true"
-          />
-        ))}
-      </div>
-    </div>
-  );
+function paintLoadCanvas(context, width, height, elapsed, channels, visual) {
+  if (width <= 1 || height <= 1) return;
+  const stateColor = visual.stateId === "constrained"
+    ? "#ff5d6c"
+    : visual.stateId === "heavy"
+      ? "#ffbd58"
+      : visual.stateId === "active" ? "#39d891" : "#9aa8b5";
+  const inputColor = "#38bdf8";
+  const outputColor = "#39d891";
+  const score = Math.max(0, Math.min(1, Number(visual.score) || 0));
+  const pressure = Math.max(0, Math.min(1, Number(visual.pressure) || 0));
+  const pixel = width < 520 ? 2 : 3;
+  const grid = width < 520 ? 10 : 14;
+  const centerX = Math.round(width * 0.53);
+  const centerY = Math.round(height * 0.52);
+  const coreHeight = Math.round(Math.max(26, Math.min(74, height * 0.42)));
+  const coreWidth = Math.round(coreHeight * 1.38);
+  const coreLeft = centerX - Math.round(coreWidth / 2);
+  const coreRight = centerX + Math.round(coreWidth / 2);
+  const intake = 12;
+  const output = width - 12;
+
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = "#05090d";
+  context.fillRect(0, 0, width, height);
+
+  context.fillStyle = "rgba(33, 52, 63, .42)";
+  for (let x = 0; x <= width; x += grid) context.fillRect(x, 0, 1, height);
+  for (let y = 0; y <= height; y += grid) context.fillRect(0, y, width, 1);
+  context.fillStyle = "rgba(161, 191, 206, .045)";
+  for (let y = 5; y < height; y += 7) context.fillRect(0, y, width, 1);
+
+  const streamOffsets = [-0.28, 0, 0.28];
+  for (const [streamIndex, channel] of channels.entries()) {
+    if (!channel.active) continue;
+    const streamY = Math.round(centerY + streamOffsets[streamIndex] * Math.min(height * .72, 116));
+    drawSegmentedPath(context, intake, streamY, coreLeft - 10, inputColor, .34 + score * .22, pixel);
+    drawSegmentedPath(context, coreRight + 10, streamY, output, outputColor, .34 + score * .22, pixel);
+
+    const split = visual.stateId === "constrained" ? .64 : .5;
+    for (let packetIndex = 0; packetIndex < channel.packetCount; packetIndex += 1) {
+      const phase = loadParticlePhase(
+        elapsed,
+        channel.travelMs,
+        channel.phaseOffset + packetIndex / channel.packetCount,
+      );
+      const incoming = phase < split;
+      const rawProgress = incoming ? phase / split : (phase - split) / (1 - split);
+      const progress = incoming && visual.stateId === "constrained"
+        ? 1 - Math.pow(1 - rawProgress, .58)
+        : rawProgress;
+      const start = incoming ? intake : coreRight + 10;
+      const end = incoming ? coreLeft - 10 : output;
+      const x = Math.round(start + (end - start) * progress);
+      const drift = Math.sin(elapsed / (260 + streamIndex * 50) + packetIndex * 1.7) * (1 + score * 3);
+      const y = Math.round(streamY + drift);
+      const size = packetIndex % 7 === 0 ? pixel * 2 : pixel;
+      context.fillStyle = incoming ? inputColor : outputColor;
+      context.globalAlpha = .58 + score * .38;
+      context.fillRect(x, y - Math.floor(size / 2), size, size);
+      if (packetIndex % 5 === 0) {
+        context.globalAlpha *= .42;
+        context.fillRect(x - (incoming ? pixel * 2 : -pixel * 2), y - 1, pixel, pixel);
+      }
+      context.globalAlpha = 1;
+    }
+  }
+
+  if (visual.stateId === "constrained") {
+    const queueCount = Math.round(4 + pressure * 8);
+    context.fillStyle = stateColor;
+    for (let index = 0; index < queueCount; index += 1) {
+      const x = Math.max(intake + 8, coreLeft - 18 - ((index * (pixel * 7)) % Math.max(18, coreLeft - intake - 22)));
+      const y = centerY + ((index % 5) - 2) * (pixel * 3);
+      context.globalAlpha = .3 + (index % 3) * .16;
+      context.fillRect(x, y, pixel * (index % 4 === 0 ? 2 : 1), pixel);
+    }
+    context.globalAlpha = 1;
+  }
+
+  drawCore(context, centerX, centerY, coreWidth, coreHeight, stateColor, inputColor, outputColor, score, pressure, elapsed, pixel);
+}
+
+function drawSegmentedPath(context, start, y, end, color, opacity, pixel) {
+  context.fillStyle = color;
+  context.globalAlpha = opacity;
+  const step = pixel * 5;
+  for (let x = start; x < end; x += step) context.fillRect(x, y, pixel * 2, pixel);
+  context.globalAlpha = 1;
+}
+
+function drawCore(context, centerX, centerY, width, height, color, inputColor, outputColor, score, pressure, elapsed, pixel) {
+  const left = centerX - Math.round(width / 2);
+  const top = centerY - Math.round(height / 2);
+  const pulse = .5 + .5 * Math.sin(elapsed / Math.max(180, 520 - score * 260));
+  for (let ring = 3; ring >= 1; ring -= 1) {
+    const pad = ring * pixel * 4;
+    context.fillStyle = color;
+    context.globalAlpha = (.035 + score * .035) * (4 - ring) + pulse * .025;
+    context.fillRect(left - pad, top - pad, width + pad * 2, pixel);
+    context.fillRect(left - pad, top + height + pad - pixel, width + pad * 2, pixel);
+    context.fillRect(left - pad, top - pad, pixel, height + pad * 2);
+    context.fillRect(left + width + pad - pixel, top - pad, pixel, height + pad * 2);
+  }
+  context.globalAlpha = 1;
+
+  context.fillStyle = "#03070a";
+  context.fillRect(left + pixel * 2, top + pixel * 2, width, height);
+  context.fillStyle = color;
+  context.fillRect(left, top, width, pixel * 2);
+  context.fillRect(left, top + height, width, pixel * 2);
+  context.fillRect(left, top, pixel * 2, height + pixel * 2);
+  context.fillRect(left + width - pixel * 2, top, pixel * 2, height + pixel * 2);
+
+  const screenLeft = left + pixel * 5;
+  const screenTop = top + pixel * 5;
+  const screenWidth = width - pixel * 10;
+  const screenHeight = height - pixel * 10;
+  context.fillStyle = "#0b171d";
+  context.fillRect(screenLeft, screenTop, screenWidth, screenHeight);
+  context.fillStyle = inputColor;
+  context.globalAlpha = .7 + pulse * .2;
+  context.fillRect(screenLeft + pixel * 2, screenTop + pixel * 2, Math.round(screenWidth * .62), pixel);
+  context.fillStyle = outputColor;
+  context.fillRect(screenLeft + pixel * 2, screenTop + pixel * 5, Math.round(screenWidth * .4), pixel);
+  context.fillStyle = color;
+  context.fillRect(screenLeft + pixel * 2, screenTop + pixel * 8, Math.round(screenWidth * (.24 + score * .52)), pixel);
+  const cursorVisible = Math.floor(elapsed / 260) % 2 === 0;
+  if (cursorVisible) context.fillRect(screenLeft + pixel * 2, screenTop + pixel * 11, pixel * 2, pixel);
+  context.globalAlpha = 1;
+
+  context.fillStyle = inputColor;
+  context.fillRect(left + pixel * 4, top - pixel * 3, pixel * 2, pixel * 2);
+  context.fillStyle = outputColor;
+  context.fillRect(left + width - pixel * 6, top - pixel * 3, pixel * 2, pixel * 2);
+  context.fillStyle = color;
+  context.fillRect(centerX - pixel, top + height + pixel * 2, pixel * 2, pixel * 4);
+  context.fillRect(centerX - pixel * 5, top + height + pixel * 6, pixel * 10, pixel * 2);
+  if (pressure > 0) {
+    context.fillStyle = color;
+    context.globalAlpha = .35 + pressure * .5;
+    context.fillRect(left - pixel * 2, top + Math.round(height * .3), pixel, pixel * 3);
+    context.fillRect(left - pixel * 4, top + Math.round(height * .58), pixel, pixel * 2);
+    context.globalAlpha = 1;
+  }
 }
 
 function LoadStat({ label, value, unit, accent = "" }) {

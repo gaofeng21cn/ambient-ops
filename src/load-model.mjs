@@ -6,6 +6,7 @@ const LOAD_STATES = Object.freeze([
 ]);
 
 export function finiteOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
   return Number.isFinite(Number(value)) ? Number(value) : null;
 }
 
@@ -23,47 +24,59 @@ export function singleMachineLoad(machine) {
     : tpsIntensity * 0.56 + sessionIntensity * 0.22 + cpuIntensity * 0.22;
   const normalizedScore = clamp(score, 0, 1);
   const hasCodexWork = tps > 0 || sessions > 0;
+  const cpuPressure = cpu === null ? null : clamp((cpu - 68) / 32, 0, 1);
+  // High activity is not the same as saturation. Only a measured host signal
+  // can promote the visual to CONSTRAINED.
+  const constrained = Boolean(
+    hasCodexWork && cpu !== null && cpu >= 88 && normalizedScore >= 0.35,
+  );
+  const streamCount = hasCodexWork
+    ? normalizedScore >= 0.45 ? 3 : normalizedScore >= 0.18 ? 2 : 1
+    : 0;
 
   return {
     tps,
     sessions,
     cpu,
     score: normalizedScore,
-    travelSeconds: clamp(2.8 - tpsIntensity * 1.65 - sessionIntensity * 0.35, 0.72, 2.8),
+    cpuPressure,
+    constrained,
+    travelSeconds: clamp(3.1 - tpsIntensity * 1.8 - sessionIntensity * 0.35, 0.8, 3.1),
+    cycleSeconds: clamp(3.1 - tpsIntensity * 1.8 - sessionIntensity * 0.35, 0.8, 3.1),
     density: hasCodexWork
       ? clamp(0.12 + tpsIntensity * 0.58 + sessionIntensity * 0.22, 0.12, 1)
       : 0,
-    beamCount: hasCodexWork
-      ? normalizedScore >= 0.75 ? 4 : normalizedScore >= 0.45 ? 3 : normalizedScore >= 0.18 ? 2 : 1
-      : 0,
+    streamCount,
+    beamCount: streamCount,
+    backpressure: constrained ? clamp(0.35 + (cpuPressure || 0) * 0.65, 0.35, 1) : 0,
   };
 }
 
-const BEAM_SPEEDS = Object.freeze([0.91, 1.18, 0.99, 1.27]);
-const BEAM_DENSITIES = Object.freeze([0.86, 1.12, 0.96, 1.18]);
-const BEAM_CENTERS = Object.freeze([0.27, 0.43, 0.59, 0.74]);
-const BEAM_SPREADS = Object.freeze([0.055, 0.075, 0.068, 0.052]);
+const STREAM_SPEEDS = Object.freeze([0.92, 1.08, 1.24]);
+const STREAM_DENSITIES = Object.freeze([0.92, 1.08, 0.98]);
+const STREAM_CENTERS = Object.freeze([0.28, 0.5, 0.72]);
+const STREAM_SPREADS = Object.freeze([0.07, 0.09, 0.07]);
 
 export function loadFlowChannels(load) {
-  const beamCount = Math.max(
+  const streamCount = Math.max(
     0,
-    Math.min(4, Math.round(Number(load?.beamCount ?? load?.laneCount) || 0)),
+    Math.min(3, Math.round(Number(load?.streamCount ?? load?.beamCount ?? load?.laneCount) || 0)),
   );
   const baseDensity = clamp(Number(load?.density) || 0, 0, 1);
-  const baseTravelMs = Math.max(300, Number(load?.travelSeconds || 2.8) * 1_000);
+  const baseTravelMs = Math.max(300, Number(load?.cycleSeconds || load?.travelSeconds || 3.1) * 1_000);
 
-  return BEAM_SPEEDS.map((speed, index) => {
-    const active = index < beamCount;
-    const density = active ? clamp(baseDensity * BEAM_DENSITIES[index], 0.08, 1) : 0;
+  return STREAM_SPEEDS.map((speed, index) => {
+    const active = index < streamCount;
+    const density = active ? clamp(baseDensity * STREAM_DENSITIES[index], 0.08, 1) : 0;
     return {
       active,
       index,
       density,
       travelMs: Math.round(baseTravelMs * speed),
-      packetCount: active ? Math.max(5, Math.min(24, Math.round(5 + density * 19))) : 0,
-      center: BEAM_CENTERS[index],
-      spread: BEAM_SPREADS[index],
-      phaseOffset: index * 0.19,
+      packetCount: active ? Math.max(5, Math.min(26, Math.round(5 + density * 21))) : 0,
+      center: STREAM_CENTERS[index],
+      spread: STREAM_SPREADS[index],
+      phaseOffset: index * 0.23,
     };
   });
 }
@@ -75,11 +88,14 @@ export function loadParticlePhase(elapsedMs, travelMs, phaseOffset = 0) {
   return (elapsed / duration + offset) % 1;
 }
 
-export function loadState(score) {
+export function loadState(score, context = {}) {
   const normalized = clamp(Number(score) || 0, 0, 1);
   let definition = LOAD_STATES[0];
   for (const candidate of LOAD_STATES) {
     if (normalized >= candidate.min) definition = candidate;
+  }
+  if (context.constrained === true) {
+    definition = LOAD_STATES.at(-1);
   }
   return { score: normalized, definition };
 }

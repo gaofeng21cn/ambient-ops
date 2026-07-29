@@ -20,7 +20,7 @@ test("maps higher aggregate work to more, denser, faster flow", () => {
 
   assert.ok(heavy.score > light.score);
   assert.ok(heavy.beamCount > light.beamCount);
-  assert.equal(heavy.beamCount, 4);
+  assert.equal(heavy.beamCount, 3);
   assert.ok(heavy.density > light.density);
   assert.ok(heavy.travelSeconds < light.travelSeconds);
 });
@@ -34,8 +34,14 @@ test("keeps an idle machine still and bounds the visual controls", () => {
 
   assert.equal(idle.beamCount, 0);
   assert.equal(idle.density, 0);
-  assert.equal(idle.travelSeconds, 2.8);
+  assert.equal(idle.travelSeconds, 3.1);
   assert.ok(idle.score >= 0 && idle.score <= 1);
+});
+
+test("keeps missing CPU telemetry distinct from a measured zero", () => {
+  assert.equal(singleMachineLoad({ cpuPercent: null }).cpu, null);
+  assert.equal(singleMachineLoad({ cpuPercent: "" }).cpu, null);
+  assert.equal(singleMachineLoad({ cpuPercent: 0 }).cpu, 0);
 });
 
 test("maps aggregate work into varied parallel flow without implying per-conversation telemetry", () => {
@@ -45,10 +51,10 @@ test("maps aggregate work into varied parallel flow without implying per-convers
     cpuPercent: 88,
   }));
 
-  assert.equal(channels.length, 4);
+  assert.equal(channels.length, 3);
   assert.ok(channels.every((channel) => channel.active));
   assert.ok(new Set(channels.map((channel) => channel.travelMs)).size > 1);
-  assert.ok(channels.every((channel) => channel.packetCount >= 4));
+  assert.ok(channels.every((channel) => channel.packetCount >= 5));
   assert.ok(new Set(channels.map((channel) => channel.center)).size > 1);
 });
 
