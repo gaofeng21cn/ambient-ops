@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   loadFlowChannels,
   loadParticlePhase,
+  loadSceneProfile,
   loadState,
   singleMachineLoad,
 } from "../src/load-model.mjs";
@@ -93,4 +94,55 @@ test("uses absolute elapsed time for flow particles so kiosk motion catches up a
   assert.equal(loadParticlePhase(250, 1_000, 0), .25);
   assert.equal(loadParticlePhase(12_250, 1_000, 0), .25);
   assert.equal(loadParticlePhase(750, 1_000, .5), .25);
+});
+
+test("maps aggregate load into a bounded pixel work scene", () => {
+  const idle = loadSceneProfile(singleMachineLoad({
+    oneMinute: { tps: 0 },
+    activeSessions: 0,
+    cpuPercent: null,
+  }));
+  const active = loadSceneProfile(singleMachineLoad({
+    oneMinute: { tps: 6_000 },
+    activeSessions: 4,
+    cpuPercent: 42,
+  }));
+  const heavy = loadSceneProfile(singleMachineLoad({
+    oneMinute: { tps: 60_000 },
+    activeSessions: 12,
+    cpuPercent: 74,
+  }));
+
+  assert.equal(idle.clusterCount, 0);
+  assert.equal(idle.taskDensity, 0);
+  assert.ok(active.clusterCount >= 1 && active.clusterCount < heavy.clusterCount);
+  assert.ok(heavy.taskDensity > active.taskDensity);
+  assert.ok(heavy.tempo > active.tempo);
+  for (const profile of [idle, active, heavy]) {
+    for (const value of Object.values(profile)) assert.ok(Number.isFinite(value));
+  }
+});
+
+test("does not invent CPU pressure when host telemetry is missing", () => {
+  const profile = loadSceneProfile(singleMachineLoad({
+    oneMinute: { tps: 60_000 },
+    activeSessions: 10,
+    cpuPercent: null,
+  }));
+
+  assert.equal(profile.pressure, 0);
+  assert.ok(profile.queueDepth > 0 && profile.queueDepth <= .25);
+  assert.ok(profile.heat > 0);
+});
+
+test("turns measured CPU pressure into visible queue and heat", () => {
+  const profile = loadSceneProfile(singleMachineLoad({
+    oneMinute: { tps: 60_000 },
+    activeSessions: 10,
+    cpuPercent: 97,
+  }));
+
+  assert.ok(profile.pressure > .8);
+  assert.ok(profile.queueDepth > .8);
+  assert.ok(profile.heat > .8);
 });

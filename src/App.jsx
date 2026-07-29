@@ -41,8 +41,7 @@ import {
 import { fetchWithTimeout } from "./http.mjs";
 import { connectionAfterFailure } from "./status-connection.mjs";
 import {
-  loadFlowChannels,
-  loadParticlePhase,
+  loadSceneProfile,
   singleMachineLoad,
   loadState,
 } from "./load-model.mjs";
@@ -328,7 +327,8 @@ function Header({ status, connection }) {
 function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
   if (!selected) return <section className="load-view"><EmptyState /></section>;
   const Icon = machineIcon(selected.platform);
-  const load = singleMachineLoad(selected);
+  const baseLoad = singleMachineLoad(selected);
+  const load = { ...baseLoad, sceneProfile: loadSceneProfile(baseLoad) };
   const state = loadState(load.score, load).definition;
 
   return (
@@ -355,7 +355,7 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
         <LoadPixelField state={state} machineName={selected.machineName} load={load} />
         <div className="load-canvas-footer">
           <LoadScale score={load.score} />
-          <span>{load.streamCount ? `${load.streamCount} FIELD PULSES` : "STANDBY FIELD"} · {formatTps(load.tps)} TPS</span>
+          <span>{load.sceneProfile?.clusterCount ? `${load.sceneProfile.clusterCount} WORK CLUSTERS` : "STANDBY STATION"} · {formatTps(load.tps)} TPS</span>
         </div>
       </div>
       <aside className="load-side-metrics">
@@ -395,9 +395,9 @@ function LoadScale({ score }) {
 
 function loadStateDescription(stateId) {
   return {
-    quiet: "standby field",
-    active: "steady work",
-    heavy: "dense work",
+    quiet: "standby station",
+    active: "focused work",
+    heavy: "parallel work",
     constrained: "pressure building",
   }[stateId] || "work field";
 }
@@ -406,21 +406,15 @@ function LoadPixelField({ state, machineName, load }) {
   const canvasRef = useRef(null);
   const prefersReducedMotion = usePrefersReducedMotion();
   const reduceMotion = shouldReduceKioskMotion(navigator.userAgent, prefersReducedMotion);
-  const channels = useMemo(
-    () => loadFlowChannels(load),
-    [load.density, load.streamCount, load.cycleSeconds],
+  const profile = useMemo(
+    () => loadSceneProfile(load),
+    [load.score, load.sessions, load.tps, load.cpu, load.cpuPressure, load.constrained],
   );
-  const channelsRef = useRef(channels);
-  const visual = {
-    score: load.score,
-    pressure: load.backpressure,
-    stateId: state.id,
-  };
+  const visual = useMemo(() => ({ ...profile, stateId: state.id }), [profile, state.id]);
   const visualRef = useRef(visual);
-  channelsRef.current = channels;
   visualRef.current = visual;
 
-  useLoadPixelMotion(canvasRef, channelsRef, visualRef, reduceMotion);
+  useLoadPixelMotion(canvasRef, visualRef, reduceMotion);
 
   return (
     <div
@@ -428,18 +422,15 @@ function LoadPixelField({ state, machineName, load }) {
       role="img"
       aria-label={`${state.label} pixel workload animation for ${machineName}`}
       style={{
-        "--pixel-density": load.density,
         "--pixel-score": load.score,
       }}
     >
       <canvas ref={canvasRef} className="load-pixel-canvas" aria-hidden="true" />
-      <span className="load-core-caption" aria-hidden="true">CODEX CORE</span>
-      <div className="load-pixel-scanline" aria-hidden="true" />
     </div>
   );
 }
 
-function useLoadPixelMotion(canvasRef, channelsRef, visualRef, reduceMotion) {
+function useLoadPixelMotion(canvasRef, visualRef, reduceMotion) {
   useEffect(() => {
     const canvas = canvasRef.current;
     const field = canvas?.parentElement;
@@ -467,6 +458,11 @@ function useLoadPixelMotion(canvasRef, channelsRef, visualRef, reduceMotion) {
     const startedAt = window.performance.now();
     let animationFrame = null;
     let lastPaintAt = -Infinity;
+    let assetReady = false;
+    const workstation = new Image();
+    workstation.decoding = "async";
+    workstation.onload = () => { assetReady = true; };
+    workstation.src = "/load/operator-workbench.webp";
 
     const paint = (timestamp) => {
       const frameBudget = reduceMotion ? 140 : 34;
@@ -476,7 +472,7 @@ function useLoadPixelMotion(canvasRef, channelsRef, visualRef, reduceMotion) {
       }
       lastPaintAt = timestamp;
       const elapsed = timestamp - startedAt;
-      paintLoadCanvas(context, width, height, elapsed, channelsRef.current, visualRef.current);
+      paintWorkbenchCanvas(context, width, height, elapsed, visualRef.current, assetReady ? workstation : null);
       animationFrame = window.requestAnimationFrame(paint);
     };
 
@@ -484,155 +480,213 @@ function useLoadPixelMotion(canvasRef, channelsRef, visualRef, reduceMotion) {
     return () => {
       if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
       observer?.disconnect();
+      workstation.onload = null;
     };
-  }, [canvasRef, channelsRef, visualRef, reduceMotion]);
+  }, [canvasRef, visualRef, reduceMotion]);
 }
 
-function paintLoadCanvas(context, width, height, elapsed, channels, visual) {
+function paintWorkbenchCanvas(context, width, height, elapsed, visual, workstation) {
   if (width <= 1 || height <= 1) return;
-  const stateColor = visual.stateId === "constrained"
-    ? "#ff5d6c"
-    : visual.stateId === "heavy"
-      ? "#ffbd58"
-      : visual.stateId === "active" ? "#39d891" : "#9aa8b5";
-  const inputColor = "#38bdf8";
-  const outputColor = "#39d891";
-  const score = Math.max(0, Math.min(1, Number(visual.score) || 0));
-  const pressure = Math.max(0, Math.min(1, Number(visual.pressure) || 0));
-  const pixel = width < 520 ? 2 : 3;
-  const grid = width < 520 ? 10 : 14;
-  const centerX = Math.round(width * 0.53);
-  const centerY = Math.round(height * 0.52);
-  const coreHeight = Math.round(Math.max(26, Math.min(74, height * 0.42)));
-  const coreWidth = Math.round(coreHeight * 1.38);
-  const coreLeft = centerX - Math.round(coreWidth / 2);
-  const coreRight = centerX + Math.round(coreWidth / 2);
-  const intake = 12;
-  const output = width - 12;
+  const activity = clampVisual(visual.activity);
+  const parallel = clampVisual(visual.parallel);
+  const pressure = clampVisual(visual.pressure);
+  const queueDepth = clampVisual(visual.queueDepth);
+  const heat = clampVisual(visual.heat);
+  const tempo = Math.max(.2, Number(visual.tempo) || .2);
+  const pixel = Math.max(2, Math.round(Math.min(width, height) / 86));
+  const centerY = Math.round(height * .53);
 
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#05090d";
   context.fillRect(0, 0, width, height);
+  drawWorkstationGrid(context, width, height, pixel, activity);
 
-  context.fillStyle = "rgba(33, 52, 63, .42)";
-  for (let x = 0; x <= width; x += grid) context.fillRect(x, 0, 1, height);
-  for (let y = 0; y <= height; y += grid) context.fillRect(0, y, width, 1);
-  context.fillStyle = "rgba(161, 191, 206, .045)";
-  for (let y = 5; y < height; y += 7) context.fillRect(0, y, width, 1);
+  const spriteSize = Math.round(Math.min(height * 1.34, width * .48));
+  const spriteX = Math.round(Math.max(4, width * .015));
+  const spriteY = Math.round((height - spriteSize) / 2 + Math.sin(elapsed / 1_700) * (0.4 + activity * .9));
+  if (workstation) {
+    context.imageSmoothingEnabled = false;
+    context.drawImage(workstation, spriteX, spriteY, spriteSize, spriteSize);
+  } else {
+    drawFallbackWorkstation(context, spriteX, spriteY, spriteSize, pixel);
+  }
 
-  const streamOffsets = [-0.28, 0, 0.28];
-  for (const [streamIndex, channel] of channels.entries()) {
-    if (!channel.active) continue;
-    const streamY = Math.round(centerY + streamOffsets[streamIndex] * Math.min(height * .72, 116));
-    drawSegmentedPath(context, intake, streamY, coreLeft - 10, inputColor, .34 + score * .22, pixel);
-    drawSegmentedPath(context, coreRight + 10, streamY, output, outputColor, .34 + score * .22, pixel);
+  const screen = {
+    x: spriteX + spriteSize * .56,
+    y: spriteY + spriteSize * .205,
+    width: spriteSize * .225,
+    height: spriteSize * .205,
+  };
+  drawScreenActivity(context, screen, elapsed, activity, pressure, pixel);
 
-    const split = visual.stateId === "constrained" ? .64 : .5;
-    for (let packetIndex = 0; packetIndex < channel.packetCount; packetIndex += 1) {
-      const phase = loadParticlePhase(
-        elapsed,
-        channel.travelMs,
-        channel.phaseOffset + packetIndex / channel.packetCount,
+  const emitterX = Math.min(width * .59, spriteX + spriteSize * .79);
+  const emitterY = spriteY + spriteSize * .36;
+  drawWorkClusters(context, width, height, emitterX, emitterY, elapsed, visual, pixel);
+  drawWorkPackets(context, width, height, emitterX, emitterY, elapsed, visual, pixel);
+  drawPressureQueue(context, emitterX, emitterY, elapsed, queueDepth, pressure, pixel);
+  drawComputerHeat(context, spriteX, spriteY, spriteSize, elapsed, heat, pressure, pixel);
+  drawStationFloor(context, width, height, centerY, pixel, activity);
+  context.globalAlpha = 1;
+}
+
+function drawWorkstationGrid(context, width, height, pixel, activity) {
+  const step = pixel * 6;
+  context.fillStyle = "rgba(34, 52, 62, .36)";
+  for (let x = step; x < width; x += step) context.fillRect(x, 0, 1, height);
+  for (let y = step; y < height; y += step) context.fillRect(0, y, width, 1);
+  context.fillStyle = `rgba(56, 189, 248, ${.018 + activity * .03})`;
+  context.fillRect(Math.round(width * .53), 0, 1, height);
+}
+
+function drawScreenActivity(context, screen, elapsed, activity, pressure, pixel) {
+  const pulse = .55 + .45 * Math.sin(elapsed / Math.max(190, 640 - activity * 330));
+  context.save();
+  context.globalAlpha = .72;
+  context.fillStyle = "#071318";
+  context.fillRect(screen.x, screen.y, screen.width, screen.height);
+  const rows = 4 + Math.round(activity * 4);
+  for (let row = 0; row < rows; row += 1) {
+    const widthFactor = .25 + pixelNoise(row + 7) * (.45 + activity * .25);
+    context.fillStyle = row % 3 === 0 ? "#38bdf8" : row % 3 === 1 ? "#39d891" : "#9ee7bd";
+    context.globalAlpha = .42 + pulse * .25;
+    context.fillRect(
+      Math.round(screen.x + pixel * 1.8),
+      Math.round(screen.y + pixel * (1.6 + row * 2.2)),
+      Math.max(pixel, Math.round(screen.width * widthFactor)),
+      Math.max(1, Math.round(pixel * .72)),
+    );
+    if (row % 2 === 0) {
+      context.globalAlpha *= .58;
+      context.fillRect(
+        Math.round(screen.x + screen.width * (.7 + pixelNoise(row + 30) * .17)),
+        Math.round(screen.y + pixel * (1.6 + row * 2.2)),
+        pixel,
+        Math.max(1, Math.round(pixel * .72)),
       );
-      const incoming = phase < split;
-      const rawProgress = incoming ? phase / split : (phase - split) / (1 - split);
-      const progress = incoming && visual.stateId === "constrained"
-        ? 1 - Math.pow(1 - rawProgress, .58)
-        : rawProgress;
-      const start = incoming ? intake : coreRight + 10;
-      const end = incoming ? coreLeft - 10 : output;
-      const x = Math.round(start + (end - start) * progress);
-      const drift = Math.sin(elapsed / (260 + streamIndex * 50) + packetIndex * 1.7) * (1 + score * 3);
-      const y = Math.round(streamY + drift);
-      const size = packetIndex % 7 === 0 ? pixel * 2 : pixel;
-      context.fillStyle = incoming ? inputColor : outputColor;
-      context.globalAlpha = .58 + score * .38;
-      context.fillRect(x, y - Math.floor(size / 2), size, size);
-      if (packetIndex % 5 === 0) {
-        context.globalAlpha *= .42;
-        context.fillRect(x - (incoming ? pixel * 2 : -pixel * 2), y - 1, pixel, pixel);
-      }
-      context.globalAlpha = 1;
     }
   }
-
-  if (visual.stateId === "constrained") {
-    const queueCount = Math.round(4 + pressure * 8);
-    context.fillStyle = stateColor;
-    for (let index = 0; index < queueCount; index += 1) {
-      const x = Math.max(intake + 8, coreLeft - 18 - ((index * (pixel * 7)) % Math.max(18, coreLeft - intake - 22)));
-      const y = centerY + ((index % 5) - 2) * (pixel * 3);
-      context.globalAlpha = .3 + (index % 3) * .16;
-      context.fillRect(x, y, pixel * (index % 4 === 0 ? 2 : 1), pixel);
-    }
-    context.globalAlpha = 1;
+  const cursorY = screen.y + screen.height - pixel * 2.2;
+  context.globalAlpha = pressure > .1 ? .45 + pulse * .35 : .8;
+  context.fillStyle = pressure > .68 ? "#ffbd58" : "#39d891";
+  if (Math.floor(elapsed / Math.max(160, 440 - activity * 220)) % 2 === 0) {
+    context.fillRect(Math.round(screen.x + pixel * 2), Math.round(cursorY), pixel * 2, Math.max(1, Math.round(pixel * .72)));
   }
-
-  drawCore(context, centerX, centerY, coreWidth, coreHeight, stateColor, inputColor, outputColor, score, pressure, elapsed, pixel);
+  context.restore();
 }
 
-function drawSegmentedPath(context, start, y, end, color, opacity, pixel) {
-  context.fillStyle = color;
-  context.globalAlpha = opacity;
-  const step = pixel * 5;
-  for (let x = start; x < end; x += step) context.fillRect(x, y, pixel * 2, pixel);
+function drawWorkClusters(context, width, height, emitterX, emitterY, elapsed, visual, pixel) {
+  const count = Math.max(0, Math.min(4, Math.round(visual.clusterCount || 0)));
+  const activity = clampVisual(visual.activity);
+  const spread = height * (.08 + activity * .22);
+  for (let cluster = 0; cluster < count; cluster += 1) {
+    const seed = cluster * 17.31 + 4;
+    const progress = .26 + (cluster + 1) / (count + 1) * .55;
+    const x = emitterX + (width - emitterX - 8) * progress;
+    const y = emitterY + (cluster - (count - 1) / 2) * spread * .62;
+    const drift = Math.sin(elapsed / (1_000 + cluster * 170) + seed) * pixel * (1 + activity * 2);
+    const color = cluster % 3 === 0 ? "#39d891" : cluster % 3 === 1 ? "#38bdf8" : "#9ee7bd";
+    context.fillStyle = color;
+    context.globalAlpha = .15 + activity * .22;
+    context.fillRect(Math.round(x), Math.round(y + drift), pixel * 7, 1);
+    context.globalAlpha = .3 + activity * .35;
+    for (let block = 0; block < 4 + Math.round(activity * 4); block += 1) {
+      const offsetX = (pixel * (2 + Math.round(pixelNoise(seed + block) * 9))) + block * pixel * 2;
+      const offsetY = Math.round((pixelNoise(seed + block * 3) - .5) * spread * .22);
+      const blockWidth = pixel * (1 + (block % 3));
+      context.fillRect(Math.round(x + offsetX), Math.round(y + drift + offsetY), blockWidth, pixel);
+    }
+  }
   context.globalAlpha = 1;
 }
 
-function drawCore(context, centerX, centerY, width, height, color, inputColor, outputColor, score, pressure, elapsed, pixel) {
-  const left = centerX - Math.round(width / 2);
-  const top = centerY - Math.round(height / 2);
-  const pulse = .5 + .5 * Math.sin(elapsed / Math.max(180, 520 - score * 260));
-  for (let ring = 3; ring >= 1; ring -= 1) {
-    const pad = ring * pixel * 4;
+function drawWorkPackets(context, width, height, emitterX, emitterY, elapsed, visual, pixel) {
+  const activity = clampVisual(visual.activity);
+  const pressure = clampVisual(visual.pressure);
+  const parallel = clampVisual(visual.parallel);
+  const tempo = Math.max(.2, Number(visual.tempo) || .2);
+  const count = visual.clusterCount ? Math.round(14 + activity * 56 + parallel * 22) : 5;
+  const endX = Math.max(emitterX + pixel * 10, width - pixel * 4);
+  const travel = Math.max(pixel * 10, endX - emitterX);
+  const spread = height * (.08 + activity * .28);
+  for (let index = 0; index < count; index += 1) {
+    const seed = index * 8.173 + 1.7;
+    const phase = (elapsed * .00012 * tempo + pixelNoise(seed) + index * .071) % 1;
+    const progress = phase < .06 ? phase / .06 * .22 : phase;
+    const x = emitterX + travel * progress;
+    const fan = (pixelNoise(seed + 1.3) - .5) * spread * (.35 + progress * .9);
+    const wave = Math.sin(elapsed / (350 + (index % 5) * 64) + seed) * pixel * (1 + activity * 2.4);
+    const y = emitterY + fan + wave;
+    const size = pixel * (index % 9 === 0 ? 2 : index % 4 === 0 ? 1.5 : 1);
+    const hot = pressure > .45 && progress > .55;
+    const color = hot ? (pressure > .78 ? "#ff5d6c" : "#ffbd58") : index % 3 === 0 ? "#38bdf8" : "#39d891";
+    const alpha = .35 + activity * .45 + (index % 4) * .04;
     context.fillStyle = color;
-    context.globalAlpha = (.035 + score * .035) * (4 - ring) + pulse * .025;
-    context.fillRect(left - pad, top - pad, width + pad * 2, pixel);
-    context.fillRect(left - pad, top + height + pad - pixel, width + pad * 2, pixel);
-    context.fillRect(left - pad, top - pad, pixel, height + pad * 2);
-    context.fillRect(left + width + pad - pixel, top - pad, pixel, height + pad * 2);
+    context.globalAlpha = Math.min(.92, alpha);
+    context.fillRect(Math.round(x), Math.round(y), Math.max(pixel, Math.round(size)), pixel);
+    if (index % 5 === 0 && progress > .08) {
+      context.globalAlpha *= .35;
+      context.fillRect(Math.round(x - pixel * 2), Math.round(y), pixel, pixel);
+    }
   }
   context.globalAlpha = 1;
+}
 
-  context.fillStyle = "#03070a";
-  context.fillRect(left + pixel * 2, top + pixel * 2, width, height);
-  context.fillStyle = color;
-  context.fillRect(left, top, width, pixel * 2);
-  context.fillRect(left, top + height, width, pixel * 2);
-  context.fillRect(left, top, pixel * 2, height + pixel * 2);
-  context.fillRect(left + width - pixel * 2, top, pixel * 2, height + pixel * 2);
-
-  const screenLeft = left + pixel * 5;
-  const screenTop = top + pixel * 5;
-  const screenWidth = width - pixel * 10;
-  const screenHeight = height - pixel * 10;
-  context.fillStyle = "#0b171d";
-  context.fillRect(screenLeft, screenTop, screenWidth, screenHeight);
-  context.fillStyle = inputColor;
-  context.globalAlpha = .7 + pulse * .2;
-  context.fillRect(screenLeft + pixel * 2, screenTop + pixel * 2, Math.round(screenWidth * .62), pixel);
-  context.fillStyle = outputColor;
-  context.fillRect(screenLeft + pixel * 2, screenTop + pixel * 5, Math.round(screenWidth * .4), pixel);
-  context.fillStyle = color;
-  context.fillRect(screenLeft + pixel * 2, screenTop + pixel * 8, Math.round(screenWidth * (.24 + score * .52)), pixel);
-  const cursorVisible = Math.floor(elapsed / 260) % 2 === 0;
-  if (cursorVisible) context.fillRect(screenLeft + pixel * 2, screenTop + pixel * 11, pixel * 2, pixel);
-  context.globalAlpha = 1;
-
-  context.fillStyle = inputColor;
-  context.fillRect(left + pixel * 4, top - pixel * 3, pixel * 2, pixel * 2);
-  context.fillStyle = outputColor;
-  context.fillRect(left + width - pixel * 6, top - pixel * 3, pixel * 2, pixel * 2);
-  context.fillStyle = color;
-  context.fillRect(centerX - pixel, top + height + pixel * 2, pixel * 2, pixel * 4);
-  context.fillRect(centerX - pixel * 5, top + height + pixel * 6, pixel * 10, pixel * 2);
-  if (pressure > 0) {
-    context.fillStyle = color;
-    context.globalAlpha = .35 + pressure * .5;
-    context.fillRect(left - pixel * 2, top + Math.round(height * .3), pixel, pixel * 3);
-    context.fillRect(left - pixel * 4, top + Math.round(height * .58), pixel, pixel * 2);
-    context.globalAlpha = 1;
+function drawPressureQueue(context, emitterX, emitterY, elapsed, queueDepth, pressure, pixel) {
+  if (queueDepth <= .05) return;
+  const count = Math.round(3 + queueDepth * 12);
+  const wobble = Math.sin(elapsed / 260) * pixel * (1 + pressure * 2);
+  for (let index = 0; index < count; index += 1) {
+    const back = pixel * (3 + (index % 6) * 2);
+    const y = emitterY + (index % 5 - 2) * pixel * 2 + wobble * (index % 2 ? .45 : .18);
+    context.fillStyle = pressure > .74 ? "#ff5d6c" : "#ffbd58";
+    context.globalAlpha = .28 + (index % 3) * .12;
+    context.fillRect(Math.round(emitterX - back), Math.round(y), pixel * (index % 4 === 0 ? 2 : 1), pixel);
   }
+  context.globalAlpha = 1;
+}
+
+function drawComputerHeat(context, spriteX, spriteY, spriteSize, elapsed, heat, pressure, pixel) {
+  if (heat <= .05) return;
+  const x = spriteX + spriteSize * .83;
+  const y = spriteY + spriteSize * .34;
+  const pulse = .35 + .3 * Math.sin(elapsed / 220);
+  context.fillStyle = pressure > .7 ? "#ff5d6c" : "#ffbd58";
+  context.globalAlpha = .22 + heat * .35 + pulse * heat;
+  for (let index = 0; index < 3; index += 1) {
+    context.fillRect(Math.round(x + index * pixel * 2), Math.round(y + (index % 2) * pixel * 2), pixel, pixel * (2 + index));
+  }
+  context.globalAlpha = 1;
+}
+
+function drawStationFloor(context, width, height, centerY, pixel, activity) {
+  context.fillStyle = `rgba(12, 21, 26, ${.78 - activity * .08})`;
+  context.fillRect(0, Math.round(height * .88), width, Math.max(1, pixel));
+  context.fillStyle = "rgba(56, 189, 248, .14)";
+  context.fillRect(pixel * 2, Math.round(height * .88) - pixel, Math.round(width * .28), 1);
+  context.fillStyle = "rgba(57, 216, 145, .12)";
+  context.fillRect(Math.round(width * .67), Math.round(height * .88) - pixel, Math.round(width * .24), 1);
+}
+
+function drawFallbackWorkstation(context, x, y, size, pixel) {
+  const top = y + size * .22;
+  const left = x + size * .52;
+  context.fillStyle = "#101c22";
+  context.fillRect(Math.round(left), Math.round(top), Math.round(size * .28), Math.round(size * .2));
+  context.fillStyle = "#38bdf8";
+  context.fillRect(Math.round(left + pixel * 2), Math.round(top + pixel * 2), Math.round(size * .2), pixel);
+  context.fillStyle = "#17252b";
+  context.fillRect(Math.round(x + size * .18), Math.round(y + size * .42), Math.round(size * .55), Math.round(size * .15));
+  context.fillStyle = "#39d891";
+  context.fillRect(Math.round(x + size * .1), Math.round(y + size * .28), pixel * 3, pixel * 5);
+}
+
+function pixelNoise(seed) {
+  const value = Math.sin(seed * 12.9898) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function clampVisual(value) {
+  return Math.max(0, Math.min(1, Number(value) || 0));
 }
 
 function LoadStat({ label, value, unit, accent = "" }) {

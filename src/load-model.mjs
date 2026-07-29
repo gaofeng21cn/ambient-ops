@@ -53,6 +53,36 @@ export function singleMachineLoad(machine) {
   };
 }
 
+export function loadSceneProfile(load) {
+  const score = clamp(Number(load?.score) || 0, 0, 1);
+  const sessions = Math.max(0, Number(load?.sessions) || 0);
+  const tps = Math.max(0, Number(load?.tps) || 0);
+  const pressure = load?.cpu === null
+    ? 0
+    : clamp(Number(load?.cpuPressure) || 0, 0, 1);
+  const hasWork = tps > 0 || sessions > 0;
+  const parallel = hasWork ? clamp(Math.sqrt(sessions / 18), 0, 1) : 0;
+  const tempo = hasWork
+    ? clamp(0.45 + score * 1.35 + Math.sqrt(tps / 90_000) * 0.7, 0.45, 2.5)
+    : 0.2;
+  const clusterCount = hasWork ? Math.max(1, Math.min(4, Math.round(1 + parallel * 3))) : 0;
+  const activity = hasWork ? clamp(score * 0.72 + parallel * 0.28, 0, 1) : 0;
+  const queueDepth = load?.constrained
+    ? clamp(0.24 + pressure * 0.76, 0.24, 1)
+    : clamp(Math.max(0, score - 0.68) * 0.7, 0, 0.25);
+
+  return {
+    activity,
+    parallel,
+    tempo,
+    clusterCount,
+    taskDensity: hasWork ? clamp(0.16 + activity * 0.68 + parallel * 0.16, 0.16, 1) : 0,
+    pressure,
+    queueDepth,
+    heat: clamp(pressure * 0.9 + activity * 0.12, 0, 1),
+  };
+}
+
 const STREAM_SPEEDS = Object.freeze([0.92, 1.08, 1.24]);
 const STREAM_DENSITIES = Object.freeze([0.92, 1.08, 0.98]);
 const STREAM_CENTERS = Object.freeze([0.28, 0.5, 0.72]);
