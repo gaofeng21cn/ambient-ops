@@ -12,7 +12,7 @@ android-kiosk/**/build/
 android-kiosk/app/src/main/assets/ambient-ops/
 ios-app/*.xcodeproj/
 ios-app/.build/
-ios-app/DerivedData/
+ios-app/DerivedData*/
 *.log
 *.pem
 *.key

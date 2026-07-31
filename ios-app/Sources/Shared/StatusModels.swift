@@ -201,6 +201,7 @@ struct PetStatus: Codable, Hashable, Sendable {
 }
 
 struct LoadVisualState: Codable, Hashable, Sendable {
+    let modelVersion: Int?
     let state: String
     let label: String
     let score: Double
@@ -216,6 +217,38 @@ struct LoadVisualState: Codable, Hashable, Sendable {
     let heat: Double
 
     var normalizedScore: Double { score.clamped(to: 0...1) }
+
+    init(
+        modelVersion: Int? = 1,
+        state: String,
+        label: String,
+        score: Double,
+        constrained: Bool,
+        activity: Double,
+        parallel: Double,
+        tempo: Double,
+        travelMs: Double,
+        clusterCount: Int,
+        taskDensity: Double,
+        pressure: Double,
+        queueDepth: Double,
+        heat: Double
+    ) {
+        self.modelVersion = modelVersion
+        self.state = state
+        self.label = label
+        self.score = score
+        self.constrained = constrained
+        self.activity = activity
+        self.parallel = parallel
+        self.tempo = tempo
+        self.travelMs = travelMs
+        self.clusterCount = clusterCount
+        self.taskDensity = taskDensity
+        self.pressure = pressure
+        self.queueDepth = queueDepth
+        self.heat = heat
+    }
 }
 
 enum LoadStatePalette {

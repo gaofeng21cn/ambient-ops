@@ -66,7 +66,7 @@ test("publishes the shared Ambient Ops discovery contract", async () => {
       id: "home-ops",
       name: "Example Home",
       path: "/display/overview",
-      api: "/api/status",
+      api: "/api/v1/status",
       protocol: "1",
       pairing: "1",
       version: "0.1.5",

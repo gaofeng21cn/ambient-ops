@@ -1,4 +1,5 @@
 import {
+  LOAD_VISUAL_MODEL_VERSION,
   loadSceneProfile,
   loadState,
   singleMachineLoad,
@@ -47,6 +48,7 @@ function projectMachine(machine) {
   return {
     ...machine,
     loadVisualState: {
+      modelVersion: LOAD_VISUAL_MODEL_VERSION,
       state: state.id,
       label: state.label,
       score: load.score,

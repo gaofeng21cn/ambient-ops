@@ -73,8 +73,8 @@ owner key used by the macOS helper, plus a sibling SHA-256 file. Download both
 files from the release, then verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.8.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.8.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.9.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.9.apk
 ```
 
 The GitHub Release APK and checksum are public downloads. A future release

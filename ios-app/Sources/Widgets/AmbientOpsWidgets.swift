@@ -340,22 +340,25 @@ private struct LiveActivitySurface: View {
     }
 
     private var glyph: some View {
-        LoadGlyph(
-            visual: LoadVisualState(
-                state: state.state,
-                label: state.state.uppercased(),
-                score: state.score,
-                constrained: state.state == "constrained",
-                activity: state.score,
-                parallel: min(1, state.activeSessions / 12),
-                tempo: 1,
-                travelMs: 1_500,
-                clusterCount: max(1, min(4, Int(state.activeSessions / 3))),
-                taskDensity: state.score,
-                pressure: state.state == "constrained" ? 1 : 0,
-                queueDepth: state.state == "constrained" ? 1 : 0,
-                heat: state.state == "constrained" ? 1 : 0
-            )
+        LoadGlyph(visual: activityVisual)
+    }
+
+    private var activityVisual: LoadVisualState {
+        state.visual ?? LoadVisualState(
+            modelVersion: nil,
+            state: state.state,
+            label: state.state.uppercased(),
+            score: state.score,
+            constrained: state.state == "constrained",
+            activity: state.score,
+            parallel: min(1, state.activeSessions / 12),
+            tempo: 1,
+            travelMs: 1_500,
+            clusterCount: max(1, min(4, Int(state.activeSessions / 3))),
+            taskDensity: state.score,
+            pressure: state.state == "constrained" ? 1 : 0,
+            queueDepth: state.state == "constrained" ? 1 : 0,
+            heat: state.state == "constrained" ? 1 : 0
         )
     }
 }

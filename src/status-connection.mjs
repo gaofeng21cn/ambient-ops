@@ -9,7 +9,7 @@ export function displayConnectionConfiguration(locationLike = globalThis.locatio
   const parameters = new URLSearchParams(search);
   const requestedEndpoint = parameters.get("statusUrl");
   const requestedView = parameters.get("view");
-  let statusEndpoint = "/api/status";
+  let statusEndpoint = "/api/v1/status";
 
   if (requestedEndpoint) {
     try {
@@ -23,7 +23,7 @@ export function displayConnectionConfiguration(locationLike = globalThis.locatio
   }
 
   return Object.freeze({
-    embedded: statusEndpoint !== "/api/status",
+    embedded: statusEndpoint !== "/api/v1/status",
     statusEndpoint,
     requestedView,
   });

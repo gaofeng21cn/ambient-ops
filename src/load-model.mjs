@@ -6,6 +6,10 @@ const LOAD_STATES = Object.freeze([
   { id: "constrained", label: "CONSTRAINED", min: Number.POSITIVE_INFINITY },
 ]);
 
+export const LOAD_VISUAL_MODEL_VERSION = 1;
+
+const LOAD_STATE_BY_ID = new Map(LOAD_STATES.map((state) => [state.id, state]));
+
 export function finiteOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
   return Number.isFinite(Number(value)) ? Number(value) : null;
@@ -50,6 +54,68 @@ export function singleMachineLoad(machine) {
     streamCount,
     beamCount: streamCount,
     backpressure: constrained ? clamp(0.35 + (cpuPressure || 0) * 0.65, 0.35, 1) : 0,
+  };
+}
+
+export function machineLoadPresentation(machine) {
+  const base = singleMachineLoad(machine);
+  const supplied = normalizedLoadVisualState(machine?.loadVisualState);
+  if (!supplied) {
+    return {
+      ...base,
+      state: loadState(base.score, base).definition,
+      sceneProfile: loadSceneProfile(base),
+      visualSource: "fallback",
+    };
+  }
+
+  return {
+    ...base,
+    score: supplied.score,
+    constrained: supplied.constrained,
+    state: LOAD_STATE_BY_ID.get(supplied.state),
+    sceneProfile: supplied,
+    visualSource: "provider",
+    modelVersion: supplied.modelVersion,
+  };
+}
+
+export function normalizedLoadVisualState(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const definition = LOAD_STATE_BY_ID.get(value.state);
+  if (!definition) return null;
+
+  const numericKeys = [
+    "score",
+    "activity",
+    "parallel",
+    "tempo",
+    "travelMs",
+    "clusterCount",
+    "taskDensity",
+    "pressure",
+    "queueDepth",
+    "heat",
+  ];
+  if (numericKeys.some((key) => !Number.isFinite(Number(value[key])))) return null;
+
+  return {
+    modelVersion: Number.isSafeInteger(Number(value.modelVersion)) && Number(value.modelVersion) > 0
+      ? Number(value.modelVersion)
+      : null,
+    state: definition.id,
+    label: definition.label,
+    score: clamp(Number(value.score), 0, 1),
+    constrained: value.constrained === true,
+    activity: clamp(Number(value.activity), 0, 1),
+    parallel: clamp(Number(value.parallel), 0, 1),
+    tempo: clamp(Number(value.tempo), 0.2, 2.5),
+    travelMs: clamp(Number(value.travelMs), 300, 4_800),
+    clusterCount: Math.max(0, Math.min(4, Math.round(Number(value.clusterCount)))),
+    taskDensity: clamp(Number(value.taskDensity), 0, 1),
+    pressure: clamp(Number(value.pressure), 0, 1),
+    queueDepth: clamp(Number(value.queueDepth), 0, 1),
+    heat: clamp(Number(value.heat), 0, 1),
   };
 }
 

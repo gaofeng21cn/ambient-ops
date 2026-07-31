@@ -10,6 +10,7 @@ struct LoadActivityAttributes: ActivityAttributes {
         let tps: Double
         let activeSessions: Double
         let cpuPercent: Double?
+        let visual: LoadVisualState?
         let updatedAt: Date
 
         init(machine: MachineStatus, updatedAt: Date = .now) {
@@ -19,6 +20,7 @@ struct LoadActivityAttributes: ActivityAttributes {
             tps = machine.oneMinute.tps
             activeSessions = machine.activeSessions
             cpuPercent = machine.cpuPercent
+            visual = machine.loadVisualState
             self.updatedAt = updatedAt
         }
     }

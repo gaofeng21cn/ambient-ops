@@ -43,6 +43,7 @@ test("projects the dashboard into a versioned mobile contract", () => {
   assert.equal(status.capabilities.persistentHistory, true);
   assert.equal(status.capabilities.webDisplay, true);
   assert.equal(status.capabilities.liveActivityPush, false);
+  assert.equal(status.machines[0].loadVisualState.modelVersion, 1);
   assert.equal(status.machines[0].loadVisualState.state, "constrained");
   assert.ok(status.machines[0].loadVisualState.taskDensity > 0.8);
 });

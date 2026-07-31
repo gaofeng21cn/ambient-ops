@@ -29,7 +29,7 @@ test("accepts only HTTP status endpoints for an embedded display", () => {
   );
   assert.equal(
     displayConnectionConfiguration({ search: "?statusUrl=file%3A%2F%2F%2Ftmp%2Fstatus" }).statusEndpoint,
-    "/api/status",
+    "/api/v1/status",
   );
 });
 

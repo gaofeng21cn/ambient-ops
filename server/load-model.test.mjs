@@ -1,12 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  LOAD_VISUAL_MODEL_VERSION,
   loadFlowChannels,
   loadParticlePhase,
   loadSceneProfile,
   loadState,
+  machineLoadPresentation,
   singleMachineLoad,
 } from "../src/load-model.mjs";
+
+const LOAD_VISUAL_V1_VECTORS = [
+  { name: "quiet", tps: 0, sessions: 0, cpu: null, state: "quiet", score: 0, clusters: 0 },
+  { name: "active", tps: 6_000, sessions: 4, cpu: 42, state: "active", score: 0.3428208823027626, clusters: 2 },
+  { name: "heavy", tps: 60_000, sessions: 10, cpu: null, state: "heavy", score: 0.9533333333333334, clusters: 3 },
+  { name: "constrained", tps: 60_000, sessions: 10, cpu: 97, state: "constrained", score: 0.9567333333333334, clusters: 3 },
+];
 
 test("maps higher aggregate work to more, denser, faster flow", () => {
   const light = singleMachineLoad({
@@ -147,4 +156,59 @@ test("turns measured CPU pressure into visible queue and heat", () => {
   assert.ok(profile.pressure > .8);
   assert.ok(profile.queueDepth > .8);
   assert.ok(profile.heat > .8);
+});
+
+test("keeps load visual model v1 aligned with the cross-platform contract vectors", () => {
+  assert.equal(LOAD_VISUAL_MODEL_VERSION, 1);
+  for (const vector of LOAD_VISUAL_V1_VECTORS) {
+    const load = singleMachineLoad({
+      oneMinute: { tps: vector.tps },
+      activeSessions: vector.sessions,
+      cpuPercent: vector.cpu,
+    });
+    const profile = loadSceneProfile(load);
+    assert.equal(loadState(load.score, load).definition.id, vector.state, vector.name);
+    assert.ok(Math.abs(load.score - vector.score) < 1e-12, vector.name);
+    assert.equal(profile.clusterCount, vector.clusters, vector.name);
+  }
+});
+
+test("renders provider load visuals without reinterpreting their state", () => {
+  const presentation = machineLoadPresentation({
+    oneMinute: { tps: 60_000 },
+    activeSessions: 10,
+    cpuPercent: 97,
+    loadVisualState: {
+      modelVersion: 1,
+      state: "active",
+      label: "ACTIVE",
+      score: 0.22,
+      constrained: false,
+      activity: 0.31,
+      parallel: 0.27,
+      tempo: 0.8,
+      travelMs: 2_400,
+      clusterCount: 2,
+      taskDensity: 0.35,
+      pressure: 0.05,
+      queueDepth: 0.04,
+      heat: 0.06,
+    },
+  });
+
+  assert.equal(presentation.visualSource, "provider");
+  assert.equal(presentation.state.id, "active");
+  assert.equal(presentation.score, 0.22);
+  assert.equal(presentation.sceneProfile.clusterCount, 2);
+});
+
+test("falls back to local v1 calculation for legacy providers without visual state", () => {
+  const presentation = machineLoadPresentation({
+    oneMinute: { tps: 60_000 },
+    activeSessions: 10,
+    cpuPercent: 97,
+  });
+
+  assert.equal(presentation.visualSource, "fallback");
+  assert.equal(presentation.state.id, "constrained");
 });

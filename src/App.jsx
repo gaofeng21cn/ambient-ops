@@ -51,9 +51,7 @@ import {
 } from "./status-history.mjs";
 import {
   loadParticlePhase,
-  loadSceneProfile,
-  singleMachineLoad,
-  loadState,
+  machineLoadPresentation,
 } from "./load-model.mjs";
 import { shouldReduceKioskMotion } from "./kiosk-motion.mjs";
 
@@ -188,7 +186,7 @@ function PairingApproval({ requestId }) {
   );
 }
 
-function useStatus(statusEndpoint = "/api/status") {
+function useStatus(statusEndpoint = "/api/v1/status") {
   const cached = useMemo(() => {
     try { return JSON.parse(localStorage.getItem("home-status-last") || "null"); } catch { return null; }
   }, []);
@@ -349,9 +347,8 @@ function Header({ status, connection, view }) {
 function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
   if (!selected) return <section className="load-view"><EmptyState /></section>;
   const Icon = machineIcon(selected.platform);
-  const baseLoad = singleMachineLoad(selected);
-  const load = { ...baseLoad, sceneProfile: loadSceneProfile(baseLoad) };
-  const state = loadState(load.score, load).definition;
+  const load = machineLoadPresentation(selected);
+  const state = load.state;
   const shortTrendValues = historyValuesInWindow(selected.tpsHistory, 5 * 60 * 1_000);
   const loadTrendValues = historyValuesInWindow(selected.tpsHistory, LOAD_TREND_WINDOW_MS);
   const loadTrendAverage = loadTrendValues.length
@@ -433,10 +430,7 @@ function LoadPixelField({ state, machineName, load }) {
   const canvasRef = useRef(null);
   const prefersReducedMotion = usePrefersReducedMotion();
   const reduceMotion = shouldReduceKioskMotion(navigator.userAgent, prefersReducedMotion);
-  const profile = useMemo(
-    () => loadSceneProfile(load),
-    [load.score, load.sessions, load.tps, load.cpu, load.cpuPressure, load.constrained],
-  );
+  const profile = load.sceneProfile;
   const visual = useMemo(() => ({ ...profile, stateId: state.id }), [profile, state.id]);
   const visualRef = useRef(visual);
   visualRef.current = visual;

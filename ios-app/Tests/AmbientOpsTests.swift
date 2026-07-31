@@ -178,6 +178,16 @@ final class AmbientOpsTests: XCTestCase {
         XCTAssertEqual(status.network.history.count, 60)
     }
 
+    func testLiveActivityCarriesTheProviderVisualStateIntoStandBy() throws {
+        let machine = try XCTUnwrap(DemoFixtures.status().machines.first)
+        let content = LoadActivityAttributes.ContentState(machine: machine)
+
+        XCTAssertEqual(content.visual, machine.loadVisualState)
+        XCTAssertEqual(content.visual?.modelVersion, 1)
+        XCTAssertEqual(content.visual?.clusterCount, machine.loadVisualState.clusterCount)
+        XCTAssertEqual(content.visual?.travelMs, machine.loadVisualState.travelMs)
+    }
+
     @MainActor
     func testLiveModeCanDisableDemoAndClearsDemoSnapshot() {
         let suiteName = "AmbientOpsTests.demo.\(UUID().uuidString)"
@@ -289,6 +299,7 @@ final class AmbientOpsTests: XCTestCase {
         let status = try JSONDecoder().decode(AmbientStatus.self, from: Data(json.utf8))
         XCTAssertNil(status.codex.cpuPercent)
         XCTAssertNil(status.machines[0].cpuPercent)
+        XCTAssertNil(status.machines[0].loadVisualState.modelVersion)
         XCTAssertEqual(MetricFormat.percent(status.machines[0].cpuPercent), "N/A")
     }
 
