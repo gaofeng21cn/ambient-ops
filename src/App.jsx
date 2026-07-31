@@ -36,6 +36,7 @@ import {
   petSpriteKey,
   resolvePetSpriteUrl,
   selectDisplayMachine,
+  selectedMachineIdForFollowMode,
   shouldReducePetMotion,
 } from "./pet-display.mjs";
 import { fetchWithTimeout } from "./http.mjs";
@@ -282,6 +283,12 @@ function Dashboard({ status, connection, displayConnection }) {
     setSelectedMachineId(machineId);
     setMachineFollowMode("fixed");
   };
+  const changeMachineFollowMode = (nextMode) => {
+    setSelectedMachineId((current) => (
+      selectedMachineIdForFollowMode(current, selectedMachine, nextMode)
+    ));
+    setMachineFollowMode(nextMode);
+  };
 
   return (
     <div className="app-shell" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
@@ -301,7 +308,7 @@ function Dashboard({ status, connection, displayConnection }) {
             machines={status.machines}
             selected={selectedMachine}
             followMode={machineFollowMode}
-            onFollowMode={setMachineFollowMode}
+            onFollowMode={changeMachineFollowMode}
             onSelect={selectMachine}
           />
         ) : null}
@@ -310,7 +317,7 @@ function Dashboard({ status, connection, displayConnection }) {
             machines={status.machines}
             selected={selectedMachine}
             followMode={machineFollowMode}
-            onFollowMode={setMachineFollowMode}
+            onFollowMode={changeMachineFollowMode}
             onSelect={selectMachine}
           />
         ) : null}

@@ -10,6 +10,7 @@ import {
   petSpriteGrid,
   resolvePetSpriteUrl,
   selectDisplayMachine,
+  selectedMachineIdForFollowMode,
   shouldReducePetMotion,
 } from "../src/pet-display.mjs";
 
@@ -38,6 +39,17 @@ test("fixed pet display does not switch when the selected machine is unavailable
   ];
 
   assert.equal(selectDisplayMachine(machines, "wife", "fixed"), null);
+});
+
+test("fixing automatic follow captures the machine currently on screen", () => {
+  assert.equal(
+    selectedMachineIdForFollowMode("older-live", { machineId: "newer-live" }, "fixed"),
+    "newer-live",
+  );
+  assert.equal(
+    selectedMachineIdForFollowMode("older-live", { machineId: "newer-live" }, "auto"),
+    "older-live",
+  );
 });
 
 test("uses only trusted content-addressed sprite URLs and invalidates on pet updates", () => {

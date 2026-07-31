@@ -27,6 +27,11 @@ export function selectDisplayMachine(machines, selectedMachineId, followMode) {
   return candidates.find((machine) => machine.machineId === selectedMachineId) || null;
 }
 
+export function selectedMachineIdForFollowMode(selectedMachineId, displayedMachine, nextMode) {
+  if (nextMode === "fixed" && displayedMachine?.machineId) return displayedMachine.machineId;
+  return selectedMachineId;
+}
+
 export function resolvePetSpriteUrl(pet) {
   if (!pet) return null;
   if (
