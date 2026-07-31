@@ -32,6 +32,14 @@ test("automatic pet display follows the most recent live machine", () => {
   assert.equal(selectDisplayMachine(machines, "stale", "auto").machineId, "newer-live");
 });
 
+test("fixed pet display does not switch when the selected machine is unavailable", () => {
+  const machines = [
+    machine("newer-live", "Newer", "live", "2026-07-25T00:00:20.000Z"),
+  ];
+
+  assert.equal(selectDisplayMachine(machines, "wife", "fixed"), null);
+});
+
 test("uses only trusted content-addressed sprite URLs and invalidates on pet updates", () => {
   const firstHash = "a".repeat(64);
   const secondHash = "b".repeat(64);

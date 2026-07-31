@@ -26,9 +26,9 @@ def releaseSigningReady =
         && releaseKeystoreFile != null
         && releaseKeystoreFile.isFile()
 def ambientOpsVersionCode =
-    providers.gradleProperty("ambientOpsVersionCode").getOrElse("13").toInteger()
+    providers.gradleProperty("ambientOpsVersionCode").getOrElse("14").toInteger()
 def ambientOpsVersionName =
-    providers.gradleProperty("ambientOpsVersionName").getOrElse("1.2.9")
+    providers.gradleProperty("ambientOpsVersionName").getOrElse("1.2.10")
 
 android {
     namespace "cn.gaofeng.ambientops.kiosk"

@@ -24,7 +24,7 @@ export function selectDisplayMachine(machines, selectedMachineId, followMode) {
     return new Date(b.generatedAt).valueOf() - new Date(a.generatedAt).valueOf();
   })[0];
   if (followMode === "auto") return autoMachine;
-  return candidates.find((machine) => machine.machineId === selectedMachineId) || autoMachine;
+  return candidates.find((machine) => machine.machineId === selectedMachineId) || null;
 }
 
 export function resolvePetSpriteUrl(pet) {

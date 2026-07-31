@@ -231,7 +231,11 @@ function Dashboard({ status, connection, displayConnection }) {
     () => localStorage.getItem("ambient-ops-machine-id") || status.machines[0]?.machineId || null,
   );
   const [machineFollowMode, setMachineFollowMode] = useState(
-    () => localStorage.getItem("ambient-ops-machine-mode") === "fixed" ? "fixed" : "auto",
+    () => {
+      const storedMode = localStorage.getItem("ambient-ops-machine-mode");
+      if (storedMode === "auto" || storedMode === "fixed") return storedMode;
+      return localStorage.getItem("ambient-ops-machine-id") ? "fixed" : "auto";
+    },
   );
   const pointerStart = useRef(null);
   const selectedMachine = selectDisplayMachine(status.machines, selectedMachineId, machineFollowMode);
@@ -247,11 +251,11 @@ function Dashboard({ status, connection, displayConnection }) {
   }, [displayConnection.embedded, view]);
 
   useEffect(() => {
-    if (selectedMachine?.machineId) {
-      localStorage.setItem("ambient-ops-machine-id", selectedMachine.machineId);
+    if (selectedMachineId) {
+      localStorage.setItem("ambient-ops-machine-id", selectedMachineId);
     }
     localStorage.setItem("ambient-ops-machine-mode", machineFollowMode);
-  }, [machineFollowMode, selectedMachine?.machineId]);
+  }, [machineFollowMode, selectedMachineId]);
 
   const switchBy = useCallback((offset) => {
     setView((current) => VIEWS[(VIEWS.indexOf(current) + offset + VIEWS.length) % VIEWS.length]);
