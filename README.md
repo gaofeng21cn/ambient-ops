@@ -13,6 +13,31 @@
   <img src="https://img.shields.io/badge/deployment-Docker-blue.svg" alt="Docker deployment">
 </p>
 
+<p align="center">
+  <img src="./docs/assets/readme-gallery/htc-load.png" alt="Single-machine Codex load view running on an HTC 5G Hub" width="100%">
+</p>
+
+<p align="center"><sub>Real 1280×720 capture from the deployed HTC 5G Hub kiosk</sub></p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="./docs/assets/readme-gallery/htc-overview.png" alt="Overview display"></td>
+    <td width="50%"><img src="./docs/assets/readme-gallery/htc-network.png" alt="Network display"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Overview</sub></td>
+    <td align="center"><sub>Network</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="./docs/assets/readme-gallery/htc-machines.png" alt="Machines display"></td>
+    <td width="50%"><img src="./docs/assets/readme-gallery/htc-pet.png" alt="Codex pet display"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Machines</sub></td>
+    <td align="center"><sub>Pet</sub></td>
+  </tr>
+</table>
+
 <table>
   <tr>
     <td width="33%" valign="top">

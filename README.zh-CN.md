@@ -13,6 +13,31 @@
   <img src="https://img.shields.io/badge/deployment-Docker-blue.svg" alt="Docker 部署">
 </p>
 
+<p align="center">
+  <img src="./docs/assets/readme-gallery/htc-load.png" alt="HTC 5G Hub 上运行的单机 Codex 负载界面" width="100%">
+</p>
+
+<p align="center"><sub>来自已部署 HTC 5G Hub 常驻屏的 1280×720 实机截图</sub></p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="./docs/assets/readme-gallery/htc-overview.png" alt="总览界面"></td>
+    <td width="50%"><img src="./docs/assets/readme-gallery/htc-network.png" alt="网络界面"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>总览</sub></td>
+    <td align="center"><sub>网络</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="./docs/assets/readme-gallery/htc-machines.png" alt="机器界面"></td>
+    <td width="50%"><img src="./docs/assets/readme-gallery/htc-pet.png" alt="Codex 宠物界面"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>机器</sub></td>
+    <td align="center"><sub>宠物</sub></td>
+  </tr>
+</table>
+
 <table>
   <tr>
     <td width="33%" valign="top">
