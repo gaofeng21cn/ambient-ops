@@ -19,6 +19,28 @@ test("prunes inactive machines from memory and persisted state", async () => {
     assert.deepEqual([...store.machines.keys()], ["live"]);
     const saved = JSON.parse(await readFile(store.path, "utf8"));
     assert.deepEqual(saved.machines.map((entry) => entry.machineId), ["live"]);
+    assert.equal(saved.machineHistory.old, undefined);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("persists bounded per-machine TPS history across restarts", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ambient-ops-store-"));
+  try {
+    const store = new StatusStore(dataDir);
+    await store.load();
+    await store.setMachine(machine("live", "2026-07-25T00:00:00.000Z", 10));
+    await store.setMachine(machine("live", "2026-07-25T00:00:01.000Z", 20));
+    await store.setMachine(machine("live", "2026-07-25T00:00:05.000Z", 30));
+
+    const reloaded = new StatusStore(dataDir);
+    await reloaded.load();
+
+    assert.deepEqual(reloaded.machineHistory.get("live"), [
+      { at: "2026-07-25T00:00:00.000Z", tps: 20 },
+      { at: "2026-07-25T00:00:05.000Z", tps: 30 },
+    ]);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }
@@ -50,14 +72,14 @@ test("loads legacy machine state whose bundled pet has no asset hash", async () 
   }
 });
 
-function machine(machineId, receivedAt) {
+function machine(machineId, receivedAt, tps = 0) {
   return {
     machineId,
     machineName: machineId,
     generatedAt: receivedAt,
     receivedAt,
     reportedStatus: "live",
-    oneMinute: {},
+    oneMinute: { tps },
     fiveMinutes: {},
     activeSessions: 0,
   };

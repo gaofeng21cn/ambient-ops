@@ -31,6 +31,7 @@ export function buildPublicStatus(dashboard, {
       loadVisualState: true,
       network: true,
       networkHistory: true,
+      machineHistory: true,
       persistentHistory: true,
       pets: true,
       webDisplay: true,

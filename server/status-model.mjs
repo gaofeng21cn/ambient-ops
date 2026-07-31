@@ -98,7 +98,7 @@ function age(snapshot, now) {
   return Math.max(0, Math.round((now.valueOf() - new Date(snapshot.generatedAt).valueOf()) / 1000));
 }
 
-export function buildDashboard({ machines, network, history, demo }, options = {}) {
+export function buildDashboard({ machines, machineHistory = new Map(), network, history, demo }, options = {}) {
   const now = options.now || new Date();
   const liveAfterSeconds = options.liveAfterSeconds || 30;
   const staleAfterSeconds = options.staleAfterSeconds || 300;
@@ -117,7 +117,13 @@ export function buildDashboard({ machines, network, history, demo }, options = {
             : current.status === "stale" ? "waiting" : "failed",
         }
       : null;
-    return { ...snapshot, ...current, cachePercent, pet };
+    return {
+      ...snapshot,
+      ...current,
+      cachePercent,
+      pet,
+      tpsHistory: historyForMachine(machineHistory, snapshot.machineId),
+    };
   })
     .filter((machine) => machine.ageSeconds <= staleAfterSeconds)
     .sort((a, b) => b.oneMinute.tps - a.oneMinute.tps);
@@ -176,6 +182,13 @@ export function buildDashboard({ machines, network, history, demo }, options = {
     },
     machines: renderedMachines,
   };
+}
+
+function historyForMachine(machineHistory, machineId) {
+  const history = machineHistory instanceof Map
+    ? machineHistory.get(machineId)
+    : machineHistory?.[machineId];
+  return Array.isArray(history) ? history : [];
 }
 
 export function networkFreshness(network, now, liveAfterSeconds, staleAfterSeconds) {

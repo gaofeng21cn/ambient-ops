@@ -202,6 +202,36 @@ final class AmbientOpsTests: XCTestCase {
         }
     }
 
+    func testServerHistoryReplacesShortLocalHistoryAndReportsItsRealWindow() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let local = [LoadHistoryPoint(at: start.addingTimeInterval(-30), tps: 999)]
+        let server = [
+            MachineTPSHistoryPoint(at: AmbientISO8601.string(from: start.addingTimeInterval(-1_800)), tps: 12_000),
+            MachineTPSHistoryPoint(at: AmbientISO8601.string(from: start.addingTimeInterval(-900)), tps: 24_000),
+            MachineTPSHistoryPoint(at: AmbientISO8601.string(from: start), tps: 36_000),
+        ]
+
+        let merged = LoadHistorySeries.merged(
+            existing: local,
+            server: server,
+            sampleAt: start,
+            tps: 36_000
+        )
+
+        XCTAssertEqual(merged.map(\.tps), [12_000, 24_000, 36_000])
+        XCTAssertEqual(LoadHistorySeries.coveredMinutes(merged), 30)
+    }
+
+    func testLocalHistoryReportsPartialWindowWhileCollecting() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let points = [
+            LoadHistoryPoint(at: now.addingTimeInterval(-390), tps: 10),
+            LoadHistoryPoint(at: now, tps: 20),
+        ]
+
+        XCTAssertEqual(LoadHistorySeries.coveredMinutes(points), 7)
+    }
+
     @MainActor
     func testLiveModeCanDisableDemoAndClearsDemoSnapshot() {
         let suiteName = "AmbientOpsTests.demo.\(UUID().uuidString)"

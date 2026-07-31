@@ -53,6 +53,7 @@ struct AmbientStatus: Codable, Hashable, Sendable {
             capabilities: ServerCapabilities(
                 loadVisualState: false,
                 networkHistory: false,
+                machineHistory: false,
                 pets: false,
                 liveActivityPush: false,
                 network: false,
@@ -107,6 +108,7 @@ struct SiteStatus: Codable, Hashable, Sendable {
 struct ServerCapabilities: Codable, Hashable, Sendable {
     let loadVisualState: Bool
     let networkHistory: Bool
+    let machineHistory: Bool?
     let pets: Bool
     let liveActivityPush: Bool
     let network: Bool?
@@ -169,6 +171,7 @@ struct MachineStatus: Codable, Hashable, Sendable, Identifiable {
     let error: String?
     let oneMinute: TokenWindow
     let fiveMinutes: TokenWindow
+    let tpsHistory: [MachineTPSHistoryPoint]?
     let activeSessions: Double
     let cpuPercent: Double?
     let memoryPercent: Double?
@@ -179,6 +182,15 @@ struct MachineStatus: Codable, Hashable, Sendable, Identifiable {
     let loadVisualState: LoadVisualState
 
     var id: String { machineId }
+    var generatedDate: Date? { AmbientISO8601.date(from: generatedAt) }
+}
+
+struct MachineTPSHistoryPoint: Codable, Hashable, Sendable, Identifiable {
+    let at: String
+    let tps: Double
+
+    var id: String { at }
+    var atDate: Date? { AmbientISO8601.date(from: at) }
 }
 
 struct TokenWindow: Codable, Hashable, Sendable {

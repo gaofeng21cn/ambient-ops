@@ -22,6 +22,7 @@ test("projects the dashboard into a versioned mobile contract", () => {
       fiveMinutes: { tps: 42000 },
       activeSessions: 10,
       cpuPercent: 97,
+      tpsHistory: [{ at: "2026-07-30T23:59:55.000Z", tps: 58000 }],
     }],
   }, {
     instanceId: "home-ops",
@@ -40,12 +41,16 @@ test("projects the dashboard into a versioned mobile contract", () => {
   });
   assert.equal(status.capabilities.network, true);
   assert.equal(status.capabilities.loadVisualState, true);
+  assert.equal(status.capabilities.machineHistory, true);
   assert.equal(status.capabilities.persistentHistory, true);
   assert.equal(status.capabilities.webDisplay, true);
   assert.equal(status.capabilities.liveActivityPush, false);
   assert.equal(status.machines[0].loadVisualState.modelVersion, 1);
   assert.equal(status.machines[0].loadVisualState.state, "constrained");
   assert.ok(status.machines[0].loadVisualState.taskDensity > 0.8);
+  assert.deepEqual(status.machines[0].tpsHistory, [
+    { at: "2026-07-30T23:59:55.000Z", tps: 58000 },
+  ]);
 });
 
 test("preserves unknown CPU as activity rather than invented pressure", () => {

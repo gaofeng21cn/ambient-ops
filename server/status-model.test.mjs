@@ -113,6 +113,29 @@ test("dashboard aggregates machine throughput", () => {
   assert.equal(dashboard.codex.activeSessions, 5);
 });
 
+test("dashboard exposes the persisted TPS history for each rendered machine", () => {
+  const now = new Date("2026-07-25T00:00:10.000Z");
+  const machines = new Map([
+    ["a", normalizeSnapshot("a", { generatedAt: now, oneMinute: { tps: 20 } }, now)],
+  ]);
+  const machineHistory = new Map([
+    ["a", [
+      { at: "2026-07-25T00:00:05.000Z", tps: 10 },
+      { at: "2026-07-25T00:00:10.000Z", tps: 20 },
+    ]],
+  ]);
+
+  const dashboard = buildDashboard({
+    machines,
+    machineHistory,
+    network: { status: "live" },
+    history: [],
+    demo: false,
+  }, { now });
+
+  assert.deepEqual(dashboard.machines[0].tpsHistory, machineHistory.get("a"));
+});
+
 test("keeps optional host telemetry bounded and aggregates only reported live hosts", () => {
   const now = new Date("2026-07-25T00:00:10.000Z");
   const machines = new Map([

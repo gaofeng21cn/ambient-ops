@@ -84,6 +84,7 @@ enum DemoFixtures {
             capabilities: ServerCapabilities(
                 loadVisualState: true,
                 networkHistory: true,
+                machineHistory: true,
                 pets: true,
                 liveActivityPush: false,
                 network: true,
@@ -195,6 +196,7 @@ enum DemoFixtures {
                 reasoningOutputTokens: nil,
                 requests: nil
             ),
+            tpsHistory: nil,
             activeSessions: sessions,
             cpuPercent: cpu,
             memoryPercent: memory,

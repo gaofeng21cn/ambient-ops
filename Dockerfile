@@ -23,6 +23,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY server ./server
 COPY src/load-model.mjs ./src/load-model.mjs
+COPY src/status-history.mjs ./src/status-history.mjs
 COPY kiosk-release ./kiosk-release
 COPY --from=build /app/dist ./dist
 RUN mkdir -p /data && chown node:node /data

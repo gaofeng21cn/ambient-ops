@@ -36,10 +36,11 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 8) {
-                        Text(store.providerLabel)
+                        Text(largeCanvas ? store.providerLabel : (store.isFleet ? "FLEET" : "DIRECT"))
                             .font((largeCanvas ? Font.caption : .caption2).weight(.semibold))
                             .foregroundStyle(AmbientTheme.muted)
                             .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                         connectionLabel
                     }
                 }
@@ -270,18 +271,37 @@ struct HomeView: View {
         Group {
             switch store.connectionState {
             case .demo:
-                StatusPill(status: "active", label: "DEMO")
+                ToolbarStatusLabel(status: "active", label: "DEMO")
             case .disconnected:
-                StatusPill(status: "idle", label: "OFFLINE")
+                ToolbarStatusLabel(status: "idle", label: "OFFLINE")
             case .loading:
                 ProgressView().controlSize(.small)
             case .live:
-                StatusPill(status: "live")
+                ToolbarStatusLabel(status: "live")
             case .stale:
-                StatusPill(status: "stale")
+                ToolbarStatusLabel(status: "stale")
             case .error:
-                StatusPill(status: "error")
+                ToolbarStatusLabel(status: "error")
             }
+        }
+    }
+
+    private struct ToolbarStatusLabel: View {
+        let status: String
+        var label: String? = nil
+
+        var body: some View {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(AmbientTheme.statusColor(status))
+                    .frame(width: 7, height: 7)
+                Text(label ?? status.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(AmbientTheme.statusColor(status))
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityElement(children: .combine)
         }
     }
 

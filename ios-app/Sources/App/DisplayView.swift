@@ -263,9 +263,9 @@ private struct LoadDisplay: View {
     private var trend: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text("30 MIN TREND")
+                Text(trendTitle)
                 Spacer()
-                Text(history.count > 1 ? "LOCAL" : "COLLECTING")
+                Text(trendSummary)
             }
             .font(.system(size: largeCanvas ? 11 : 9, weight: .semibold))
             .foregroundStyle(AmbientTheme.muted)
@@ -276,13 +276,44 @@ private struct LoadDisplay: View {
                     y: .value("TPS", point.tps)
                 )
                 .foregroundStyle(AmbientTheme.green)
-                .interpolationMethod(.catmullRom)
+                .lineStyle(StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
             }
+            .chartYScale(domain: 0...trendScale)
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .frame(height: largeCanvas ? 80 : landscape ? 58 : 46)
+
+            HStack {
+                Text(trendStartLabel)
+                Spacer()
+                Text("NOW")
+            }
+            .font(.system(size: largeCanvas ? 9 : 7, weight: .medium))
+            .foregroundStyle(AmbientTheme.muted)
         }
         .padding(14)
+    }
+
+    private var coveredMinutes: Int {
+        LoadHistorySeries.coveredMinutes(history)
+    }
+
+    private var trendTitle: String {
+        coveredMinutes >= 30 ? "30 MIN TREND" : coveredMinutes > 0 ? "\(coveredMinutes) MIN TREND" : "LIVE TREND"
+    }
+
+    private var trendSummary: String {
+        guard history.count > 1 else { return "COLLECTING" }
+        let average = history.map(\.tps).reduce(0, +) / Double(history.count)
+        return "\(MetricFormat.tps(average)) TPS AVG"
+    }
+
+    private var trendStartLabel: String {
+        coveredMinutes > 0 ? "-\(coveredMinutes)M" : "NOW"
+    }
+
+    private var trendScale: Double {
+        max(1, history.map(\.tps).max() ?? 1) / 0.92
     }
 
     private var loadScale: some View {

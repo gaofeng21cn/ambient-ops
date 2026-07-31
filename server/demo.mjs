@@ -30,7 +30,7 @@ export function updateDemo(store, tick = Date.now()) {
   machineSeeds.forEach((seed, index) => {
     const pulse = Math.sin(phase * (1.2 + index * 0.16) + index) * seed.base * 0.08;
     const generatedAt = new Date(Date.now() - (seed.stale ? 122_000 : index * 1_800));
-    store.machines.set(seed.id, normalizeSnapshot(seed.id, {
+    const snapshot = normalizeSnapshot(seed.id, {
       machineName: seed.name,
       platform: seed.platform,
       generatedAt,
@@ -46,6 +46,8 @@ export function updateDemo(store, tick = Date.now()) {
       activeSessions: seed.sessions,
       cpuPercent: Math.max(18, Math.min(97, 34 + seed.base / 18 + Math.sin(phase * 1.6 + index) * 8)),
       memoryPercent: Math.max(22, Math.min(92, 38 + index * 10 + Math.cos(phase * 1.2) * 4)),
-    }, new Date()));
+    }, new Date());
+    store.machines.set(seed.id, snapshot);
+    store.recordMachineHistory(snapshot);
   });
 }

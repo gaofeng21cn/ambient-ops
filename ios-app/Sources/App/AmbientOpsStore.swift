@@ -44,6 +44,49 @@ struct LoadHistoryPoint: Identifiable, Hashable {
     var id: Date { at }
 }
 
+enum LoadHistorySeries {
+    static let window: TimeInterval = 30 * 60
+    static let sampleInterval: TimeInterval = 4
+    static let maximumPointCount = 360
+
+    static func merged(
+        existing: [LoadHistoryPoint],
+        server: [MachineTPSHistoryPoint]?,
+        sampleAt: Date,
+        tps: Double
+    ) -> [LoadHistoryPoint] {
+        let serverPoints = (server ?? []).compactMap { point -> LoadHistoryPoint? in
+            guard let at = point.atDate else { return nil }
+            return LoadHistoryPoint(at: at, tps: max(0, point.tps))
+        }
+        var points = serverPoints.isEmpty ? existing : serverPoints
+        points.sort { $0.at < $1.at }
+
+        if let last = points.last {
+            let elapsed = sampleAt.timeIntervalSince(last.at)
+            if elapsed == 0 {
+                points[points.count - 1] = LoadHistoryPoint(at: sampleAt, tps: max(0, tps))
+            } else if elapsed >= sampleInterval {
+                points.append(LoadHistoryPoint(at: sampleAt, tps: max(0, tps)))
+            }
+        } else {
+            points.append(LoadHistoryPoint(at: sampleAt, tps: max(0, tps)))
+        }
+
+        let cutoff = sampleAt.addingTimeInterval(-window)
+        return Array(
+            points
+                .filter { $0.at >= cutoff && $0.at <= sampleAt }
+                .suffix(maximumPointCount)
+        )
+    }
+
+    static func coveredMinutes(_ points: [LoadHistoryPoint]) -> Int {
+        guard let first = points.first?.at, let last = points.last?.at, last > first else { return 0 }
+        return min(30, max(1, Int(ceil(last.timeIntervalSince(first) / 60))))
+    }
+}
+
 @MainActor
 @Observable
 final class AmbientOpsStore {
@@ -345,13 +388,14 @@ final class AmbientOpsStore {
 
     private func recordHistory(_ snapshot: AmbientStatus) {
         let now = snapshot.generatedDate ?? .now
-        let cutoff = now.addingTimeInterval(-30 * 60)
+        let cutoff = now.addingTimeInterval(-LoadHistorySeries.window)
         for machine in snapshot.machines {
-            var points = loadHistory[machine.machineId, default: []]
-            if points.last.map({ now.timeIntervalSince($0.at) >= 4 }) ?? true {
-                points.append(LoadHistoryPoint(at: now, tps: machine.oneMinute.tps))
-            }
-            loadHistory[machine.machineId] = Array(points.filter { $0.at >= cutoff }.suffix(360))
+            loadHistory[machine.machineId] = LoadHistorySeries.merged(
+                existing: loadHistory[machine.machineId, default: []],
+                server: machine.tpsHistory,
+                sampleAt: machine.generatedDate ?? now,
+                tps: machine.oneMinute.tps
+            )
         }
         guard
             !snapshot.capabilities.networkHistory,

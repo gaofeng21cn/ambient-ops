@@ -146,6 +146,7 @@ function dashboard() {
     site: { name: config.siteName, timeZone: config.displayTimeZone },
     ...buildDashboard({
       machines: store.machines,
+      machineHistory: store.machineHistory,
       network: store.network,
       history: store.networkHistory,
       demo: config.demo,

@@ -1,11 +1,13 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { appendHistorySample } from "../src/status-history.mjs";
 
 export class StatusStore {
   constructor(dataDir, { networkPersistIntervalMs = 5000 } = {}) {
     this.dataDir = dataDir;
     this.path = join(dataDir, "state.json");
     this.machines = new Map();
+    this.machineHistory = new Map();
     this.network = { status: "error", source: "unconfigured", error: "UniFi is not configured" };
     this.networkHistory = [];
     this.persistChain = Promise.resolve();
@@ -20,6 +22,12 @@ export class StatusStore {
     try {
       const saved = JSON.parse(await readFile(this.path, "utf8"));
       this.machines = new Map((saved.machines || []).map((machine) => [machine.machineId, machine]));
+      this.machineHistory = new Map(
+        Object.entries(saved.machineHistory || {}).map(([machineId, history]) => [
+          machineId,
+          Array.isArray(history) ? history.slice(-1_000) : [],
+        ]),
+      );
       this.network = saved.network || this.network;
       this.networkHistory = (saved.networkHistory || []).slice(-300);
     } catch (error) {
@@ -29,11 +37,13 @@ export class StatusStore {
 
   setMachine(snapshot) {
     this.machines.set(snapshot.machineId, snapshot);
+    this.recordMachineHistory(snapshot);
     return this.persist();
   }
 
   async removeMachine(machineId) {
     if (!this.machines.delete(machineId)) return false;
+    this.machineHistory.delete(machineId);
     await this.persist();
     return true;
   }
@@ -45,6 +55,7 @@ export class StatusStore {
       const receivedAt = new Date(snapshot.receivedAt || snapshot.generatedAt).valueOf();
       if (!Number.isFinite(receivedAt) || receivedAt < cutoff) {
         this.machines.delete(machineId);
+        this.machineHistory.delete(machineId);
         removed.push(machineId);
       }
     }
@@ -75,6 +86,7 @@ export class StatusStore {
     this.networkDirty = false;
     const body = JSON.stringify({
       machines: [...this.machines.values()],
+      machineHistory: Object.fromEntries(this.machineHistory),
       network: this.network,
       networkHistory: this.networkHistory,
     }, null, 2);
@@ -98,5 +110,16 @@ export class StatusStore {
       if (this.networkDirty) this.persist();
     }, this.networkPersistIntervalMs);
     this.networkPersistTimer.unref?.();
+  }
+
+  recordMachineHistory(snapshot) {
+    const history = appendHistorySample(
+      this.machineHistory.get(snapshot.machineId),
+      {
+        at: snapshot.generatedAt,
+        tps: snapshot.oneMinute?.tps,
+      },
+    );
+    this.machineHistory.set(snapshot.machineId, history);
   }
 }

@@ -1503,7 +1503,10 @@ function mergeStatusHistory(previous, next) {
   const machines = (next.machines || []).map((machine) => {
     const prior = previousMachines.get(machine.machineId);
     const sample = { at: machine.generatedAt, tps: Number(machine.oneMinute?.tps || 0) };
-    return { ...machine, tpsHistory: appendHistorySample(prior?.tpsHistory, sample) };
+    const sourceHistory = Array.isArray(machine.tpsHistory)
+      ? machine.tpsHistory
+      : prior?.tpsHistory;
+    return { ...machine, tpsHistory: appendHistorySample(sourceHistory, sample) };
   });
   const codexHistory = appendHistorySample(previous?.codex?.tpsHistory, {
     at: next.generatedAt,
