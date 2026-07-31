@@ -33,6 +33,8 @@ struct HomeView: View {
             switch store.connectionState {
             case .demo:
                 StatusPill(status: "active", label: "DEMO")
+            case .disconnected:
+                StatusPill(status: "idle", label: "OFFLINE")
             case .loading:
                 ProgressView().controlSize(.small)
             case .live:

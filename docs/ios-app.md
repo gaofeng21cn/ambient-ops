@@ -39,6 +39,10 @@ interfaces before connecting a local server.
 3. The app explains why local-network access is needed before Bonjour discovery
    triggers the system permission dialog.
 
+Turning Demo Mode off follows the same path: it clears demo metrics immediately,
+reuses a saved server address when available, or offers local-network discovery
+when no server has been configured.
+
 Discovery uses `_ambient-ops._tcp`. The app requests only the public aggregate
 status endpoint. Server, Codex TPS, and router credentials remain outside the app.
 

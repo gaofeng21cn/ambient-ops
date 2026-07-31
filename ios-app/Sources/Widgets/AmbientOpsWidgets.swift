@@ -170,7 +170,7 @@ private struct LoadGlyph: View {
 struct AmbientLoadLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: LoadActivityAttributes.self) { context in
-            LiveActivityLockScreen(context: context)
+            LiveActivitySurface(state: context.state)
                 .activityBackgroundTint(AmbientTheme.surface)
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
@@ -213,42 +213,104 @@ struct AmbientLoadLiveActivity: Widget {
     }
 }
 
-private struct LiveActivityLockScreen: View {
-    let context: ActivityViewContext<LoadActivityAttributes>
+private struct LiveActivitySurface: View {
+    let state: LoadActivityAttributes.ContentState
 
     var body: some View {
-        HStack(spacing: 14) {
+        ViewThatFits(in: .horizontal) {
+            standBy
+                .frame(minWidth: 520)
+            lockScreen
+        }
+        .widgetURL(URL(string: "ambientops://display/load"))
+    }
+
+    private var standBy: some View {
+        HStack(spacing: 28) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(context.state.machineName)
+                Text(state.machineName)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text(LoadStatePalette.label(for: state.state))
+                    .font(.system(size: 42, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AmbientTheme.statusColor(state.state))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.68)
+                HStack(spacing: 14) {
+                    Label("\(MetricFormat.tps(state.tps)) TPS", systemImage: "waveform.path.ecg")
+                    Label(
+                        "\(MetricFormat.integer(state.activeSessions)) active",
+                        systemImage: "bubble.left.and.bubble.right"
+                    )
+                    Text("CPU \(MetricFormat.percent(state.cpuPercent))")
+                }
+                .font(.subheadline.monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+
+            glyph
+                .frame(minWidth: 180, idealWidth: 260, maxWidth: 320, minHeight: 72, idealHeight: 90)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+    }
+
+    private var lockScreen: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(state.machineName)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text(LoadStatePalette.label(for: context.state.state))
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(AmbientTheme.statusColor(context.state.state))
-                Text("\(MetricFormat.tps(context.state.tps)) TPS · \(MetricFormat.integer(context.state.activeSessions)) active")
-                    .font(.caption.monospacedDigit())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                Text(LoadStatePalette.label(for: state.state))
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(AmbientTheme.statusColor(state.state))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.62)
+                ViewThatFits(in: .horizontal) {
+                    Text(
+                        "\(MetricFormat.tps(state.tps)) TPS · "
+                            + "\(MetricFormat.integer(state.activeSessions)) active"
+                    )
+                    Text("\(MetricFormat.tps(state.tps)) TPS")
+                }
+                .font(.caption2.monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.68)
             }
-            Spacer()
-            LoadGlyph(
-                visual: LoadVisualState(
-                    state: context.state.state,
-                    label: context.state.state.uppercased(),
-                    score: context.state.score,
-                    constrained: context.state.state == "constrained",
-                    activity: context.state.score,
-                    parallel: min(1, context.state.activeSessions / 12),
-                    tempo: 1,
-                    travelMs: 1_500,
-                    clusterCount: max(1, min(4, Int(context.state.activeSessions / 3))),
-                    taskDensity: context.state.score,
-                    pressure: context.state.state == "constrained" ? 1 : 0,
-                    queueDepth: context.state.state == "constrained" ? 1 : 0,
-                    heat: context.state.state == "constrained" ? 1 : 0
-                )
-            )
-            .frame(width: 90, height: 54)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+
+            glyph
+                .frame(width: 68, height: 44)
         }
-        .padding(.horizontal, 4)
-        .widgetURL(URL(string: "ambientops://display/load"))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    }
+
+    private var glyph: some View {
+        LoadGlyph(
+            visual: LoadVisualState(
+                state: state.state,
+                label: state.state.uppercased(),
+                score: state.score,
+                constrained: state.state == "constrained",
+                activity: state.score,
+                parallel: min(1, state.activeSessions / 12),
+                tempo: 1,
+                travelMs: 1_500,
+                clusterCount: max(1, min(4, Int(state.activeSessions / 3))),
+                taskDensity: state.score,
+                pressure: state.state == "constrained" ? 1 : 0,
+                queueDepth: state.state == "constrained" ? 1 : 0,
+                heat: state.state == "constrained" ? 1 : 0
+            )
+        )
     }
 }

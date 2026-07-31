@@ -2,7 +2,7 @@
 # file by itself, so LAN discovery must not depend on a second override file.
 services:
   ambient-ops:
-    image: ${AMBIENT_OPS_IMAGE:-ghcr.io/gaofeng21cn/ambient-ops:0.1.25}
+    image: ${AMBIENT_OPS_IMAGE:-ghcr.io/gaofeng21cn/ambient-ops:0.1.26}
     network_mode: host
     restart: unless-stopped
     init: true

@@ -341,6 +341,16 @@
         }
       }
     },
+    "StandBy & Lock Screen" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待机显示与锁定屏幕"
+          }
+        }
+      }
+    },
     "Local discovery could not start." : {
       "localizations" : {
         "zh-Hans" : {

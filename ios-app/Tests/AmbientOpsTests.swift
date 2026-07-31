@@ -71,6 +71,7 @@ final class AmbientOpsTests: XCTestCase {
             "Allow Local Network Access?",
             "Start Load Live Activity",
             "End Live Activity",
+            "StandBy & Lock Screen",
             "Privacy",
         ]
 
@@ -102,6 +103,33 @@ final class AmbientOpsTests: XCTestCase {
         XCTAssertEqual(states, Set(["quiet", "active", "heavy", "constrained"]))
         XCTAssertNil(status.machines.first(where: { $0.machineId == "notebook" })?.cpuPercent)
         XCTAssertEqual(status.network.history.count, 60)
+    }
+
+    @MainActor
+    func testLiveModeCanDisableDemoAndClearsDemoSnapshot() {
+        let defaults = UserDefaults.standard
+        let demoKey = "ambient-ops.demo-mode"
+        let previousDemoValue = defaults.object(forKey: demoKey)
+        defer {
+            if let previousDemoValue {
+                defaults.set(previousDemoValue, forKey: demoKey)
+            } else {
+                defaults.removeObject(forKey: demoKey)
+            }
+        }
+
+        defaults.set(true, forKey: demoKey)
+        let store = AmbientOpsStore()
+        XCTAssertTrue(store.isDemoMode)
+        XCTAssertTrue(store.status.demo)
+
+        store.useLiveMode()
+
+        XCTAssertFalse(store.isDemoMode)
+        XCTAssertEqual(store.connectionState, .disconnected)
+        XCTAssertFalse(store.status.demo)
+        XCTAssertTrue(store.status.machines.isEmpty)
+        XCTAssertEqual(defaults.object(forKey: demoKey) as? Bool, false)
     }
 
     func testUnknownCPUDecodesAsNil() throws {

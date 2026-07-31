@@ -28,6 +28,51 @@ struct AmbientStatus: Codable, Hashable, Sendable {
             return $0.oneMinute.tps > $1.oneMinute.tps
         }.first
     }
+
+    static func unavailable(now: Date = .now) -> AmbientStatus {
+        AmbientStatus(
+            schemaVersion: 1,
+            serverVersion: "—",
+            instanceId: "",
+            generatedAt: AmbientISO8601.string(from: now),
+            demo: false,
+            site: SiteStatus(name: "Ambient Ops", timeZone: TimeZone.current.identifier),
+            overallStatus: "error",
+            capabilities: ServerCapabilities(
+                loadVisualState: false,
+                networkHistory: false,
+                pets: false,
+                liveActivityPush: false
+            ),
+            network: NetworkStatus(
+                status: "error",
+                source: nil,
+                downloadMbps: nil,
+                uploadMbps: nil,
+                clients: nil,
+                latencyMs: nil,
+                updatedAt: nil,
+                error: nil,
+                ageSeconds: nil,
+                history: []
+            ),
+            codex: CodexStatus(
+                status: "error",
+                oneMinuteTps: 0,
+                fiveMinuteTps: 0,
+                cachePercent: 0,
+                activeSessions: 0,
+                cpuPercent: nil,
+                cpuReportedMachineCount: 0,
+                memoryPercent: nil,
+                memoryReportedMachineCount: 0,
+                machineCount: 0,
+                liveMachineCount: 0,
+                staleMachineCount: 0
+            ),
+            machines: []
+        )
+    }
 }
 
 struct SiteStatus: Codable, Hashable, Sendable {

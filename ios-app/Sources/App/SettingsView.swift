@@ -15,6 +15,13 @@ struct SettingsView: View {
                             set: { enabled in
                                 if enabled {
                                     store.useDemoMode()
+                                } else {
+                                    store.useLiveMode()
+                                    if AmbientOpsClient.normalizedServerURL(store.serverAddress) != nil {
+                                        Task { await store.connect() }
+                                    } else {
+                                        showDiscoveryExplanation = true
+                                    }
                                 }
                             }
                         )
@@ -58,7 +65,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Lock Screen") {
+                Section("StandBy & Lock Screen") {
                     Button {
                         guard let machine = store.selectedMachine else { return }
                         Task { await store.liveActivity.start(status: store.status, machine: machine) }

@@ -3,6 +3,7 @@ import Observation
 
 enum AppConnectionState: Equatable {
     case demo
+    case disconnected
     case loading
     case live
     case stale
@@ -72,7 +73,7 @@ final class AmbientOpsStore {
         let initialDemo = defaults.object(forKey: Keys.demoMode) as? Bool ?? true
         serverAddress = defaults.string(forKey: Keys.serverURL) ?? ""
         selectedMachineID = defaults.string(forKey: Keys.selectedMachineID)
-        status = DemoFixtures.status()
+        status = initialDemo ? DemoFixtures.status() : .unavailable()
 
         discovery.onChange = { [weak self] servers in
             self?.discoveredServers = servers
@@ -87,7 +88,7 @@ final class AmbientOpsStore {
         } else if AmbientOpsClient.normalizedServerURL(serverAddress) != nil {
             Task { await connect() }
         } else {
-            useDemoMode()
+            useLiveMode()
         }
     }
 
@@ -121,17 +122,28 @@ final class AmbientOpsStore {
         SharedSnapshotStore.save(status, focusedMachineID: selectedMachine?.machineId)
     }
 
+    func useLiveMode() {
+        refreshTask?.cancel()
+        discovery.stop()
+        isDiscovering = false
+        if status.demo {
+            status = .unavailable()
+            loadHistory = [:]
+        }
+        connectionState = .disconnected
+        UserDefaults.standard.set(false, forKey: Keys.demoMode)
+    }
+
     func connect() async {
+        useLiveMode()
         guard let serverURL = AmbientOpsClient.normalizedServerURL(serverAddress) else {
             connectionState = .error(AmbientOpsClientError.invalidServerURL.localizedDescription)
             return
         }
-        refreshTask?.cancel()
         connectionState = .loading
+        UserDefaults.standard.set(serverAddress, forKey: Keys.serverURL)
         do {
             try await fetch(serverURL)
-            UserDefaults.standard.set(false, forKey: Keys.demoMode)
-            UserDefaults.standard.set(serverAddress, forKey: Keys.serverURL)
             scheduleRefresh(serverURL)
         } catch {
             connectionState = .error(error.localizedDescription)
@@ -151,9 +163,11 @@ final class AmbientOpsStore {
     }
 
     func startDiscovery() {
+        useLiveMode()
         hasExplainedLocalNetwork = true
         isDiscovering = true
         discoveredServers = []
+        connectionState = .loading
         discovery.start()
     }
 
