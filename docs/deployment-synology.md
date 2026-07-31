@@ -204,17 +204,84 @@ complete agent and APK installation commands.
 
 ## Upgrade and rollback
 
+### Restricted SSH deployment
+
+For a NAS that is administered repeatedly, install the repository-owned
+restricted deploy command once. It is safer than granting a user access to the
+Docker socket: Docker access is effectively root access, while this command is
+limited to the Ambient Ops project, image repository, and validation contract.
+
+The one-time installer creates:
+
+- `/usr/local/sbin/ambient-ops-deploy`, owned by root and not writable by the
+  SSH user;
+- `/etc/sudoers.d/ambient-ops-deploy`, allowing `gaofeng` to run only that
+  command without a password;
+- `/volume1/.ambient-ops-deploy`, a root-controlled runtime directory copied
+  from the existing `/volume1/docker/ambient-ops` configuration.
+
+The root-controlled directory is intentional. A privileged deployer must not
+read Compose or environment files from a user-writable parent directory. The
+installer preserves the existing `.env`, secrets, `INSTANCE_ID`, agent token,
+and Compose project name, so the named data volume remains
+`ambient-ops_ambient_ops_data`.
+
+Stage the three reviewed files together:
+
+```text
+ambient-ops-deploy
+install-deploy-command.sh
+compose.yaml
+```
+
+From that staging directory, run the installer once as root:
+
+```bash
+sudo /bin/sh ./install-deploy-command.sh
+```
+
+Then verify from the ordinary SSH account:
+
+```bash
+sudo -n /usr/local/sbin/ambient-ops-deploy --check
+```
+
+Ordinary upgrades then need no DSM browser session and no password. Supply both
+the semantic version and the reviewed multi-architecture OCI index digest:
+
+```bash
+sudo -n /usr/local/sbin/ambient-ops-deploy deploy \
+  0.1.26 \
+  sha256:a3a34a6ebb43ea94e3498c22f87e5c876f62093cc14859984135ab8cf9c67453
+```
+
+The command:
+
+1. rejects other image repositories, malformed versions, and malformed digests;
+2. serializes deployments with `flock`;
+3. pulls and verifies the exact `tag@digest`;
+4. atomically updates only `AMBIENT_OPS_IMAGE`;
+5. validates the rendered Compose security and networking contract;
+6. recreates the service without deleting volumes;
+7. requires live `/healthz` plus the versioned `/api/v1/status`;
+8. restores the previous `.env` and service automatically on failure.
+
+It never calls `docker compose down` and has no path that accepts `-v`.
+Arbitrary Docker commands remain password-protected. A release that changes the
+Compose structure requires reviewing and rerunning the one-time installer; an
+ordinary image-only release does not.
+
+### Manual path
+
 Pin and record source commits. Qualify the new commit with
-`./ops/docker/smoke-test.sh`, then recreate the service with both Compose files:
+`./ops/docker/smoke-test.sh`, then recreate the service:
 
 ```bash
 docker compose -p ambient-ops \
   -f compose.yaml \
-  -f compose.host-network.yaml \
   pull
 docker compose -p ambient-ops \
   -f compose.yaml \
-  -f compose.host-network.yaml \
   up -d
 ```
 

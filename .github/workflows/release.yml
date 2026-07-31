@@ -28,6 +28,7 @@ jobs:
           }
       - run: npm ci
       - run: npm test
+      - run: ./ops/synology/deploy.test.sh
       - run: npm run build
       - run: ./ops/docker/smoke-test.sh
       - uses: actions/setup-java@v4
