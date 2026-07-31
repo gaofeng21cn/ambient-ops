@@ -261,6 +261,13 @@ enum LoadStatePalette {
         default: state.uppercased()
         }
     }
+
+    static func compactLabel(for state: String) -> String {
+        switch state {
+        case "constrained": "LIMITED"
+        default: label(for: state)
+        }
+    }
 }
 
 extension Double {

@@ -80,11 +80,13 @@ struct AmbientLoadWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: AmbientLoadProvider()) { entry in
             AmbientLoadWidgetView(entry: entry)
+                .environment(\.colorScheme, .dark)
                 .containerBackground(AmbientTheme.surface, for: .widget)
         }
         .configurationDisplayName("Codex Load")
         .description("See the focused Codex host's current development load.")
         .supportedFamilies([.accessoryRectangular, .systemSmall, .systemMedium])
+        .contentMarginsDisabled()
     }
 }
 
@@ -105,106 +107,272 @@ private struct AmbientLoadWidgetView: View {
 
     private var accessory: some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text(MetricFormat.tps(entry.machine.oneMinute.tps))
+                    .font(.headline.monospacedDigit().weight(.bold))
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.68)
+                    .layoutPriority(1)
+                Text("TPS")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 2)
+                LoadStateBadge(state: entry.machine.loadVisualState.state, compact: true)
+            }
+            HStack(spacing: 5) {
                 Text(entry.machine.machineName)
                     .lineLimit(1)
-                Spacer()
-                Text(LoadStatePalette.label(for: entry.machine.loadVisualState.state))
-                    .fontWeight(.bold)
-            }
-            .font(.caption)
-            HStack(spacing: 6) {
-                Text("\(MetricFormat.tps(entry.machine.oneMinute.tps)) TPS")
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.62)
-                Text("·")
-                Text("\(MetricFormat.integer(entry.machine.activeSessions)) active")
+                    .truncationMode(.middle)
+                Spacer(minLength: 2)
+                Label(
+                    MetricFormat.integer(entry.machine.activeSessions),
+                    systemImage: "bubble.left.and.bubble.right.fill"
+                )
+                    .labelStyle(.titleAndIcon)
+                    .fixedSize()
             }
             .font(.caption2)
-            LoadGlyph(visual: entry.machine.loadVisualState)
-                .frame(height: 7)
+            LoadGlyph(
+                visual: entry.machine.loadVisualState,
+                phase: entry.date,
+                compact: true
+            )
+            .frame(height: 8)
         }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 3)
         .widgetURL(URL(string: "ambientops://display/load"))
     }
 
     private var small: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Image(systemName: "waveform.path.ecg.rectangle")
-                Spacer()
-                Circle()
-                    .fill(AmbientTheme.statusColor(entry.machine.status))
-                    .frame(width: 7, height: 7)
-            }
-            Text(LoadStatePalette.label(for: entry.machine.loadVisualState.state))
-                .font(.headline)
-                .foregroundStyle(AmbientTheme.statusColor(entry.machine.loadVisualState.state))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(entry.machine.machineName)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Spacer()
-            Text("\(MetricFormat.tps(entry.machine.oneMinute.tps)) TPS")
-                .font(.title3.monospacedDigit().weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.62)
-            LoadGlyph(visual: entry.machine.loadVisualState)
-                .frame(height: 12)
-        }
-        .widgetURL(URL(string: "ambientops://display/load"))
-    }
-
-    private var medium: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                LoadPulse(state: entry.machine.loadVisualState.state, phase: entry.date)
                 Text(entry.machine.machineName)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text(LoadStatePalette.label(for: entry.machine.loadVisualState.state))
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(AmbientTheme.statusColor(entry.machine.loadVisualState.state))
-                Spacer()
-                Text("\(MetricFormat.tps(entry.machine.oneMinute.tps)) TPS")
-                    .font(.title.monospacedDigit().weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.62)
+                    .truncationMode(.middle)
+                Spacer(minLength: 3)
+                Circle()
+                    .fill(AmbientTheme.statusColor(entry.machine.status))
+                    .frame(width: 7, height: 7)
             }
-            LoadGlyph(visual: entry.machine.loadVisualState)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            HStack(alignment: .lastTextBaseline, spacing: 5) {
+                Text(MetricFormat.tps(entry.machine.oneMinute.tps))
+                    .font(.system(size: 29, weight: .bold, design: .rounded).monospacedDigit())
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .layoutPriority(1)
+                Text("TPS")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 2)
+            }
+
+            LoadGlyph(visual: entry.machine.loadVisualState, phase: entry.date)
+                .frame(maxHeight: .infinity)
+
+            HStack(alignment: .bottom, spacing: 9) {
+                Text(LoadStatePalette.compactLabel(for: entry.machine.loadVisualState.state))
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(AmbientTheme.statusColor(entry.machine.loadVisualState.state))
+                    .lineLimit(1)
+                    .accessibilityLabel(
+                        LoadStatePalette.label(for: entry.machine.loadVisualState.state)
+                    )
+                Spacer(minLength: 4)
+                CompactMetric(
+                    label: "ACT",
+                    value: MetricFormat.integer(entry.machine.activeSessions)
+                )
+                CompactMetric(
+                    label: "CPU",
+                    value: MetricFormat.percent(entry.machine.cpuPercent)
+                )
+            }
         }
+        .padding(12)
+        .widgetURL(URL(string: "ambientops://display/load"))
+    }
+
+    private var medium: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                LoadPulse(state: entry.machine.loadVisualState.state, phase: entry.date)
+                Text(entry.machine.machineName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 8)
+                LoadStateBadge(state: entry.machine.loadVisualState.state)
+            }
+
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .lastTextBaseline, spacing: 6) {
+                        Text(MetricFormat.tps(entry.machine.oneMinute.tps))
+                            .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
+                            .contentTransition(.numericText())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                        Text("TPS")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 20) {
+                        CompactMetric(
+                            label: "ACTIVE",
+                            value: MetricFormat.integer(entry.machine.activeSessions)
+                        )
+                        CompactMetric(
+                            label: "CPU",
+                            value: MetricFormat.percent(entry.machine.cpuPercent)
+                        )
+                    }
+                }
+                .frame(maxWidth: 150, alignment: .leading)
+
+                LoadGlyph(visual: entry.machine.loadVisualState, phase: entry.date)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .padding(14)
         .widgetURL(URL(string: "ambientops://display/load"))
     }
 }
 
 private struct LoadGlyph: View {
     let visual: LoadVisualState
+    var phase: Date = .now
+    var compact = false
 
     var body: some View {
         Canvas { context, size in
             let color = AmbientTheme.statusColor(visual.state)
-            let count = visual.clusterCount == 0 ? 0 : Int(8 + visual.taskDensity * 26)
-            let bands = max(1, visual.clusterCount)
+            let laneCount = max(1, min(4, visual.clusterCount))
+            let hasWork = visual.clusterCount > 0 && visual.taskDensity > 0.01
+            let inset = compact ? CGFloat(1) : CGFloat(4)
+            let usableHeight = max(1, size.height - inset * 2)
+            let laneSpacing = usableHeight / CGFloat(laneCount)
+            let packetsPerLane = max(1, Int(2 + visual.taskDensity.clamped(to: 0...1) * 5))
+            let travelSeconds = max(0.75, visual.travelMs / 1_000)
+            let timePhase = phase.timeIntervalSinceReferenceDate / travelSeconds
+            let packetHeight = max(1.5, min(compact ? 2 : 4, laneSpacing * 0.34))
+            let trackEnd = max(inset + 8, size.width - inset - 7)
 
-            let baseline = Path(CGRect(x: 0, y: size.height / 2, width: size.width, height: 1))
-            context.fill(baseline, with: .color(.secondary.opacity(0.18)))
-
-            for index in 0..<count {
-                let progress = CGFloat(index + 1) / CGFloat(max(1, count + 1))
-                let band = CGFloat(index % bands) - CGFloat(bands - 1) / 2
-                let y = size.height / 2 + band * min(9, size.height / CGFloat(bands + 1))
-                let rect = CGRect(
-                    x: progress * size.width,
-                    y: y,
-                    width: index.isMultiple(of: 6) ? 4 : 2,
-                    height: 2
+            for lane in 0..<laneCount {
+                let y = inset + laneSpacing * (CGFloat(lane) + 0.5)
+                let track = Path(
+                    CGRect(
+                        x: inset,
+                        y: y - 0.5,
+                        width: max(1, trackEnd - inset),
+                        height: 1
+                    )
                 )
-                context.fill(Path(rect), with: .color(index.isMultiple(of: 5) ? AmbientTheme.blue : color))
+                context.fill(track, with: .color(.secondary.opacity(hasWork ? 0.22 : 0.12)))
+
+                var arrow = Path()
+                arrow.move(to: CGPoint(x: size.width - inset - 6, y: y - 3))
+                arrow.addLine(to: CGPoint(x: size.width - inset, y: y))
+                arrow.addLine(to: CGPoint(x: size.width - inset - 6, y: y + 3))
+                context.stroke(arrow, with: .color(color.opacity(hasWork ? 0.55 : 0.18)), lineWidth: 1)
+
+                guard hasWork else { continue }
+                for packet in 0..<packetsPerLane {
+                    let seed = Double(packet) / Double(packetsPerLane)
+                        + Double(lane) * 0.173
+                    let speed = max(0.25, visual.tempo) * (0.12 + Double(lane) * 0.012)
+                    let progress = (seed + timePhase * speed).truncatingRemainder(dividingBy: 1)
+                    let packetWidth = CGFloat(packet.isMultiple(of: 3) ? 8 : 5)
+                    let x = inset + CGFloat(progress) * max(1, trackEnd - inset - packetWidth)
+                    let packetRect = CGRect(
+                        x: x,
+                        y: y - packetHeight / 2,
+                        width: packetWidth,
+                        height: packetHeight
+                    )
+                    let packetColor = packet.isMultiple(of: 4) ? AmbientTheme.blue : color
+                    context.fill(
+                        Path(packetRect),
+                        with: .color(packetColor.opacity(0.62 + visual.heat.clamped(to: 0...1) * 0.3))
+                    )
+                }
             }
         }
+        .background {
+            RoundedRectangle(cornerRadius: compact ? 2 : 4)
+                .fill(AmbientTheme.elevated.opacity(compact ? 0.28 : 0.58))
+                .overlay(alignment: .top) {
+                    if visual.pressure > 0.15 {
+                        Rectangle()
+                            .fill(AmbientTheme.statusColor(visual.state).opacity(0.5))
+                            .frame(height: 1)
+                    }
+                }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: compact ? 2 : 4))
+        .animation(.easeOut(duration: 0.45), value: visual.normalizedScore)
         .accessibilityHidden(true)
+    }
+}
+
+private struct LoadPulse: View {
+    let state: String
+    let phase: Date
+
+    var body: some View {
+        Image(systemName: "bolt.horizontal.fill")
+            .font(.caption.weight(.bold))
+            .foregroundStyle(AmbientTheme.statusColor(state))
+            .symbolEffect(.pulse.byLayer, value: phase)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct LoadStateBadge: View {
+    let state: String
+    var compact = false
+
+    var body: some View {
+        HStack(spacing: compact ? 4 : 6) {
+            Circle()
+                .fill(AmbientTheme.statusColor(state))
+                .frame(width: compact ? 5 : 7, height: compact ? 5 : 7)
+            Text(compact ? LoadStatePalette.compactLabel(for: state) : LoadStatePalette.label(for: state))
+                .lineLimit(1)
+        }
+        .font((compact ? Font.caption2 : .caption).weight(.bold))
+        .foregroundStyle(AmbientTheme.statusColor(state))
+        .padding(.horizontal, compact ? 5 : 8)
+        .frame(height: compact ? 18 : 24)
+        .background(AmbientTheme.statusColor(state).opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .accessibilityLabel(LoadStatePalette.label(for: state))
+    }
+}
+
+private struct CompactMetric: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.caption.monospacedDigit().weight(.bold))
+                .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
     }
 }
 
@@ -212,6 +380,7 @@ struct AmbientLoadLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: LoadActivityAttributes.self) { context in
             LiveActivitySurface(state: context.state)
+                .environment(\.colorScheme, .dark)
                 .activityBackgroundTint(AmbientTheme.surface)
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
@@ -219,26 +388,43 @@ struct AmbientLoadLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(context.state.machineName)
-                            .font(.caption)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
-                        Text(LoadStatePalette.label(for: context.state.state))
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(AmbientTheme.statusColor(context.state.state))
+                            .truncationMode(.middle)
+                        LoadStateBadge(state: context.state.state, compact: true)
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(MetricFormat.tps(context.state.tps))
-                        .font(.title3.monospacedDigit().weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.62)
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text(MetricFormat.tps(context.state.tps))
+                            .font(.title3.monospacedDigit().weight(.bold))
+                            .contentTransition(.numericText())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.58)
+                        Text("TPS")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack {
-                        Label("\(MetricFormat.integer(context.state.activeSessions))", systemImage: "bubble.left.and.bubble.right")
-                        Spacer()
-                        Text("CPU \(MetricFormat.percent(context.state.cpuPercent))")
+                    VStack(spacing: 5) {
+                        LoadGlyph(
+                            visual: visual(for: context.state),
+                            phase: context.state.updatedAt,
+                            compact: true
+                        )
+                        .frame(height: 12)
+                        HStack {
+                            Label(
+                                MetricFormat.integer(context.state.activeSessions),
+                                systemImage: "bubble.left.and.bubble.right.fill"
+                            )
+                            Spacer()
+                            Text("CPU \(MetricFormat.percent(context.state.cpuPercent))")
+                        }
+                        .font(.caption2.monospacedDigit().weight(.semibold))
                     }
-                    .font(.caption)
                 }
             } compactLeading: {
                 Image(systemName: "waveform.path.ecg")
@@ -256,91 +442,138 @@ struct AmbientLoadLiveActivity: Widget {
             .keylineTint(AmbientTheme.statusColor(context.state.state))
         }
     }
+
+    private func visual(for state: LoadActivityAttributes.ContentState) -> LoadVisualState {
+        state.visual ?? LoadVisualState(
+            modelVersion: nil,
+            state: state.state,
+            label: state.state.uppercased(),
+            score: state.score,
+            constrained: state.state == "constrained",
+            activity: state.score,
+            parallel: min(1, state.activeSessions / 12),
+            tempo: 1,
+            travelMs: 1_500,
+            clusterCount: max(1, min(4, Int(state.activeSessions / 3))),
+            taskDensity: state.score,
+            pressure: state.state == "constrained" ? 1 : 0,
+            queueDepth: state.state == "constrained" ? 1 : 0,
+            heat: state.state == "constrained" ? 1 : 0
+        )
+    }
 }
 
 private struct LiveActivitySurface: View {
     let state: LoadActivityAttributes.ContentState
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
+        ViewThatFits(in: [.horizontal, .vertical]) {
             standBy
-                .frame(minWidth: 520)
+                .frame(minWidth: 560, minHeight: 170)
             lockScreen
         }
         .widgetURL(URL(string: "ambientops://display/load"))
     }
 
     private var standBy: some View {
-        HStack(spacing: 28) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(state.machineName)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Text(LoadStatePalette.label(for: state.state))
-                    .font(.system(size: 42, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AmbientTheme.statusColor(state.state))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.68)
-                HStack(spacing: 14) {
-                    Label("\(MetricFormat.tps(state.tps)) TPS", systemImage: "waveform.path.ecg")
-                    Label(
-                        "\(MetricFormat.integer(state.activeSessions)) active",
-                        systemImage: "bubble.left.and.bubble.right"
-                    )
-                    Text("CPU \(MetricFormat.percent(state.cpuPercent))")
+        HStack(spacing: 24) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    LoadPulse(state: state.state, phase: state.updatedAt)
+                    Text(state.machineName)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-                .font(.subheadline.monospacedDigit())
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+
+                Text(LoadStatePalette.label(for: state.state))
+                    .font(.system(size: 42, weight: .bold, design: .rounded))
+                    .foregroundStyle(AmbientTheme.statusColor(state.state))
+                    .contentTransition(.interpolate)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.66)
+
+                HStack(alignment: .lastTextBaseline, spacing: 7) {
+                    Text(MetricFormat.tps(state.tps))
+                        .font(.system(size: 38, weight: .bold, design: .rounded).monospacedDigit())
+                        .contentTransition(.numericText())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.62)
+                    Text("TPS")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: 310, alignment: .leading)
             .layoutPriority(1)
 
-            glyph
-                .frame(minWidth: 180, idealWidth: 260, maxWidth: 320, minHeight: 72, idealHeight: 90)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 28) {
+                    CompactMetric(
+                        label: "ACTIVE",
+                        value: MetricFormat.integer(state.activeSessions)
+                    )
+                    CompactMetric(label: "CPU", value: MetricFormat.percent(state.cpuPercent))
+                }
+
+                LoadGlyph(visual: activityVisual, phase: state.updatedAt)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                HStack(spacing: 8) {
+                    Text("LIVE CODEX LOAD")
+                    Spacer(minLength: 8)
+                    Text(state.updatedAt, style: .relative)
+                        .contentTransition(.numericText())
+                }
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
     }
 
     private var lockScreen: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                LoadPulse(state: state.state, phase: state.updatedAt)
                 Text(state.machineName)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                Text(LoadStatePalette.label(for: state.state))
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(AmbientTheme.statusColor(state.state))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.62)
-                ViewThatFits(in: .horizontal) {
-                    Text(
-                        "\(MetricFormat.tps(state.tps)) TPS · "
-                            + "\(MetricFormat.integer(state.activeSessions)) active"
-                    )
-                    Text("\(MetricFormat.tps(state.tps)) TPS")
-                }
-                .font(.caption2.monospacedDigit())
-                .lineLimit(1)
-                .minimumScaleFactor(0.68)
+                    .truncationMode(.middle)
+                Spacer(minLength: 5)
+                LoadStateBadge(state: state.state, compact: true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .layoutPriority(1)
 
-            glyph
-                .frame(width: 68, height: 44)
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                Text(MetricFormat.tps(state.tps))
+                    .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.58)
+                    .layoutPriority(1)
+                Text("TPS")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                CompactMetric(
+                    label: "ACTIVE",
+                    value: MetricFormat.integer(state.activeSessions)
+                )
+                .frame(minWidth: 36, alignment: .leading)
+                CompactMetric(label: "CPU", value: MetricFormat.percent(state.cpuPercent))
+                    .frame(minWidth: 40, alignment: .leading)
+            }
+
+            LoadGlyph(visual: activityVisual, phase: state.updatedAt, compact: true)
+                .frame(height: 18)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-    }
-
-    private var glyph: some View {
-        LoadGlyph(visual: activityVisual)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
     }
 
     private var activityVisual: LoadVisualState {

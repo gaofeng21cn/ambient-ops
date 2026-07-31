@@ -139,6 +139,8 @@ final class AmbientOpsTests: XCTestCase {
             "Find on Local Network",
             "Nearby sources",
             "Start Load Live Activity",
+            "Start Full-Screen StandBy",
+            "Restart Full-Screen StandBy",
             "End Live Activity",
             "StandBy & Lock Screen",
             "Privacy",
@@ -187,6 +189,17 @@ final class AmbientOpsTests: XCTestCase {
         XCTAssertEqual(content.visual?.modelVersion, 1)
         XCTAssertEqual(content.visual?.clusterCount, machine.loadVisualState.clusterCount)
         XCTAssertEqual(content.visual?.travelMs, machine.loadVisualState.travelMs)
+    }
+
+    func testCompactLoadStateLabelsStayWithinSmallSurfaceBudget() {
+        XCTAssertEqual(LoadStatePalette.compactLabel(for: "quiet"), "QUIET")
+        XCTAssertEqual(LoadStatePalette.compactLabel(for: "active"), "ACTIVE")
+        XCTAssertEqual(LoadStatePalette.compactLabel(for: "heavy"), "HEAVY")
+        XCTAssertEqual(LoadStatePalette.compactLabel(for: "constrained"), "LIMITED")
+
+        for state in ["quiet", "active", "heavy", "constrained"] {
+            XCTAssertLessThanOrEqual(LoadStatePalette.compactLabel(for: state).count, 7)
+        }
     }
 
     @MainActor

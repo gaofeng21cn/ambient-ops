@@ -39,6 +39,8 @@ struct SettingsView: View {
                     }
                 }
 
+                standBySection
+
                 if !store.discoveredServers.isEmpty {
                     Section("Nearby sources") {
                         ForEach(store.discoveredServers) { server in
@@ -79,36 +81,6 @@ struct SettingsView: View {
                         Task { await store.connect() }
                     }
                     .disabled(store.serverAddress.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-
-                Section("StandBy & Lock Screen") {
-                    Button {
-                        guard let machine = store.selectedMachine else { return }
-                        Task { await store.liveActivity.start(status: store.status, machine: machine) }
-                    } label: {
-                        if store.liveActivity.isActive {
-                            Label("Restart Load Live Activity", systemImage: "bolt.horizontal.circle")
-                        } else {
-                            Label("Start Load Live Activity", systemImage: "bolt.horizontal.circle")
-                        }
-                    }
-                    .disabled(store.selectedMachine == nil)
-
-                    if store.liveActivity.isActive {
-                        Button("End Live Activity", systemImage: "stop.circle", role: .destructive) {
-                            Task { await store.liveActivity.end() }
-                        }
-                    }
-
-                    Text("Live Activity shows the focused host on the Lock Screen, Dynamic Island, and StandBy. It updates while the app can refresh; remote background updates require the optional push relay.")
-                        .font(.footnote)
-                        .foregroundStyle(AmbientTheme.muted)
-
-                    if let message = store.liveActivity.errorMessage {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(AmbientTheme.red)
-                    }
                 }
 
                 Section("Privacy") {
@@ -165,6 +137,38 @@ struct SettingsView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var standBySection: some View {
+        Section {
+            Button {
+                guard let machine = store.selectedMachine else { return }
+                Task { await store.liveActivity.start(status: store.status, machine: machine) }
+            } label: {
+                if store.liveActivity.isActive {
+                    Label("Restart Full-Screen StandBy", systemImage: "rectangle.inset.filled")
+                } else {
+                    Label("Start Full-Screen StandBy", systemImage: "rectangle.inset.filled")
+                }
+            }
+            .disabled(store.selectedMachine == nil)
+
+            if store.liveActivity.isActive {
+                Button("End Live Activity", systemImage: "stop.circle", role: .destructive) {
+                    Task { await store.liveActivity.end() }
+                }
+            }
+
+            if let message = store.liveActivity.errorMessage {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(AmbientTheme.red)
+            }
+        } header: {
+            Text("StandBy & Lock Screen")
+        } footer: {
+            Text("Starts the full-width StandBy view and Lock Screen card. This is separate from the widget gallery.")
         }
     }
 

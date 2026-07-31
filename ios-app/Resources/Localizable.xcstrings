@@ -821,6 +821,36 @@
         }
       }
     },
+    "Restart Full-Screen StandBy" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新启动全屏待机显示"
+          }
+        }
+      }
+    },
+    "Start Full-Screen StandBy" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启动全屏待机显示"
+          }
+        }
+      }
+    },
+    "Starts the full-width StandBy view and Lock Screen card. This is separate from the widget gallery." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启动铺满待机显示的实时活动和锁屏卡片；它与小组件库中的小组件相互独立。"
+          }
+        }
+      }
+    },
     "Use for Display" : {
       "localizations" : {
         "zh-Hans" : {
