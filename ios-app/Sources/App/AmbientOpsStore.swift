@@ -51,6 +51,7 @@ final class AmbientOpsStore {
         static let demoMode = "ambient-ops.demo-mode"
         static let serverURL = "ambient-ops.server-url"
         static let selectedMachineID = "ambient-ops.selected-machine"
+        static let selectedSourceID = "ambient-ops.selected-source"
     }
 
     var status: AmbientStatus
@@ -60,33 +61,44 @@ final class AmbientOpsStore {
     var displayMode: DisplayMode = .load
     var discoveredServers: [DiscoveredServer] = []
     var isDiscovering = false
-    var hasExplainedLocalNetwork = false
     var loadHistory: [String: [LoadHistoryPoint]] = [:]
+    var networkHistory: [NetworkHistoryPoint] = []
 
     private let client = AmbientOpsClient()
-    private let discovery = DiscoveryService()
+    private let defaults: UserDefaults
+    private let discovery: DiscoveryService
     private var refreshTask: Task<Void, Never>?
+    private var automaticSelectionTask: Task<Void, Never>?
+    private var startupReconnectTask: Task<Void, Never>?
     let liveActivity = LiveActivityController()
 
-    init() {
-        let defaults = UserDefaults.standard
-        let initialDemo = defaults.object(forKey: Keys.demoMode) as? Bool ?? true
+    init(
+        defaults: UserDefaults = .standard,
+        discovery: DiscoveryService? = nil,
+        automaticallyConnect: Bool = true
+    ) {
+        self.defaults = defaults
+        self.discovery = discovery ?? DiscoveryService()
+        let initialDemo = defaults.object(forKey: Keys.demoMode) as? Bool ?? false
         serverAddress = defaults.string(forKey: Keys.serverURL) ?? ""
         selectedMachineID = defaults.string(forKey: Keys.selectedMachineID)
         status = initialDemo ? DemoFixtures.status() : .unavailable()
 
-        discovery.onChange = { [weak self] servers in
-            self?.discoveredServers = servers
+        self.discovery.onChange = { [weak self] servers in
+            self?.handleDiscoveredServers(servers)
         }
-        discovery.onError = { [weak self] message in
-            self?.isDiscovering = false
-            self?.connectionState = .error(message)
+        self.discovery.onError = { [weak self] message in
+            guard let self else { return }
+            self.isDiscovering = false
+            if self.connectionState != .live && self.connectionState != .stale {
+                self.connectionState = .error(message)
+            }
         }
 
         if initialDemo {
             useDemoMode()
-        } else if AmbientOpsClient.normalizedServerURL(serverAddress) != nil {
-            Task { await connect() }
+        } else if automaticallyConnect {
+            useAutomaticSourceMode()
         } else {
             useLiveMode()
         }
@@ -100,11 +112,44 @@ final class AmbientOpsStore {
         connectionState == .demo
     }
 
+    var isFleet: Bool {
+        status.effectiveProvider.isFleet
+    }
+
+    var providerLabel: String {
+        isDemoMode ? "DEMO · FLEET" : "\(isFleet ? "FLEET" : "DIRECT") · \(status.effectiveProvider.name)"
+    }
+
+    var availableDisplayModes: [DisplayMode] {
+        DisplayMode.allCases.filter { mode in
+            mode != .network || status.capabilities.supportsNetwork
+        }
+    }
+
+    var displayNetwork: NetworkStatus {
+        guard !status.capabilities.networkHistory else { return status.network }
+        return NetworkStatus(
+            status: status.network.status,
+            source: status.network.source,
+            downloadMbps: status.network.downloadMbps,
+            uploadMbps: status.network.uploadMbps,
+            clients: status.network.clients,
+            latencyMs: status.network.latencyMs,
+            updatedAt: status.network.updatedAt,
+            error: status.network.error,
+            ageSeconds: status.network.ageSeconds,
+            history: networkHistory
+        )
+    }
+
     func useDemoMode() {
         refreshTask?.cancel()
+        automaticSelectionTask?.cancel()
+        startupReconnectTask?.cancel()
         discovery.stop()
         isDiscovering = false
         status = DemoFixtures.status()
+        networkHistory = []
         loadHistory = Dictionary(uniqueKeysWithValues: status.machines.map { machine in
             let points = (0..<60).map { index in
                 let elapsed = Double(59 - index)
@@ -118,20 +163,34 @@ final class AmbientOpsStore {
         })
         connectionState = .demo
         persistSelection()
-        UserDefaults.standard.set(true, forKey: Keys.demoMode)
+        defaults.set(true, forKey: Keys.demoMode)
+        SharedSnapshotStore.saveSourceURL(nil)
         SharedSnapshotStore.save(status, focusedMachineID: selectedMachine?.machineId)
     }
 
     func useLiveMode() {
         refreshTask?.cancel()
+        automaticSelectionTask?.cancel()
+        startupReconnectTask?.cancel()
         discovery.stop()
         isDiscovering = false
         if status.demo {
             status = .unavailable()
             loadHistory = [:]
+            networkHistory = []
         }
         connectionState = .disconnected
-        UserDefaults.standard.set(false, forKey: Keys.demoMode)
+        defaults.set(false, forKey: Keys.demoMode)
+    }
+
+    func useAutomaticSourceMode() {
+        useLiveMode()
+        beginDiscovery()
+
+        guard AmbientOpsClient.normalizedServerURL(serverAddress) != nil else { return }
+        startupReconnectTask = Task { [weak self] in
+            await self?.reconnectSavedSourceWhileDiscovering()
+        }
     }
 
     func connect() async {
@@ -141,7 +200,7 @@ final class AmbientOpsStore {
             return
         }
         connectionState = .loading
-        UserDefaults.standard.set(serverAddress, forKey: Keys.serverURL)
+        defaults.set(serverAddress, forKey: Keys.serverURL)
         do {
             try await fetch(serverURL)
             scheduleRefresh(serverURL)
@@ -164,7 +223,10 @@ final class AmbientOpsStore {
 
     func startDiscovery() {
         useLiveMode()
-        hasExplainedLocalNetwork = true
+        beginDiscovery()
+    }
+
+    private func beginDiscovery() {
         isDiscovering = true
         discoveredServers = []
         connectionState = .loading
@@ -172,8 +234,11 @@ final class AmbientOpsStore {
     }
 
     func choose(_ server: DiscoveredServer) {
+        startupReconnectTask?.cancel()
+        automaticSelectionTask?.cancel()
         discovery.stop()
         isDiscovering = false
+        defaults.set(server.id, forKey: Keys.selectedSourceID)
         serverAddress = server.url.absoluteString
         Task { await connect() }
     }
@@ -190,6 +255,8 @@ final class AmbientOpsStore {
         } else if !isDemoMode,
                   let serverURL = AmbientOpsClient.normalizedServerURL(serverAddress) {
             scheduleRefresh(serverURL)
+        } else if !isDemoMode, !isDiscovering {
+            startDiscovery()
         }
         if isActive {
             consumePendingRoute()
@@ -201,6 +268,9 @@ final class AmbientOpsStore {
         let fetched = try await client.fetchStatus(from: serverURL)
         status = fetched
         recordHistory(fetched)
+        if displayMode == .network, !fetched.capabilities.supportsNetwork {
+            displayMode = .load
+        }
         if let selectedMachineID,
            !fetched.machines.contains(where: { $0.machineId == selectedMachineID }) {
             self.selectedMachineID = nil
@@ -208,6 +278,7 @@ final class AmbientOpsStore {
         connectionState = fetched.overallStatus == "live" ? .live : .stale
         persistSelection()
         SharedSnapshotStore.save(fetched, focusedMachineID: selectedMachine?.machineId)
+        SharedSnapshotStore.saveSourceURL(serverURL)
         if let selectedMachine {
             Task { await liveActivity.update(status: fetched, machine: selectedMachine) }
         }
@@ -229,9 +300,47 @@ final class AmbientOpsStore {
         }
     }
 
+    private func handleDiscoveredServers(_ servers: [DiscoveredServer]) {
+        discoveredServers = servers
+        guard isDiscovering, !servers.isEmpty else { return }
+
+        let preferredID = defaults.string(forKey: Keys.selectedSourceID)
+        if let preferredID,
+           let preferred = servers.first(where: { $0.id == preferredID }) {
+            choose(preferred)
+            return
+        }
+
+        automaticSelectionTask?.cancel()
+        automaticSelectionTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled, let self, self.isDiscovering else { return }
+            if let source = SourceSelectionPolicy.automaticSource(
+                from: self.discoveredServers,
+                preferredID: preferredID
+            ) {
+                self.choose(source)
+            }
+        }
+    }
+
     private func persistSelection() {
-        let defaults = UserDefaults.standard
         defaults.set(selectedMachineID, forKey: Keys.selectedMachineID)
+    }
+
+    private func reconnectSavedSourceWhileDiscovering() async {
+        guard let serverURL = AmbientOpsClient.normalizedServerURL(serverAddress) else { return }
+        do {
+            try Task.checkCancellation()
+            try await fetch(serverURL)
+            try Task.checkCancellation()
+            scheduleRefresh(serverURL)
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled, discoveredServers.isEmpty else { return }
+            connectionState = .error(error.localizedDescription)
+        }
     }
 
     private func recordHistory(_ snapshot: AmbientStatus) {
@@ -244,6 +353,27 @@ final class AmbientOpsStore {
             }
             loadHistory[machine.machineId] = Array(points.filter { $0.at >= cutoff }.suffix(360))
         }
+        guard
+            !snapshot.capabilities.networkHistory,
+            let download = snapshot.network.downloadMbps,
+            let upload = snapshot.network.uploadMbps
+        else { return }
+        let sampledAt = snapshot.network.updatedAt
+            .flatMap(AmbientISO8601.date(from:)) ?? now
+        if networkHistory.last?.atDate.map({ sampledAt.timeIntervalSince($0) >= 1 }) ?? true {
+            networkHistory.append(
+                NetworkHistoryPoint(
+                    at: AmbientISO8601.string(from: sampledAt),
+                    downloadMbps: download,
+                    uploadMbps: upload
+                )
+            )
+        }
+        networkHistory = Array(
+            networkHistory
+                .filter { ($0.atDate ?? .distantPast) >= cutoff }
+                .suffix(360)
+        )
     }
 
     private func consumePendingRoute() {

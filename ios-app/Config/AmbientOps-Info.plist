@@ -41,6 +41,7 @@
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_ambient-ops._tcp</string>
+		<string>_codex-tps._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Ambient Ops discovers and reads status from your self-hosted server on this local network.</string>

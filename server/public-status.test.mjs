@@ -32,7 +32,16 @@ test("projects the dashboard into a versioned mobile contract", () => {
   assert.equal(status.schemaVersion, PUBLIC_STATUS_SCHEMA_VERSION);
   assert.equal(status.serverVersion, "1.2.3");
   assert.equal(status.instanceId, "home-ops");
+  assert.deepEqual(status.provider, {
+    kind: "gateway",
+    scope: "fleet",
+    id: "home-ops",
+    name: "Home",
+  });
+  assert.equal(status.capabilities.network, true);
   assert.equal(status.capabilities.loadVisualState, true);
+  assert.equal(status.capabilities.persistentHistory, true);
+  assert.equal(status.capabilities.webDisplay, true);
   assert.equal(status.capabilities.liveActivityPush, false);
   assert.equal(status.machines[0].loadVisualState.state, "constrained");
   assert.ok(status.machines[0].loadVisualState.taskDensity > 0.8);

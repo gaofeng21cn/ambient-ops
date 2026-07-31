@@ -1,10 +1,11 @@
 {
   "name": "ambient-ops",
   "private": true,
-  "version": "0.1.26",
+  "version": "0.1.27",
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:android": "vite build --base ./ --outDir android-kiosk/app/src/main/assets/ambient-ops --emptyOutDir",
     "dev": "vite --host 0.0.0.0",
     "start": "node server/server.mjs",
     "test": "node --test server/*.test.mjs"

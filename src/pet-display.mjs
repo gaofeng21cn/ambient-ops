@@ -3,7 +3,7 @@ import { shouldReduceKioskMotion } from "./kiosk-motion.mjs";
 const LEGACY_PET_ID = "ledger-owl";
 const LEGACY_PET_HASH = "783854af87d6ee8639843ca7812917e062345b0095d43f9be5ea2374a41ada6c";
 const LEGACY_PET_URL = "/pets/ledger-owl/spritesheet.webp";
-const CONTENT_ADDRESSED_URL = /^\/api\/v1\/pets\/[a-f0-9]{64}\.webp$/;
+const CONTENT_ADDRESSED_URL = /^\/api\/v1\/pets\/[a-f0-9]{64}(?:\.webp)?$/;
 const CODEX_IDLE_DURATION_SCALE = 6;
 
 export const PET_ANIMATIONS = Object.freeze({
@@ -29,17 +29,28 @@ export function selectDisplayMachine(machines, selectedMachineId, followMode) {
 
 export function resolvePetSpriteUrl(pet) {
   if (!pet) return null;
-  const expectedUrl = /^[a-f0-9]{64}$/.test(pet.assetHash || "")
-    ? `/api/v1/pets/${pet.assetHash}.webp`
-    : null;
-  if (expectedUrl && pet.assetUrl === expectedUrl && CONTENT_ADDRESSED_URL.test(pet.assetUrl)) {
-    return pet.assetUrl;
-  }
   if (
     pet.id === LEGACY_PET_ID
     && (!pet.assetHash || pet.assetHash === LEGACY_PET_HASH)
   ) {
     return LEGACY_PET_URL;
+  }
+  const assetUrl = String(pet.assetUrl || "");
+  const relativeAsset = /^\/(?!\/)/.test(assetUrl);
+  const trustedAbsoluteAsset = /^https?:\/\//i.test(assetUrl)
+    && pet.assetUrlTrustedOrigin === true;
+  if (!relativeAsset && !trustedAbsoluteAsset) return null;
+  let candidate;
+  try {
+    candidate = new URL(assetUrl, "http://ambient-ops.invalid");
+  } catch {
+    candidate = null;
+  }
+  const contentAddressed = candidate
+    && CONTENT_ADDRESSED_URL.test(candidate.pathname)
+    && candidate.pathname.replace(/\.webp$/, "").endsWith(`/${pet.assetHash}`);
+  if (/^[a-f0-9]{64}$/.test(pet.assetHash || "") && contentAddressed) {
+    return assetUrl;
   }
   return null;
 }

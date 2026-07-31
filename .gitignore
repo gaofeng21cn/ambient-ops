@@ -9,6 +9,7 @@ data/
 android-kiosk/.gradle/
 android-kiosk/local.properties
 android-kiosk/**/build/
+android-kiosk/app/src/main/assets/ambient-ops/
 ios-app/*.xcodeproj/
 ios-app/.build/
 ios-app/DerivedData/

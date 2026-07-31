@@ -114,7 +114,7 @@ SNMPv3 router -------------- standard IF-MIB counters ------------+--> Ambient O
                                                                   |    container
 /data ---------------------- state and short history -------------+       |
                                                                          +--> browsers
-                                                                         +--> Android kiosk
+                                                                  +--> Android kiosk (Fleet)
                                                                          +--> native iOS app
                                                                          +--> Prometheus
                                                                          +--> Home Assistant
@@ -122,8 +122,9 @@ SNMPv3 router -------------- standard IF-MIB counters ------------+--> Ambient O
 ```
 
 The server, API, SNMP collector, LAN discovery publisher, and frontend ship in one
-container. The Android kiosk discovers and displays the canonical instance; it does
-not contain collection credentials or aggregation logic.
+container. The Android kiosk can display this canonical Fleet source, or use its
+bundled frontend to connect directly to one LAN Codex TPS instance. Direct mode
+needs no Gateway and still receives only aggregate machine status.
 
 ### What you get
 
@@ -133,7 +134,7 @@ not contain collection credentials or aggregation logic.
 - Aggregate Codex throughput, active-session, and freshness state across machines
 - Standard IF-MIB `Counter64` download/upload metrics and optional latency
 - Prometheus text metrics and optional Home Assistant synchronization
-- LAN discovery for the dedicated Android kiosk
+- Dual Gateway/Direct LAN discovery for the dedicated Android kiosk
 - Versioned Docker images, health checks, persistent state, and rollbackable upgrades
 
 ### Quick start

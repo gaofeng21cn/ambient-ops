@@ -11,18 +11,28 @@ export function buildPublicStatus(dashboard, {
   instanceId,
   serverVersion,
 } = {}) {
+  const providerId = String(instanceId || "");
   return {
     schemaVersion: PUBLIC_STATUS_SCHEMA_VERSION,
     serverVersion: String(serverVersion || "unknown"),
-    instanceId: String(instanceId || ""),
+    instanceId: providerId,
     generatedAt: dashboard.generatedAt,
     demo: Boolean(dashboard.demo),
     site: dashboard.site,
     overallStatus: dashboard.overallStatus,
+    provider: {
+      kind: "gateway",
+      scope: "fleet",
+      id: providerId,
+      name: dashboard.site.name,
+    },
     capabilities: {
       loadVisualState: true,
+      network: true,
       networkHistory: true,
+      persistentHistory: true,
       pets: true,
+      webDisplay: true,
       liveActivityPush: false,
     },
     network: dashboard.network,

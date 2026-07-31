@@ -50,6 +50,16 @@ test("uses only trusted content-addressed sprite URLs and invalidates on pet upd
   const host = { machineId: "wife" };
 
   assert.equal(resolvePetSpriteUrl(first), first.assetUrl);
+  const directAssetUrl = `http://192.168.1.8:47321/api/v1/pets/${firstHash}.webp`;
+  assert.equal(
+    resolvePetSpriteUrl({
+      ...first,
+      assetUrl: directAssetUrl,
+      assetUrlTrustedOrigin: true,
+    }),
+    directAssetUrl,
+  );
+  assert.equal(resolvePetSpriteUrl({ ...first, assetUrl: directAssetUrl }), null);
   assert.notEqual(petSpriteKey(host, first), petSpriteKey(host, second));
   assert.equal(resolvePetSpriteUrl({ ...first, assetUrl: "https://tracker.invalid/pet.webp" }), null);
   assert.equal(

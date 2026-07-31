@@ -2,31 +2,70 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var store: AmbientOpsStore
-    @State private var showDiscoveryExplanation = false
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Data source") {
-                    Toggle(
-                        "Demo Mode",
-                        isOn: Binding(
-                            get: { store.isDemoMode },
-                            set: { enabled in
-                                if enabled {
-                                    store.useDemoMode()
-                                } else {
-                                    store.useLiveMode()
-                                    if AmbientOpsClient.normalizedServerURL(store.serverAddress) != nil {
-                                        Task { await store.connect() }
-                                    } else {
-                                        showDiscoveryExplanation = true
+                Section("Connection") {
+                    HStack(spacing: 12) {
+                        Image(systemName: connectionIcon)
+                            .font(.title3)
+                            .foregroundStyle(connectionColor)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Current source")
+                                .font(.caption)
+                                .foregroundStyle(AmbientTheme.muted)
+                            Text(currentSourceName)
+                                .font(.headline)
+                                .lineLimit(1)
+                            Text(currentSourceDetail)
+                                .font(.caption)
+                                .foregroundStyle(AmbientTheme.muted)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 8)
+                        connectionBadge
+                    }
+                    .padding(.vertical, 4)
+
+                    Button(
+                        store.isDiscovering ? "Search Again" : "Find on Local Network",
+                        systemImage: "dot.radiowaves.left.and.right"
+                    ) {
+                        store.startDiscovery()
+                    }
+                }
+
+                if !store.discoveredServers.isEmpty {
+                    Section("Nearby sources") {
+                        ForEach(store.discoveredServers) { server in
+                            Button {
+                                store.choose(server)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(server.name)
+                                        Spacer()
+                                        Text(server.kind.providerLabel)
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(
+                                                server.kind == .gateway
+                                                    ? AmbientTheme.blue
+                                                    : AmbientTheme.green
+                                            )
                                     }
+                                    Text(server.url.absoluteString)
+                                        .font(.caption)
+                                        .foregroundStyle(AmbientTheme.muted)
                                 }
                             }
-                        )
-                    )
+                        }
+                    }
+                }
 
+                Section("Manual Connection") {
                     TextField("http://ambient-ops.local:8787", text: $store.serverAddress)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
@@ -36,33 +75,6 @@ struct SettingsView: View {
                         Task { await store.connect() }
                     }
                     .disabled(store.serverAddress.trimmingCharacters(in: .whitespaces).isEmpty)
-
-                    Button("Find on Local Network", systemImage: "dot.radiowaves.left.and.right") {
-                        showDiscoveryExplanation = true
-                    }
-                }
-
-                if store.isDiscovering || !store.discoveredServers.isEmpty {
-                    Section("Nearby servers") {
-                        if store.isDiscovering && store.discoveredServers.isEmpty {
-                            HStack {
-                                ProgressView()
-                                Text("Searching…")
-                            }
-                        }
-                        ForEach(store.discoveredServers) { server in
-                            Button {
-                                store.choose(server)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(server.name)
-                                    Text(server.url.absoluteString)
-                                        .font(.caption)
-                                        .foregroundStyle(AmbientTheme.muted)
-                                }
-                            }
-                        }
-                    }
                 }
 
                 Section("StandBy & Lock Screen") {
@@ -105,6 +117,7 @@ struct SettingsView: View {
                 }
 
                 Section("About") {
+                    LabeledContent("Source", value: store.providerLabel)
                     LabeledContent("Status schema", value: "v\(store.status.schemaVersion)")
                     LabeledContent("Server", value: store.status.serverVersion)
                     LabeledContent("Push relay") {
@@ -115,15 +128,108 @@ struct SettingsView: View {
                         )
                     }
                 }
+
+                Section("Preview") {
+                    Toggle(
+                        "Demo Mode",
+                        isOn: Binding(
+                            get: { store.isDemoMode },
+                            set: { enabled in
+                                if enabled {
+                                    store.useDemoMode()
+                                } else {
+                                    store.useAutomaticSourceMode()
+                                }
+                            }
+                        )
+                    )
+                    Text("Demo Mode uses sample fleet data for preview and App Store review.")
+                        .font(.footnote)
+                        .foregroundStyle(AmbientTheme.muted)
+                }
             }
             .scrollContentBackground(.hidden)
+            .safeAreaPadding(.bottom, verticalSizeClass == .compact ? 58 : 0)
             .background(AmbientTheme.background)
             .navigationTitle("Settings")
-            .alert("Allow Local Network Access?", isPresented: $showDiscoveryExplanation) {
-                Button("Not Now", role: .cancel) {}
-                Button("Continue") { store.startDiscovery() }
-            } message: {
-                Text("Ambient Ops uses Bonjour only to find your self-hosted server on this Wi-Fi network. It does not scan devices or send local data to a cloud service.")
+        }
+    }
+
+    private var currentSourceName: String {
+        if store.isDemoMode {
+            return String(localized: "Demo data")
+        }
+        switch store.connectionState {
+        case .live, .stale:
+            return store.status.effectiveProvider.name
+        case .loading where store.isDiscovering:
+            return String(localized: "Searching local network…")
+        default:
+            return AmbientOpsClient.normalizedServerURL(store.serverAddress)?.host
+                ?? String(localized: "No live source")
+        }
+    }
+
+    private var currentSourceDetail: String {
+        if store.isDemoMode {
+            return String(localized: "Sample fleet preview")
+        }
+        switch store.connectionState {
+        case .live, .stale:
+            return store.providerLabel
+        case .loading where store.isDiscovering:
+            return String(localized: "Gateway and Codex TPS")
+        case let .error(message):
+            return message
+        default:
+            return String(localized: "Gateway and Codex TPS")
+        }
+    }
+
+    private var connectionIcon: String {
+        if store.isDemoMode { return "play.rectangle" }
+        return switch store.connectionState {
+        case .live: "checkmark.circle.fill"
+        case .stale: "clock.badge.exclamationmark"
+        case .error: "exclamationmark.triangle.fill"
+        default: store.isDiscovering ? "dot.radiowaves.left.and.right" : "network.slash"
+        }
+    }
+
+    private var connectionColor: Color {
+        if store.isDemoMode { return AmbientTheme.blue }
+        return switch store.connectionState {
+        case .live: AmbientTheme.green
+        case .stale: AmbientTheme.amber
+        case .error: AmbientTheme.red
+        default: store.isDiscovering ? AmbientTheme.green : AmbientTheme.muted
+        }
+    }
+
+    @ViewBuilder
+    private var connectionBadge: some View {
+        if store.isDemoMode {
+            StatusPill(status: "active", label: "DEMO")
+        } else {
+            switch store.connectionState {
+            case .live:
+                StatusPill(status: "live")
+            case .stale:
+                StatusPill(status: "stale")
+            case .error:
+                StatusPill(status: "error")
+            default:
+                if store.isDiscovering {
+                    HStack(spacing: 7) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("AUTO")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(AmbientTheme.green)
+                    }
+                } else {
+                    StatusPill(status: "idle", label: "OFFLINE")
+                }
             }
         }
     }

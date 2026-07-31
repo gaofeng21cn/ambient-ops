@@ -1,71 +1,66 @@
 package cn.gaofeng.ambientops.kiosk;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+
+import java.util.Arrays;
+import java.util.Collections;
 
 import org.junit.Test;
 
 public final class ServiceSelectionPolicyTest {
     @Test
-    public void healthyRememberedInstanceRejectsAnotherInstance() {
-        assertFalse(
-            ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", true, false)
+    public void savedSourceWinsEvenWhenGatewayIsAvailable() {
+        DisplaySource gateway = source("gateway:home", "Home", DisplaySource.Kind.GATEWAY);
+        DisplaySource direct = source("codexTPS:studio", "Studio", DisplaySource.Kind.DIRECT);
+        assertEquals(
+            direct,
+            ServiceSelectionPolicy.automaticSource(Arrays.asList(gateway, direct), direct.id)
         );
     }
 
     @Test
-    public void healthyRememberedInstanceAcceptsItsUpdatedEndpoint() {
-        assertTrue(
-            ServiceSelectionPolicy.shouldAccept("home-ops", "home-ops", true, false)
+    public void gatewayWinsWithoutSavedSource() {
+        DisplaySource gateway = source("gateway:home", "Home", DisplaySource.Kind.GATEWAY);
+        DisplaySource direct = source("codexTPS:studio", "Studio", DisplaySource.Kind.DIRECT);
+        assertEquals(
+            gateway,
+            ServiceSelectionPolicy.automaticSource(Arrays.asList(direct, gateway), null)
         );
     }
 
     @Test
-    public void healthyRememberedInstanceRejectsAnonymousCandidate() {
-        assertFalse(ServiceSelectionPolicy.shouldAccept("home-ops", null, true, false));
-    }
-
-    @Test
-    public void failedPageAcceptsAnotherInstance() {
-        assertTrue(
-            ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", false, false)
+    public void gatewayChoiceIsDeterministic() {
+        DisplaySource beta = source("gateway:beta", "Beta", DisplaySource.Kind.GATEWAY);
+        DisplaySource alpha = source("gateway:alpha", "Alpha", DisplaySource.Kind.GATEWAY);
+        assertEquals(
+            alpha,
+            ServiceSelectionPolicy.automaticSource(Arrays.asList(beta, alpha), null)
         );
     }
 
     @Test
-    public void pendingRememberedEndpointRejectsAnotherInstance() {
-        assertFalse(
-            ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", true, false)
+    public void uniqueDirectIsSelectedWithoutGateway() {
+        DisplaySource direct = source("codexTPS:studio", "Studio", DisplaySource.Kind.DIRECT);
+        assertEquals(
+            direct,
+            ServiceSelectionPolicy.automaticSource(Collections.singletonList(direct), null)
         );
     }
 
     @Test
-    public void firstHealthyDiscoveryIsAcceptedWithoutRememberedInstance() {
-        assertTrue(ServiceSelectionPolicy.shouldAccept(null, "home-ops", true, false));
-    }
-
-    @Test
-    public void explicitBindingRejectsFailoverAfterPageFailure() {
-        assertFalse(
-            ServiceSelectionPolicy.shouldAccept("home-ops", "backup-ops", false, true)
+    public void multipleDirectSourcesDoNotRaceForSelection() {
+        DisplaySource studio = source("codexTPS:studio", "Studio", DisplaySource.Kind.DIRECT);
+        DisplaySource notebook = source("codexTPS:notebook", "Notebook", DisplaySource.Kind.DIRECT);
+        assertNull(
+            ServiceSelectionPolicy.automaticSource(Arrays.asList(studio, notebook), null)
         );
-    }
-
-    @Test
-    public void explicitBindingAcceptsSameInstanceAfterPageFailure() {
-        assertTrue(
-            ServiceSelectionPolicy.shouldAccept("home-ops", "home-ops", false, true)
-        );
-    }
-
-    @Test
-    public void explicitUrlWithoutInstanceIdRejectsDiscoveryReplacement() {
-        assertFalse(ServiceSelectionPolicy.shouldAccept(null, "backup-ops", false, true));
     }
 
     @Test
     public void currentEndpointCompletionMarksPageHealthy() {
-        assertTrue(
+        assertEquals(
+            true,
             ServiceSelectionPolicy.shouldMarkPageHealthy(
                 "http://192.168.1.10:8791/display/overview",
                 "http://192.168.1.10:8791/display/overview"
@@ -75,11 +70,16 @@ public final class ServiceSelectionPolicyTest {
 
     @Test
     public void staleEndpointCompletionDoesNotMarkNewEndpointHealthy() {
-        assertFalse(
+        assertEquals(
+            false,
             ServiceSelectionPolicy.shouldMarkPageHealthy(
                 "http://192.168.1.11:8791/display/overview",
                 "http://192.168.1.10:8791/display/overview"
             )
         );
+    }
+
+    private DisplaySource source(String id, String name, DisplaySource.Kind kind) {
+        return new DisplaySource(id, id, name, "http://127.0.0.1", kind);
     }
 }

@@ -1,9 +1,11 @@
 # Ambient Ops Android Kiosk
 
 This small native Android application owns the HTC display surface. It discovers
-`_ambient-ops._tcp.local` with Android NSD, remembers the last successful
-instance and LAN endpoint, keeps the screen awake, restores immersive mode,
-retries after connection failures, and can act as the default Home application.
+both `_ambient-ops._tcp.local` Gateways and `_codex-tps._tcp.local` Direct sources
+with Android NSD, remembers the last successful source, keeps the screen awake,
+restores immersive mode, retries after connection failures, and can act as the
+default Home application. The saved source wins; otherwise Gateway wins; otherwise
+one unique Direct source is selected. Multiple Direct sources never race for focus.
 Normal operation uses Wi-Fi discovery and does not require USB or `adb reverse`.
 On a rooted dedicated display, it also performs trusted unattended upgrades
 from the selected Ambient Ops server.
@@ -71,8 +73,8 @@ owner key used by the macOS helper, plus a sibling SHA-256 file. Download both
 files from the release, then verify and install:
 
 ```bash
-shasum -a 256 -c Ambient-Ops-Kiosk-1.2.7.apk.sha256
-adb install -r Ambient-Ops-Kiosk-1.2.7.apk
+shasum -a 256 -c Ambient-Ops-Kiosk-1.2.8.apk.sha256
+adb install -r Ambient-Ops-Kiosk-1.2.8.apk
 ```
 
 The GitHub Release APK and checksum are public downloads. A future release
@@ -122,6 +124,16 @@ adb shell am start -n cn.gaofeng.ambientops.kiosk/.MainActivity \
   --es ambient_ops_instance_id home-ops
 ```
 
+For a deployment-time Direct binding, pass the Codex TPS status endpoint and
+source kind explicitly:
+
+```bash
+adb shell am start -n cn.gaofeng.ambientops.kiosk/.MainActivity \
+  --es ambient_ops_url http://192.168.1.20:7419/api/v1/status \
+  --es ambient_ops_instance_id codex-tps-studio \
+  --es ambient_ops_source_kind codexTPS
+```
+
 The manual URL is a rescue path. Normal operation should continue to use LAN
 discovery so the display is independent of a development computer.
 
@@ -144,7 +156,7 @@ signature mismatch, downgrade, missing root grant, or package-manager failure
 leaves the installed version untouched and is retried at a later check.
 `MY_PACKAGE_REPLACED` restarts the Home activity after a successful replacement.
 
-Version `1.2.7` also checks `/api/v1/ui/revision` every 15 seconds while the
+Gateway mode also checks `/api/v1/ui/revision` every 15 seconds while the
 dashboard activity is visible. The first successful response establishes a
 baseline. Two consecutive observations of a different content revision trigger
 one WebView reload; network errors and invalid responses preserve the current
@@ -164,7 +176,7 @@ leaving the kiosk permanently at "searching".
 Run this acceptance after a signed install or update:
 
 1. Confirm the intended Ambient Ops server advertises
-   `_ambient-ops._tcp.local` on the same LAN.
+   `_ambient-ops._tcp.local` or one `_codex-tps._tcp.local` source on the same LAN.
 2. Set the kiosk as Home, open it once, and confirm the live display loads.
 3. Remove any development tunnel and prove none remains:
 

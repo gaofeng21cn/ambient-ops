@@ -2,6 +2,9 @@ import SwiftUI
 
 struct MachinesView: View {
     @Bindable var store: AmbientOpsStore
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var largeCanvas: Bool { horizontalSizeClass == .regular }
 
     private var machines: [MachineStatus] {
         store.status.machines.sorted {
@@ -14,19 +17,44 @@ struct MachinesView: View {
 
     var body: some View {
         NavigationStack {
-            List(machines) { machine in
-                NavigationLink {
-                    MachineDetailView(machine: machine) {
-                        store.selectMachine(machine.machineId)
+            Group {
+                if largeCanvas {
+                    ScrollView {
+                        Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+                            ForEach(Array(stride(from: 0, to: machines.count, by: 2)), id: \.self) { index in
+                                if index + 1 < machines.count {
+                                    GridRow {
+                                        machineLink(machines[index])
+                                        machineLink(machines[index + 1])
+                                    }
+                                } else {
+                                    machineLink(machines[index])
+                                        .gridCellColumns(2)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 20)
                     }
-                } label: {
-                    MachineRow(machine: machine, isFocused: store.selectedMachine?.machineId == machine.machineId)
+                } else {
+                    List(machines) { machine in
+                        NavigationLink {
+                            MachineDetailView(machine: machine) {
+                                store.selectMachine(machine.machineId)
+                            }
+                        } label: {
+                            MachineRow(
+                                machine: machine,
+                                isFocused: store.selectedMachine?.machineId == machine.machineId
+                            )
+                        }
+                        .listRowBackground(AmbientTheme.surface)
+                    }
+                    .scrollContentBackground(.hidden)
                 }
-                .listRowBackground(AmbientTheme.surface)
             }
-            .scrollContentBackground(.hidden)
             .background(AmbientTheme.background)
-            .navigationTitle("Machines")
+            .navigationTitle(store.isFleet ? "Machines" : "Machine")
             .overlay {
                 if machines.isEmpty {
                     ContentUnavailableView(
@@ -39,6 +67,20 @@ struct MachinesView: View {
         }
     }
 
+    private func machineLink(_ machine: MachineStatus) -> some View {
+        NavigationLink {
+            MachineDetailView(machine: machine) {
+                store.selectMachine(machine.machineId)
+            }
+        } label: {
+            MachineCard(
+                machine: machine,
+                isFocused: store.selectedMachine?.machineId == machine.machineId
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func priority(_ machine: MachineStatus) -> Int {
         switch machine.status {
         case "error": 0
@@ -48,29 +90,134 @@ struct MachinesView: View {
     }
 }
 
-private struct MachineRow: View {
+private struct MachineCard: View {
     let machine: MachineStatus
     let isFocused: Bool
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack(spacing: 11) {
+                Image(systemName: machineIcon(machine.platform))
+                    .font(.title2)
+                    .foregroundStyle(AmbientTheme.statusColor(machine.status))
+                    .frame(width: 30)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 7) {
+                        Text(machine.machineName)
+                            .font(.headline)
+                            .lineLimit(1)
+                        if isFocused {
+                            Image(systemName: "scope")
+                                .font(.subheadline)
+                                .foregroundStyle(AmbientTheme.green)
+                                .accessibilityLabel("Focused machine")
+                        }
+                    }
+                    Text(machine.platform)
+                        .font(.subheadline)
+                        .foregroundStyle(AmbientTheme.muted)
+                }
+                Spacer(minLength: 6)
+                Text(secondaryState)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(AmbientTheme.statusColor(
+                        machine.status == "live" ? machine.loadVisualState.state : machine.status
+                    ))
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AmbientTheme.muted)
+            }
+
+            Divider()
+
+            HStack(alignment: .bottom, spacing: 16) {
+                cardMetric(
+                    "TPS",
+                    MetricFormat.tps(machine.oneMinute.tps),
+                    color: AmbientTheme.green,
+                    primary: true
+                )
+                cardMetric("Active", MetricFormat.integer(machine.activeSessions))
+                cardMetric("CPU", MetricFormat.percent(machine.cpuPercent))
+            }
+
+            Divider()
+
+            HStack(alignment: .bottom, spacing: 16) {
+                cardMetric("5 min", MetricFormat.tps(machine.fiveMinutes.tps), compact: true)
+                cardMetric("Memory", MetricFormat.percent(machine.memoryPercent), compact: true)
+                cardMetric("Cache", MetricFormat.percent(machine.cachePercent), compact: true)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 214, alignment: .topLeading)
+        .background(AmbientTheme.surface)
+        .overlay {
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isFocused ? AmbientTheme.green.opacity(0.35) : AmbientTheme.line)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func cardMetric(
+        _ label: String,
+        _ value: String,
+        color: Color = .primary,
+        primary: Bool = false,
+        compact: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AmbientTheme.muted)
+            Text(value)
+                .font(.system(
+                    size: primary ? 27 : (compact ? 18 : 22),
+                    weight: .semibold,
+                    design: .rounded
+                ))
+                .foregroundStyle(color)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var secondaryState: String {
+        machine.status == "live"
+            ? LoadStatePalette.label(for: machine.loadVisualState.state)
+            : machine.status.uppercased()
+    }
+}
+
+private struct MachineRow: View {
+    let machine: MachineStatus
+    let isFocused: Bool
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var largeCanvas: Bool { horizontalSizeClass == .regular }
+
+    var body: some View {
         HStack(spacing: 12) {
             Image(systemName: machineIcon(machine.platform))
-                .font(.title3)
+                .font(largeCanvas ? .title2 : .title3)
                 .foregroundStyle(AmbientTheme.statusColor(machine.status))
                 .frame(width: 30)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 7) {
                     Text(machine.machineName)
-                        .font(.headline)
+                        .font(largeCanvas ? .title3 : .headline)
                     if isFocused {
                         Image(systemName: "scope")
-                            .font(.caption)
+                            .font(largeCanvas ? .subheadline : .caption)
                             .foregroundStyle(AmbientTheme.green)
                             .accessibilityLabel("Focused machine")
                     }
                 }
                 Text("\(machine.platform) · \(secondaryState)")
-                    .font(.caption)
+                    .font(largeCanvas ? .subheadline : .caption)
                     .foregroundStyle(AmbientTheme.statusColor(
                         machine.status == "live" ? machine.loadVisualState.state : machine.status
                     ))
@@ -78,13 +225,13 @@ private struct MachineRow: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 5) {
                 Text(MetricFormat.tps(machine.oneMinute.tps))
-                    .font(.headline.monospacedDigit())
+                    .font((largeCanvas ? Font.title3 : .headline).monospacedDigit())
                 Text("TPS")
-                    .font(.caption2)
+                    .font(largeCanvas ? .caption : .caption2)
                     .foregroundStyle(AmbientTheme.muted)
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, largeCanvas ? 10 : 6)
     }
 
     private var secondaryState: String {
@@ -97,6 +244,9 @@ private struct MachineRow: View {
 private struct MachineDetailView: View {
     let machine: MachineStatus
     let focus: () -> Void
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var largeCanvas: Bool { horizontalSizeClass == .regular }
 
     var body: some View {
         ScrollView {
@@ -105,10 +255,10 @@ private struct MachineDetailView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 7) {
                             Text(machine.platform.uppercased())
-                                .font(.caption.weight(.semibold))
+                                .font((largeCanvas ? Font.subheadline : .caption).weight(.semibold))
                                 .foregroundStyle(AmbientTheme.muted)
                             Text(LoadStatePalette.label(for: machine.loadVisualState.state))
-                                .font(.system(size: 38, weight: .semibold, design: .rounded))
+                                .font(.system(size: largeCanvas ? 48 : 38, weight: .semibold, design: .rounded))
                                 .foregroundStyle(AmbientTheme.statusColor(machine.loadVisualState.state))
                         }
                         Spacer()
@@ -127,7 +277,7 @@ private struct MachineDetailView: View {
                         "CPU telemetry is not reported by this host. Ambient Ops keeps it unknown instead of treating it as zero.",
                         systemImage: "info.circle"
                     )
-                    .font(.footnote)
+                    .font(largeCanvas ? .body : .footnote)
                     .foregroundStyle(AmbientTheme.muted)
                     .padding(12)
                 }

@@ -8,6 +8,7 @@ struct AmbientStatus: Codable, Hashable, Sendable {
     let demo: Bool
     let site: SiteStatus
     let overallStatus: String
+    let provider: StatusProvider?
     let capabilities: ServerCapabilities
     let network: NetworkStatus
     let codex: CodexStatus
@@ -15,6 +16,16 @@ struct AmbientStatus: Codable, Hashable, Sendable {
 
     var generatedDate: Date? {
         AmbientISO8601.date(from: generatedAt)
+    }
+
+    var effectiveProvider: StatusProvider {
+        if let provider { return provider }
+        return StatusProvider(
+            kind: "gateway",
+            scope: "fleet",
+            id: instanceId,
+            name: site.name
+        )
     }
 
     func focusedMachine(preferredID: String?) -> MachineStatus? {
@@ -38,11 +49,15 @@ struct AmbientStatus: Codable, Hashable, Sendable {
             demo: false,
             site: SiteStatus(name: "Ambient Ops", timeZone: TimeZone.current.identifier),
             overallStatus: "error",
+            provider: nil,
             capabilities: ServerCapabilities(
                 loadVisualState: false,
                 networkHistory: false,
                 pets: false,
-                liveActivityPush: false
+                liveActivityPush: false,
+                network: false,
+                persistentHistory: false,
+                webDisplay: false
             ),
             network: NetworkStatus(
                 status: "error",
@@ -75,6 +90,15 @@ struct AmbientStatus: Codable, Hashable, Sendable {
     }
 }
 
+struct StatusProvider: Codable, Hashable, Sendable {
+    let kind: String
+    let scope: String
+    let id: String
+    let name: String
+
+    var isFleet: Bool { scope == "fleet" }
+}
+
 struct SiteStatus: Codable, Hashable, Sendable {
     let name: String
     let timeZone: String
@@ -85,6 +109,17 @@ struct ServerCapabilities: Codable, Hashable, Sendable {
     let networkHistory: Bool
     let pets: Bool
     let liveActivityPush: Bool
+    let network: Bool?
+    let persistentHistory: Bool?
+    let webDisplay: Bool?
+
+    var supportsNetwork: Bool {
+        network ?? networkHistory
+    }
+
+    var supportsPersistentHistory: Bool {
+        persistentHistory ?? networkHistory
+    }
 }
 
 struct NetworkStatus: Codable, Hashable, Sendable {
@@ -106,6 +141,7 @@ struct NetworkHistoryPoint: Codable, Hashable, Sendable, Identifiable {
     let uploadMbps: Double
 
     var id: String { at }
+    var atDate: Date? { AmbientISO8601.date(from: at) }
 }
 
 struct CodexStatus: Codable, Hashable, Sendable {

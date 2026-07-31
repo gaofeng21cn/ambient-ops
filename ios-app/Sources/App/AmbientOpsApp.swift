@@ -31,7 +31,12 @@ private struct RootView: View {
             .tag(0)
 
             MachinesView(store: store)
-                .tabItem { Label("Machines", systemImage: "laptopcomputer.and.iphone") }
+                .tabItem {
+                    Label(
+                        store.isFleet ? "Machines" : "Machine",
+                        systemImage: "laptopcomputer.and.iphone"
+                    )
+                }
                 .tag(1)
 
             DisplayView(store: store)

@@ -1,1 +1,1 @@
-"NSLocalNetworkUsageDescription" = "Ambient Ops discovers and reads status from your self-hosted server on this local network.";
+"NSLocalNetworkUsageDescription" = "Ambient Ops discovers and reads aggregate status from Codex TPS or your self-hosted Gateway on this local network.";

@@ -26,18 +26,21 @@ enum AmbientTheme {
 struct StatusPill: View {
     let status: String
     var label: String? = nil
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var largeCanvas: Bool { horizontalSizeClass == .regular }
 
     var body: some View {
         HStack(spacing: 6) {
             Circle()
                 .fill(AmbientTheme.statusColor(status))
-                .frame(width: 7, height: 7)
+                .frame(width: largeCanvas ? 8 : 7, height: largeCanvas ? 8 : 7)
             Text(label ?? status.uppercased())
-                .font(.caption2.weight(.bold))
+                .font((largeCanvas ? Font.caption : .caption2).weight(.bold))
         }
         .foregroundStyle(AmbientTheme.statusColor(status))
-        .padding(.horizontal, 9)
-        .frame(height: 26)
+        .padding(.horizontal, largeCanvas ? 11 : 9)
+        .frame(height: largeCanvas ? 30 : 26)
         .background(AmbientTheme.statusColor(status).opacity(0.1))
         .overlay {
             RoundedRectangle(cornerRadius: 4)
@@ -51,6 +54,9 @@ struct StatusPill: View {
 struct OpsPanel<Content: View>: View {
     let title: String?
     @ViewBuilder let content: Content
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var largeCanvas: Bool { horizontalSizeClass == .regular }
 
     init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
@@ -58,15 +64,15 @@ struct OpsPanel<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: largeCanvas ? 18 : 14) {
             if let title {
                 Text(title.uppercased())
-                    .font(.caption.weight(.semibold))
+                    .font((largeCanvas ? Font.subheadline : .caption).weight(.semibold))
                     .foregroundStyle(AmbientTheme.muted)
             }
             content
         }
-        .padding(16)
+        .padding(largeCanvas ? 20 : 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AmbientTheme.surface)
         .overlay {
@@ -82,22 +88,25 @@ struct MetricValue: View {
     let value: String
     var unit: String? = nil
     var color: Color = .primary
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var largeCanvas: Bool { horizontalSizeClass == .regular }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label.uppercased())
-                .font(.caption2.weight(.semibold))
+                .font((largeCanvas ? Font.caption : .caption2).weight(.semibold))
                 .foregroundStyle(AmbientTheme.muted)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value)
-                    .font(.system(.title2, design: .rounded, weight: .semibold))
+                    .font(.system(largeCanvas ? .title : .title2, design: .rounded, weight: .semibold))
                     .foregroundStyle(color)
                     .contentTransition(.numericText())
                     .lineLimit(1)
                     .minimumScaleFactor(0.68)
                 if let unit {
                     Text(unit)
-                        .font(.caption2)
+                        .font(largeCanvas ? .caption : .caption2)
                         .foregroundStyle(AmbientTheme.muted)
                 }
             }
@@ -107,16 +116,13 @@ struct MetricValue: View {
 
 enum MetricFormat {
     static func tps(_ value: Double) -> String {
-        if value >= 100_000 {
-            return String(format: "%.0fk", value / 1_000)
-        }
-        if value >= 10_000 {
-            return String(format: "%.1fk", value / 1_000)
-        }
-        if value >= 1_000 {
-            return String(format: "%.2fk", value / 1_000)
-        }
-        return String(format: "%.0f", value)
+        let maximumFractionDigits = abs(value) >= 100 ? 0 : 1
+        return value.formatted(
+            .number
+                .locale(Locale(identifier: "en_US"))
+                .grouping(.automatic)
+                .precision(.fractionLength(0...maximumFractionDigits))
+        )
     }
 
     static func decimal(_ value: Double?) -> String {

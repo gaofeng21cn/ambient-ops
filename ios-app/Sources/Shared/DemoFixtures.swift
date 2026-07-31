@@ -75,11 +75,20 @@ enum DemoFixtures {
             demo: true,
             site: SiteStatus(name: "Ambient Ops Demo", timeZone: "Asia/Shanghai"),
             overallStatus: "live",
+            provider: StatusProvider(
+                kind: "gateway",
+                scope: "fleet",
+                id: "ambient-ops-demo",
+                name: "Ambient Ops Demo"
+            ),
             capabilities: ServerCapabilities(
                 loadVisualState: true,
                 networkHistory: true,
                 pets: true,
-                liveActivityPush: false
+                liveActivityPush: false,
+                network: true,
+                persistentHistory: true,
+                webDisplay: true
             ),
             network: NetworkStatus(
                 status: "live",

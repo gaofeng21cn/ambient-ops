@@ -4,28 +4,266 @@ import SwiftUI
 struct HomeView: View {
     @Bindable var store: AmbientOpsStore
     let openDisplay: () -> Void
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var largeCanvas: Bool { horizontalSizeClass == .regular }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    attentionPanel
-                    codexMetrics
-                    networkPanel
-                    machineSummary
+            GeometryReader { proxy in
+                if proxy.size.width > proxy.size.height {
+                    landscapeDashboard(size: proxy.size)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            attentionPanel
+                            codexMetrics
+                            if store.status.capabilities.supportsNetwork {
+                                networkPanel
+                            }
+                            machineSummary
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 20)
+                    }
+                    .refreshable { await store.refresh() }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 20)
             }
             .background(AmbientTheme.background)
-            .refreshable { await store.refresh() }
             .navigationTitle(store.status.site.name)
+            .navigationBarTitleDisplayMode(verticalSizeClass == .compact ? .inline : .large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    connectionLabel
+                    HStack(spacing: 8) {
+                        Text(store.providerLabel)
+                            .font((largeCanvas ? Font.caption : .caption2).weight(.semibold))
+                            .foregroundStyle(AmbientTheme.muted)
+                            .lineLimit(1)
+                        connectionLabel
+                    }
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func landscapeDashboard(size: CGSize) -> some View {
+        if largeCanvas {
+            tabletLandscapeDashboard(size: size)
+        } else {
+            compactLandscapeDashboard
+        }
+    }
+
+    private func tabletLandscapeDashboard(size: CGSize) -> some View {
+        let contentWidth = max(0, size.width - 30)
+        return VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                landscapeAttention
+                    .frame(width: contentWidth * 0.34)
+                landscapeCodex
+            }
+            HStack(spacing: 10) {
+                if store.status.capabilities.supportsNetwork {
+                    landscapeNetwork
+                        .frame(width: contentWidth * 0.57)
+                }
+                landscapeMachines
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+    }
+
+    private var compactLandscapeDashboard: some View {
+        HStack(spacing: 8) {
+            VStack(spacing: 8) {
+                landscapeAttention
+                landscapeCodex
+            }
+            VStack(spacing: 8) {
+                if store.status.capabilities.supportsNetwork {
+                    landscapeNetwork
+                }
+                landscapeMachines
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+    }
+
+    private var landscapeAttention: some View {
+        let machine = store.selectedMachine
+        let visual = machine?.loadVisualState
+        return Button(action: openDisplay) {
+            LandscapeHomePanel(large: largeCanvas) {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(machine?.machineName ?? "No machine")
+                            .font((largeCanvas ? Font.subheadline : .caption).weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Text(visual.map { LoadStatePalette.label(for: $0.state) } ?? "NO DATA")
+                            .font(.system(size: largeCanvas ? 46 : 28, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AmbientTheme.statusColor(visual?.state ?? "error"))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        Text(attentionDescription(machine))
+                            .font(largeCanvas ? .subheadline : .caption2)
+                            .foregroundStyle(AmbientTheme.muted)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "arrow.up.right")
+                        .font((largeCanvas ? Font.headline : .caption).weight(.semibold))
+                        .foregroundStyle(AmbientTheme.muted)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open focused machine load display")
+    }
+
+    private var landscapeCodex: some View {
+        LandscapeHomePanel("Codex activity", large: largeCanvas) {
+            HStack(alignment: .top, spacing: 8) {
+                landscapeMetric(
+                    "1 MIN",
+                    MetricFormat.tps(store.status.codex.oneMinuteTps),
+                    "TPS",
+                    AmbientTheme.green
+                )
+                landscapeMetric(
+                    "ACTIVE",
+                    MetricFormat.integer(store.status.codex.activeSessions),
+                    "SESSIONS"
+                )
+                landscapeMetric(
+                    "CPU",
+                    MetricFormat.percent(store.status.codex.cpuPercent),
+                    store.status.codex.cpuPercent == nil ? nil : "HOST AVG",
+                    cpuColor(store.status.codex.cpuPercent)
+                )
+                landscapeMetric(
+                    "MACHINES",
+                    "\(Int(store.status.codex.liveMachineCount))/\(Int(store.status.codex.machineCount))",
+                    "LIVE"
+                )
+            }
+        }
+    }
+
+    private var landscapeNetwork: some View {
+        let network = store.displayNetwork
+        return LandscapeHomePanel("Network", large: largeCanvas) {
+            HStack(alignment: .top, spacing: 20) {
+                landscapeMetric(
+                    "DOWNLOAD",
+                    MetricFormat.decimal(network.downloadMbps),
+                    "MBPS",
+                    AmbientTheme.blue
+                )
+                landscapeMetric(
+                    "UPLOAD",
+                    MetricFormat.decimal(network.uploadMbps),
+                    "MBPS",
+                    AmbientTheme.purple
+                )
+                NetworkMiniChart(points: network.history)
+                    .frame(maxWidth: .infinity, maxHeight: largeCanvas ? .infinity : 44)
+            }
+        }
+    }
+
+    private var landscapeMachines: some View {
+        LandscapeHomePanel(store.isFleet ? "Machines" : "Machine", large: largeCanvas) {
+            if largeCanvas {
+                VStack(spacing: 0) {
+                    ForEach(Array(store.status.machines.prefix(4).enumerated()), id: \.element.id) { index, machine in
+                        if index > 0 { Divider() }
+                        HStack(spacing: 10) {
+                            Image(systemName: machineIcon(machine.platform))
+                                .font(.title3)
+                                .foregroundStyle(AmbientTheme.statusColor(machine.status))
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(machine.machineName)
+                                    .font(.body.weight(.semibold))
+                                    .lineLimit(1)
+                                Text(LoadStatePalette.label(for: machine.loadVisualState.state))
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(AmbientTheme.statusColor(machine.loadVisualState.state))
+                            }
+                            Spacer(minLength: 6)
+                            Text("\(MetricFormat.tps(machine.oneMinute.tps)) TPS")
+                                .font(.subheadline.monospacedDigit())
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 8),
+                        GridItem(.flexible(), spacing: 8),
+                    ],
+                    spacing: 7
+                ) {
+                    ForEach(store.status.machines.prefix(4)) { machine in
+                        HStack(spacing: 7) {
+                            Image(systemName: machineIcon(machine.platform))
+                                .font(.caption)
+                                .foregroundStyle(AmbientTheme.statusColor(machine.status))
+                                .frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(machine.machineName)
+                                    .font(.caption2.weight(.semibold))
+                                    .lineLimit(1)
+                                HStack(spacing: 4) {
+                                    Text("\(MetricFormat.tps(machine.oneMinute.tps)) TPS")
+                                        .font(.caption2.monospacedDigit())
+                                    Circle()
+                                        .fill(AmbientTheme.statusColor(machine.loadVisualState.state))
+                                        .frame(width: 5, height: 5)
+                                }
+                                .foregroundStyle(AmbientTheme.muted)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func landscapeMetric(
+        _ label: String,
+        _ value: String,
+        _ unit: String?,
+        _ color: Color = .primary
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.system(size: largeCanvas ? 13 : 9, weight: .semibold))
+                .foregroundStyle(AmbientTheme.muted)
+                .lineLimit(1)
+            Text(value)
+                .font(.system(size: largeCanvas ? 32 : 20, weight: .semibold, design: .rounded))
+                .foregroundStyle(color)
+                .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+            if let unit {
+                Text(unit)
+                    .font(.system(size: largeCanvas ? 12 : 8, weight: .medium))
+                    .foregroundStyle(AmbientTheme.muted)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var connectionLabel: some View {
@@ -55,13 +293,13 @@ struct HomeView: View {
                 HStack(alignment: .top, spacing: 14) {
                     VStack(alignment: .leading, spacing: 7) {
                         Text(machine?.machineName ?? "No machine")
-                            .font(.headline)
+                            .font(largeCanvas ? .title3 : .headline)
                             .foregroundStyle(.primary)
                         Text(visual.map { LoadStatePalette.label(for: $0.state) } ?? "NO DATA")
-                            .font(.system(size: 34, weight: .semibold, design: .rounded))
+                            .font(.system(size: largeCanvas ? 44 : 34, weight: .semibold, design: .rounded))
                             .foregroundStyle(AmbientTheme.statusColor(visual?.state ?? "error"))
                         Text(attentionDescription(machine))
-                            .font(.subheadline)
+                            .font(largeCanvas ? .body : .subheadline)
                             .foregroundStyle(AmbientTheme.muted)
                     }
                     Spacer()
@@ -110,29 +348,30 @@ struct HomeView: View {
     }
 
     private var networkPanel: some View {
-        OpsPanel("Network") {
+        let network = store.displayNetwork
+        return OpsPanel("Network") {
             HStack {
                 MetricValue(
                     label: "Download",
-                    value: MetricFormat.decimal(store.status.network.downloadMbps),
+                    value: MetricFormat.decimal(network.downloadMbps),
                     unit: "Mbps",
                     color: AmbientTheme.blue
                 )
                 Spacer()
                 MetricValue(
                     label: "Upload",
-                    value: MetricFormat.decimal(store.status.network.uploadMbps),
+                    value: MetricFormat.decimal(network.uploadMbps),
                     unit: "Mbps",
                     color: AmbientTheme.purple
                 )
             }
-            NetworkMiniChart(points: store.status.network.history)
+            NetworkMiniChart(points: network.history)
                 .frame(height: 84)
         }
     }
 
     private var machineSummary: some View {
-        OpsPanel("Machines") {
+        OpsPanel(store.isFleet ? "Machines" : "Machine") {
             ForEach(Array(store.status.machines.prefix(4).enumerated()), id: \.element.id) { index, machine in
                 if index > 0 { Divider() }
                 HStack(spacing: 10) {
@@ -141,17 +380,17 @@ struct HomeView: View {
                         .frame(width: 24)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(machine.machineName)
-                            .font(.subheadline.weight(.semibold))
+                            .font((largeCanvas ? Font.body : .subheadline).weight(.semibold))
                         Text(machine.platform)
-                            .font(.caption)
+                            .font(largeCanvas ? .subheadline : .caption)
                             .foregroundStyle(AmbientTheme.muted)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 3) {
                         Text("\(MetricFormat.tps(machine.oneMinute.tps)) TPS")
-                            .font(.subheadline.monospacedDigit())
+                            .font((largeCanvas ? Font.body : .subheadline).monospacedDigit())
                         Text(LoadStatePalette.label(for: machine.loadVisualState.state))
-                            .font(.caption2.weight(.bold))
+                            .font((largeCanvas ? Font.caption : .caption2).weight(.bold))
                             .foregroundStyle(AmbientTheme.statusColor(machine.loadVisualState.state))
                     }
                 }
@@ -177,6 +416,42 @@ struct HomeView: View {
         if cpu >= 88 { return AmbientTheme.red }
         if cpu >= 72 { return AmbientTheme.amber }
         return .primary
+    }
+}
+
+private struct LandscapeHomePanel<Content: View>: View {
+    let title: String?
+    let large: Bool
+    @ViewBuilder let content: Content
+
+    init(_ title: String? = nil, large: Bool = false, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.large = large
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: large ? 10 : 7) {
+            if let title {
+                Text(title.uppercased())
+                    .font(.system(size: large ? 12 : 9, weight: .semibold))
+                    .foregroundStyle(AmbientTheme.muted)
+            }
+            content
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: large ? .center : .topLeading
+                )
+        }
+        .padding(large ? 14 : 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AmbientTheme.surface)
+        .overlay {
+            RoundedRectangle(cornerRadius: 5)
+                .stroke(AmbientTheme.line)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 5))
     }
 }
 

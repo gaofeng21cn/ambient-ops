@@ -39,7 +39,11 @@ import {
   shouldReducePetMotion,
 } from "./pet-display.mjs";
 import { fetchWithTimeout } from "./http.mjs";
-import { connectionAfterFailure } from "./status-connection.mjs";
+import {
+  connectionAfterFailure,
+  displayConnectionConfiguration,
+  resolveStatusAssetURLs,
+} from "./status-connection.mjs";
 import {
   appendHistorySample,
   historyValuesInWindow,
@@ -56,6 +60,7 @@ import { shouldReduceKioskMotion } from "./kiosk-motion.mjs";
 const VIEWS = ["overview", "network", "machines", "load", "pet"];
 const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", load: "Load", pet: "Pet" };
 const CONNECTION_STALE_GRACE_MS = 5_000;
+const DISPLAY_CONNECTION = displayConnectionConfiguration();
 const PET_STATE_LABELS = {
   idle: "IDLE",
   failed: "OFFLINE",
@@ -77,9 +82,9 @@ export function App() {
   const pairingMatch = location.pathname.match(/^\/pair\/([a-zA-Z0-9_-]{32,80})$/);
   if (pairingMatch) return <PairingApproval requestId={pairingMatch[1]} />;
   const eink = location.pathname.startsWith("/display/eink");
-  const [status, connection] = useStatus();
+  const [status, connection] = useStatus(DISPLAY_CONNECTION.statusEndpoint);
   if (eink) return <EinkDisplay status={status} connection={connection} />;
-  return <Dashboard status={status} connection={connection} />;
+  return <Dashboard status={status} connection={connection} displayConnection={DISPLAY_CONNECTION} />;
 }
 
 function PairingApproval({ requestId }) {
@@ -183,7 +188,7 @@ function PairingApproval({ requestId }) {
   );
 }
 
-function useStatus() {
+function useStatus(statusEndpoint = "/api/status") {
   const cached = useMemo(() => {
     try { return JSON.parse(localStorage.getItem("home-status-last") || "null"); } catch { return null; }
   }, []);
@@ -196,9 +201,9 @@ function useStatus() {
     let timer;
     const refresh = async () => {
       try {
-        const response = await fetchWithTimeout("/api/status", { cache: "no-store" });
+        const response = await fetchWithTimeout(statusEndpoint, { cache: "no-store" });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const next = await response.json();
+        const next = resolveStatusAssetURLs(await response.json(), statusEndpoint);
         if (stopped) return;
         setStatus((current) => {
           const merged = mergeStatusHistory(current, next);
@@ -217,13 +222,13 @@ function useStatus() {
     };
     refresh();
     return () => { stopped = true; clearTimeout(timer); };
-  }, []);
+  }, [statusEndpoint]);
 
   return [status, connection];
 }
 
-function Dashboard({ status, connection }) {
-  const [view, setView] = useState(initialView);
+function Dashboard({ status, connection, displayConnection }) {
+  const [view, setView] = useState(() => initialView(displayConnection));
   const [selectedMachineId, setSelectedMachineId] = useState(
     () => localStorage.getItem("ambient-ops-machine-id") || status.machines[0]?.machineId || null,
   );
@@ -234,9 +239,14 @@ function Dashboard({ status, connection }) {
   const selectedMachine = selectDisplayMachine(status.machines, selectedMachineId, machineFollowMode);
 
   useEffect(() => {
+    window.AmbientOpsNative?.statusChanged?.(connection);
+  }, [connection]);
+
+  useEffect(() => {
+    if (displayConnection.embedded) return;
     const next = `/display/${view}`;
     if (location.pathname !== next) history.replaceState(null, "", next);
-  }, [view]);
+  }, [displayConnection.embedded, view]);
 
   useEffect(() => {
     if (selectedMachine?.machineId) {
@@ -308,7 +318,8 @@ function Dashboard({ status, connection }) {
   );
 }
 
-function initialView() {
+function initialView(displayConnection = DISPLAY_CONNECTION) {
+  if (VIEWS.includes(displayConnection.requestedView)) return displayConnection.requestedView;
   const route = location.pathname.split("/").pop();
   return VIEWS.includes(route) ? route : "overview";
 }
@@ -325,7 +336,9 @@ function Header({ status, connection, view }) {
         {status.demo ? <span className="mode-label">DEMO</span> : null}
         <StatusLabel status={connection === "live" ? status.overallStatus : "stale"} />
         <span className="divider" />
-        <span className="source-label">Gateway &amp; Codex Agents</span>
+        <span className="source-label">
+          {status.provider?.scope === "machine" ? "Direct Codex TPS" : "Gateway & Codex Agents"}
+        </span>
         <FullscreenButton />
       </div>
       <time>{formatTime(now, status.site?.timeZone)}</time>
@@ -476,7 +489,7 @@ function useLoadPixelMotion(canvasRef, visualRef, reduceMotion) {
     const workstation = new Image();
     workstation.decoding = "async";
     workstation.onload = () => { assetReady = true; };
-    workstation.src = "/load/operator-workbench.webp";
+    workstation.src = `${import.meta.env.BASE_URL}load/operator-workbench.webp`;
 
     const paint = (timestamp) => {
       const frameBudget = reduceMotion ? 140 : 34;

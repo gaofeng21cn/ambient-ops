@@ -30,6 +30,7 @@ jobs:
       - run: npm test
       - run: ./ops/synology/deploy.test.sh
       - run: npm run build
+      - run: npm run build:android
       - run: ./ops/docker/smoke-test.sh
       - uses: actions/setup-java@v4
         with:
@@ -116,6 +117,12 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build:android
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

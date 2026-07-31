@@ -1,5 +1,6 @@
 package cn.gaofeng.ambientops.kiosk;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -9,36 +10,40 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
-import android.net.nsd.NsdManager;
-import android.net.nsd.NsdServiceInfo;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import java.net.InetAddress;
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 public final class MainActivity extends Activity {
-    private static final String SERVICE_TYPE = "_ambient-ops._tcp.";
-    private static final String DEFAULT_PATH = "/display/overview";
+    private static final String LOCAL_DISPLAY_URL =
+        "file:///android_asset/ambient-ops/index.html";
     private static final String PREFS = "ambient_ops_kiosk";
     private static final String PREF_ENDPOINT = "last_endpoint";
     private static final String PREF_INSTANCE_ID = "last_instance_id";
+    private static final String PREF_SOURCE_ID = "last_source_id";
+    private static final String PREF_SOURCE_KIND = "last_source_kind";
+    private static final String PREF_SOURCE_NAME = "last_source_name";
     private static final String PREF_MANUAL_URL = "manual_url";
+    private static final String PREF_MANUAL_KIND = "manual_source_kind";
     private static final String EXTRA_URL = "ambient_ops_url";
     private static final String EXTRA_INSTANCE_ID = "ambient_ops_instance_id";
+    private static final String EXTRA_SOURCE_KIND = "ambient_ops_source_kind";
     private static final long RETRY_DELAY_MS = 2_000L;
     private static final long LOAD_TIMEOUT_MS = 10_000L;
-    private static final long RESOLVE_TIMEOUT_MS = 5_000L;
+    private static final long AUTOMATIC_SELECTION_DELAY_MS = 800L;
     private static final long UPDATE_INITIAL_DELAY_MS = 10_000L;
     private static final long UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1_000L;
     private static final long UI_REVISION_INITIAL_DELAY_MS = 2_000L;
@@ -53,26 +58,25 @@ public final class MainActivity extends Activity {
             | View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final List<DisplaySource> discoveredSources = new ArrayList<>();
     private WebView webView;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
-    private NsdManager nsdManager;
-    private NsdManager.DiscoveryListener discoveryListener;
     private SharedPreferences preferences;
     private KioskUpdater kioskUpdater;
     private UiRevisionMonitor uiRevisionMonitor;
-    private String currentEndpoint;
+    private DualModeDiscovery discovery;
+    private DisplaySource currentSource;
     private boolean pageLoaded;
     private boolean endpointAttemptInProgress;
-    private boolean resolving;
     private boolean activityResumed;
 
     private final Runnable retry = () -> {
-        String endpoint = preferredEndpoint();
-        if (endpoint != null) {
-            loadEndpoint(endpoint);
+        DisplaySource preferred = preferredSource();
+        if (preferred != null) {
+            loadSource(preferred);
         } else {
-            showDiscoveryState("正在查找 Ambient Ops");
+            showDiscoveryState("正在查找 Ambient Ops 与 Codex TPS");
             startDiscovery();
         }
     };
@@ -83,21 +87,27 @@ public final class MainActivity extends Activity {
         webView.stopLoading();
         handleLoadFailure();
     };
-    private final Runnable resolveTimeout = () -> {
-        if (!resolving) {
+    private final Runnable automaticSelection = () -> {
+        if (validHttpUrl(preferences.getString(PREF_MANUAL_URL, null))) {
             return;
         }
-        resolving = false;
-        stopDiscovery();
-        handler.postDelayed(this::startDiscovery, RETRY_DELAY_MS);
+        DisplaySource selected = ServiceSelectionPolicy.automaticSource(
+            discoveredSources,
+            rememberedSourceId()
+        );
+        if (selected != null) {
+            selectDiscoveredSource(selected);
+        } else if (!pageLoaded && !endpointAttemptInProgress && discoveredSources.size() > 1) {
+            showDiscoveryState("发现多个 Codex TPS，等待已保存来源或 Gateway");
+        }
     };
     private final Runnable updateCheck = new Runnable() {
         @Override
         public void run() {
-            if (kioskUpdater != null && pageLoaded && currentEndpoint != null) {
-                kioskUpdater.check(currentEndpoint);
+            if (kioskUpdater != null && pageLoaded && isGatewaySource()) {
+                kioskUpdater.check(currentSource.endpoint);
+                handler.postDelayed(this, UPDATE_INTERVAL_MS);
             }
-            handler.postDelayed(this, UPDATE_INTERVAL_MS);
         }
     };
     private final Runnable uiRevisionCheck = new Runnable() {
@@ -107,12 +117,12 @@ public final class MainActivity extends Activity {
                 uiRevisionMonitor != null
                     && activityResumed
                     && pageLoaded
-                    && currentEndpoint != null
+                    && isGatewaySource()
             ) {
-                String endpoint = currentEndpoint;
+                DisplaySource source = currentSource;
                 uiRevisionMonitor.check(
-                    endpoint,
-                    () -> handler.post(() -> reloadForUiRevision(endpoint))
+                    source.endpoint,
+                    () -> handler.post(() -> reloadForUiRevision(source))
                 );
                 handler.postDelayed(this, UI_REVISION_INTERVAL_MS);
             }
@@ -120,6 +130,7 @@ public final class MainActivity extends Activity {
     };
 
     @Override
+    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -133,7 +144,17 @@ public final class MainActivity extends Activity {
         kioskUpdater = new KioskUpdater(this);
         uiRevisionMonitor = new UiRevisionMonitor();
         applyConfiguration(getIntent());
-        nsdManager = (NsdManager) getSystemService(Context.NSD_SERVICE);
+        discovery = new DualModeDiscovery(this, new DualModeDiscovery.Listener() {
+            @Override
+            public void onSourcesChanged(List<DisplaySource> sources) {
+                handler.post(() -> handleDiscoveredSources(sources));
+            }
+
+            @Override
+            public void onDiscoveryError() {
+                handler.post(MainActivity.this::scheduleRetry);
+            }
+        });
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(12, 15, 18));
@@ -145,10 +166,15 @@ public final class MainActivity extends Activity {
                 + " AmbientOpsKiosk/"
                 + BuildConfig.VERSION_NAME
         );
+        webView.addJavascriptInterface(new DirectStatusBridge(), "AmbientOpsNative");
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                verifyPageHealthy(view, url);
+                if (currentSource != null && currentSource.kind == DisplaySource.Kind.DIRECT) {
+                    verifyDirectShell(view, url);
+                } else {
+                    verifyGatewayPage(view, url);
+                }
                 enterImmersiveMode();
             }
 
@@ -179,13 +205,13 @@ public final class MainActivity extends Activity {
         String requestedUrl = getIntent() == null
             ? null
             : getIntent().getStringExtra(EXTRA_URL);
-        currentEndpoint = validHttpUrl(requestedUrl)
-            ? requestedUrl
-            : preferredEndpoint();
-        if (currentEndpoint != null) {
-            loadEndpoint(currentEndpoint);
+        currentSource = validHttpUrl(requestedUrl)
+            ? manualSource(requestedUrl)
+            : preferredSource();
+        if (currentSource != null) {
+            loadSource(currentSource);
         } else {
-            showDiscoveryState("正在查找 Ambient Ops");
+            showDiscoveryState("正在查找 Ambient Ops 与 Codex TPS");
         }
         startDiscovery();
         registerNetworkRetry();
@@ -198,7 +224,7 @@ public final class MainActivity extends Activity {
         applyConfiguration(intent);
         String requestedUrl = intent == null ? null : intent.getStringExtra(EXTRA_URL);
         if (validHttpUrl(requestedUrl)) {
-            loadEndpoint(requestedUrl);
+            loadSource(manualSource(requestedUrl));
         } else if (!pageLoaded && !endpointAttemptInProgress) {
             handler.post(retry);
         }
@@ -233,8 +259,8 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (currentEndpoint != null) {
-            loadEndpoint(currentEndpoint);
+        if (currentSource != null) {
+            loadSource(currentSource);
         }
     }
 
@@ -242,7 +268,10 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         unregisterNetworkRetry();
-        stopDiscovery();
+        if (discovery != null) {
+            discovery.stop();
+            discovery = null;
+        }
         if (kioskUpdater != null) {
             kioskUpdater.close();
             kioskUpdater = null;
@@ -252,6 +281,7 @@ public final class MainActivity extends Activity {
             uiRevisionMonitor = null;
         }
         if (webView != null) {
+            webView.removeJavascriptInterface("AmbientOpsNative");
             webView.destroy();
             webView = null;
         }
@@ -259,200 +289,147 @@ public final class MainActivity extends Activity {
     }
 
     private void startDiscovery() {
-        if (nsdManager == null || discoveryListener != null) {
+        if (discovery != null) {
+            discovery.start();
+        }
+    }
+
+    private void handleDiscoveredSources(List<DisplaySource> sources) {
+        discoveredSources.clear();
+        discoveredSources.addAll(sources);
+        if (validHttpUrl(preferences.getString(PREF_MANUAL_URL, null))) {
             return;
         }
-        discoveryListener = new NsdManager.DiscoveryListener() {
-            @Override
-            public void onDiscoveryStarted(String serviceType) {}
 
-            @Override
-            public void onServiceFound(NsdServiceInfo serviceInfo) {
-                if (SERVICE_TYPE.equals(serviceInfo.getServiceType()) && !resolving) {
-                    resolveService(serviceInfo);
+        String remembered = rememberedSourceId();
+        if (remembered != null) {
+            for (DisplaySource source : discoveredSources) {
+                if (remembered.equals(source.id)) {
+                    handler.removeCallbacks(automaticSelection);
+                    selectDiscoveredSource(source);
+                    return;
                 }
             }
-
-            @Override
-            public void onServiceLost(NsdServiceInfo serviceInfo) {}
-
-            @Override
-            public void onDiscoveryStopped(String serviceType) {}
-
-            @Override
-            public void onStartDiscoveryFailed(String serviceType, int errorCode) {
-                stopDiscovery();
-                scheduleRetry();
-            }
-
-            @Override
-            public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-                discoveryListener = null;
-            }
-        };
-        try {
-            nsdManager.discoverServices(
-                SERVICE_TYPE,
-                NsdManager.PROTOCOL_DNS_SD,
-                discoveryListener
-            );
-        } catch (RuntimeException error) {
-            discoveryListener = null;
-            scheduleRetry();
         }
+        handler.removeCallbacks(automaticSelection);
+        handler.postDelayed(automaticSelection, AUTOMATIC_SELECTION_DELAY_MS);
     }
 
-    private void stopDiscovery() {
-        if (nsdManager == null || discoveryListener == null) {
-            return;
-        }
-        NsdManager.DiscoveryListener listener = discoveryListener;
-        discoveryListener = null;
-        try {
-            nsdManager.stopServiceDiscovery(listener);
-        } catch (IllegalArgumentException ignored) {
-            // Android may already have stopped discovery after a network transition.
-        }
-    }
-
-    private void resolveService(NsdServiceInfo serviceInfo) {
-        resolving = true;
-        handler.removeCallbacks(resolveTimeout);
-        handler.postDelayed(resolveTimeout, RESOLVE_TIMEOUT_MS);
-        nsdManager.resolveService(serviceInfo, new NsdManager.ResolveListener() {
-            @Override
-            public void onResolveFailed(NsdServiceInfo failedService, int errorCode) {
-                resolving = false;
-                handler.removeCallbacks(resolveTimeout);
-            }
-
-            @Override
-            public void onServiceResolved(NsdServiceInfo resolved) {
-                handler.post(() -> handleResolvedService(resolved));
-            }
-        });
-    }
-
-    private void handleResolvedService(NsdServiceInfo resolved) {
-        resolving = false;
-        handler.removeCallbacks(resolveTimeout);
-        String instanceId = attribute(resolved, "id");
-        String preferredId = preferences.getString(PREF_INSTANCE_ID, null);
-        boolean explicitBinding = validHttpUrl(
-            preferences.getString(PREF_MANUAL_URL, null)
-        );
+    private void selectDiscoveredSource(DisplaySource source) {
         if (
-            !ServiceSelectionPolicy.shouldAccept(
-                preferredId,
-                instanceId,
-                pageLoaded || endpointAttemptInProgress,
-                explicitBinding
-            )
+            pageLoaded
+                && currentSource != null
+                && currentSource.id.equals(source.id)
+                && currentSource.endpoint.equals(source.endpoint)
         ) {
             return;
         }
+        persistSource(source);
+        loadSource(source);
+    }
 
-        String endpoint = endpoint(resolved);
-        if (endpoint == null) {
+    @SuppressLint("SetJavaScriptEnabled")
+    private void loadSource(DisplaySource source) {
+        if (source == null || !validHttpUrl(source.endpoint)) {
             return;
         }
-        SharedPreferences.Editor editor = preferences.edit()
-            .putString(PREF_ENDPOINT, endpoint);
-        if (instanceId != null) {
-            editor.putString(PREF_INSTANCE_ID, instanceId);
-        }
-        editor.apply();
-
-        if (!endpoint.equals(currentEndpoint) || !pageLoaded) {
-            loadEndpoint(endpoint);
-        }
-    }
-
-    private String endpoint(NsdServiceInfo serviceInfo) {
-        InetAddress host = serviceInfo.getHost();
-        int port = serviceInfo.getPort();
-        if (host == null || port <= 0) {
-            return null;
-        }
-        String address = host.getHostAddress();
-        if (address == null || address.isEmpty()) {
-            return null;
-        }
-        if (address.contains(":")) {
-            address = "[" + address.replaceAll("%.*$", "") + "]";
-        }
-        String path = attribute(serviceInfo, "path");
-        if (path == null || !path.startsWith("/")) {
-            path = DEFAULT_PATH;
-        }
-        return String.format(Locale.US, "http://%s:%d%s", address, port, path);
-    }
-
-    private String attribute(NsdServiceInfo serviceInfo, String key) {
-        Map<String, byte[]> attributes = serviceInfo.getAttributes();
-        byte[] value = attributes.get(key);
-        return value == null ? null : new String(value, StandardCharsets.UTF_8);
-    }
-
-    private void loadEndpoint(String endpoint) {
-        if (!validHttpUrl(endpoint)) {
-            return;
-        }
-        if (uiRevisionMonitor != null) {
-            uiRevisionMonitor.selectEndpoint(endpoint);
-        }
-        currentEndpoint = endpoint;
+        currentSource = source;
         pageLoaded = false;
         endpointAttemptInProgress = true;
         handler.removeCallbacks(retry);
         handler.removeCallbacks(loadTimeout);
+        handler.removeCallbacks(updateCheck);
         handler.removeCallbacks(uiRevisionCheck);
         handler.postDelayed(loadTimeout, LOAD_TIMEOUT_MS);
-        webView.loadUrl(endpoint);
+
+        if (source.isGateway()) {
+            webView.getSettings().setAllowUniversalAccessFromFileURLs(false);
+            if (uiRevisionMonitor != null) {
+                uiRevisionMonitor.selectEndpoint(source.endpoint);
+            }
+            webView.loadUrl(source.endpoint);
+        } else {
+            webView.getSettings().setAllowUniversalAccessFromFileURLs(true);
+            webView.loadUrl(
+                LOCAL_DISPLAY_URL
+                    + "?statusUrl="
+                    + Uri.encode(source.endpoint)
+                    + "&view=overview"
+            );
+        }
     }
 
-    private void verifyPageHealthy(WebView view, String url) {
-        if (!ServiceSelectionPolicy.shouldMarkPageHealthy(currentEndpoint, url)) {
+    private void verifyGatewayPage(WebView view, String url) {
+        if (
+            currentSource == null
+                || !currentSource.isGateway()
+                || !ServiceSelectionPolicy.shouldMarkPageHealthy(currentSource.endpoint, url)
+        ) {
             return;
         }
         view.evaluateJavascript(
             "document.getElementById('root') !== null",
             result -> {
                 if (
-                    view != webView
-                        || !"true".equals(result)
-                        || !ServiceSelectionPolicy.shouldMarkPageHealthy(
-                            currentEndpoint,
+                    view == webView
+                        && "true".equals(result)
+                        && currentSource != null
+                        && currentSource.isGateway()
+                        && ServiceSelectionPolicy.shouldMarkPageHealthy(
+                            currentSource.endpoint,
                             url
                         )
                 ) {
-                    return;
+                    markPageHealthy();
                 }
-                pageLoaded = true;
-                endpointAttemptInProgress = false;
-                handler.removeCallbacks(retry);
-                handler.removeCallbacks(loadTimeout);
-                preferences.edit().putString(PREF_ENDPOINT, url).apply();
-                handler.removeCallbacks(updateCheck);
-                handler.postDelayed(updateCheck, UPDATE_INITIAL_DELAY_MS);
-                scheduleUiRevisionCheck();
             }
         );
     }
 
+    private void verifyDirectShell(WebView view, String url) {
+        if (!url.startsWith(LOCAL_DISPLAY_URL)) {
+            return;
+        }
+        view.evaluateJavascript(
+            "document.getElementById('root') !== null",
+            result -> {
+                if (view == webView && !"true".equals(result)) {
+                    handleLoadFailure();
+                }
+            }
+        );
+    }
+
+    private void markPageHealthy() {
+        if (currentSource == null) {
+            return;
+        }
+        pageLoaded = true;
+        endpointAttemptInProgress = false;
+        handler.removeCallbacks(retry);
+        handler.removeCallbacks(loadTimeout);
+        persistSource(currentSource);
+        if (currentSource.isGateway()) {
+            handler.postDelayed(updateCheck, UPDATE_INITIAL_DELAY_MS);
+            scheduleUiRevisionCheck();
+        }
+    }
+
     private void scheduleUiRevisionCheck() {
         handler.removeCallbacks(uiRevisionCheck);
-        if (activityResumed && pageLoaded) {
+        if (activityResumed && pageLoaded && isGatewaySource()) {
             handler.postDelayed(uiRevisionCheck, UI_REVISION_INITIAL_DELAY_MS);
         }
     }
 
-    private void reloadForUiRevision(String endpoint) {
+    private void reloadForUiRevision(DisplaySource source) {
         if (
             !activityResumed
                 || webView == null
                 || !pageLoaded
-                || !endpoint.equals(currentEndpoint)
+                || currentSource == null
+                || !currentSource.equals(source)
+                || !source.isGateway()
         ) {
             return;
         }
@@ -465,12 +442,15 @@ public final class MainActivity extends Activity {
     }
 
     private void handleLoadFailure() {
+        if (webView == null) {
+            return;
+        }
         pageLoaded = false;
         endpointAttemptInProgress = false;
         handler.removeCallbacks(loadTimeout);
         handler.removeCallbacks(updateCheck);
         handler.removeCallbacks(uiRevisionCheck);
-        showDiscoveryState("Ambient Ops 暂时不可用，正在重新查找");
+        showDiscoveryState("当前来源暂时不可用，正在重新查找");
         startDiscovery();
         scheduleRetry();
     }
@@ -493,6 +473,7 @@ public final class MainActivity extends Activity {
                     if (!pageLoaded && !endpointAttemptInProgress) {
                         handler.post(retry);
                     }
+                    startDiscovery();
                 });
             }
         };
@@ -520,34 +501,93 @@ public final class MainActivity extends Activity {
         networkCallback = null;
     }
 
-    private String preferredEndpoint() {
+    private DisplaySource preferredSource() {
         String manualUrl = preferences == null
             ? null
             : preferences.getString(PREF_MANUAL_URL, null);
         if (validHttpUrl(manualUrl)) {
-            return manualUrl;
+            return manualSource(manualUrl);
         }
-        if (validHttpUrl(currentEndpoint)) {
-            return currentEndpoint;
+        if (currentSource != null && validHttpUrl(currentSource.endpoint)) {
+            return currentSource;
         }
-        String rememberedEndpoint = preferences == null
+        String endpoint = preferences == null
             ? null
             : preferences.getString(PREF_ENDPOINT, null);
-        return validHttpUrl(rememberedEndpoint) ? rememberedEndpoint : null;
+        if (!validHttpUrl(endpoint)) {
+            return null;
+        }
+        DisplaySource.Kind kind = DisplaySource.Kind.fromPreference(
+            preferences.getString(PREF_SOURCE_KIND, DisplaySource.Kind.GATEWAY.preferenceValue)
+        );
+        String instanceId = preferences.getString(PREF_INSTANCE_ID, endpoint);
+        String id = rememberedSourceId();
+        if (id == null) {
+            id = kind.preferenceValue + ":" + instanceId;
+        }
+        String name = preferences.getString(PREF_SOURCE_NAME, "Ambient Ops");
+        return new DisplaySource(id, instanceId, name, endpoint, kind);
     }
 
+    private String rememberedSourceId() {
+        if (preferences == null) {
+            return null;
+        }
+        String id = preferences.getString(PREF_SOURCE_ID, null);
+        if (id != null && !id.isEmpty()) {
+            return id;
+        }
+        String oldInstanceId = preferences.getString(PREF_INSTANCE_ID, null);
+        return oldInstanceId == null || oldInstanceId.isEmpty()
+            ? null
+            : DisplaySource.Kind.GATEWAY.preferenceValue + ":" + oldInstanceId;
+    }
+
+    private DisplaySource manualSource(String endpoint) {
+        String instanceId = preferences == null
+            ? "manual"
+            : preferences.getString(PREF_INSTANCE_ID, "manual");
+        DisplaySource.Kind kind = preferences == null
+            ? DisplaySource.Kind.GATEWAY
+            : DisplaySource.Kind.fromPreference(
+                preferences.getString(
+                    PREF_MANUAL_KIND,
+                    DisplaySource.Kind.GATEWAY.preferenceValue
+                )
+            );
+        return new DisplaySource(
+            kind.preferenceValue + ":" + instanceId,
+            instanceId,
+            kind == DisplaySource.Kind.DIRECT ? "Manual Codex TPS" : "Manual Gateway",
+            endpoint,
+            kind
+        );
+    }
+
+    private void persistSource(DisplaySource source) {
+        preferences.edit()
+            .putString(PREF_ENDPOINT, source.endpoint)
+            .putString(PREF_INSTANCE_ID, source.instanceId)
+            .putString(PREF_SOURCE_ID, source.id)
+            .putString(PREF_SOURCE_KIND, source.kind.preferenceValue)
+            .putString(PREF_SOURCE_NAME, source.name)
+            .apply();
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
     private void showDiscoveryState(String message) {
         if (webView == null) {
             return;
         }
+        webView.getSettings().setAllowUniversalAccessFromFileURLs(false);
         String html =
             "<!doctype html><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
                 + "<style>html,body{height:100%;margin:0;background:#0c0f12;color:#eef3f7;"
                 + "font-family:sans-serif}body{display:grid;place-items:center}"
-                + "main{text-align:center}strong{font-size:32px;font-weight:500}"
-                + "p{font-size:18px;color:#9aa5ae}</style><main><strong>"
+                + "main{text-align:center}strong{font-size:30px;font-weight:500}"
+                + "p{font-size:16px;color:#9aa5ae}</style><main><strong>"
                 + escapeHtml(message)
-                + "</strong><p>_ambient-ops._tcp.local</p></main>";
+                + "</strong><p>Gateway · Direct Codex TPS</p></main>";
         webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
     }
 
@@ -557,6 +597,7 @@ public final class MainActivity extends Activity {
         }
         String url = intent.getStringExtra(EXTRA_URL);
         String instanceId = intent.getStringExtra(EXTRA_INSTANCE_ID);
+        String sourceKind = intent.getStringExtra(EXTRA_SOURCE_KIND);
         SharedPreferences.Editor editor = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
         boolean changed = false;
         if (validHttpUrl(url)) {
@@ -567,6 +608,13 @@ public final class MainActivity extends Activity {
             editor.putString(PREF_INSTANCE_ID, instanceId.toLowerCase(Locale.US));
             changed = true;
         }
+        if (
+            DisplaySource.Kind.GATEWAY.preferenceValue.equals(sourceKind)
+                || DisplaySource.Kind.DIRECT.preferenceValue.equals(sourceKind)
+        ) {
+            editor.putString(PREF_MANUAL_KIND, sourceKind);
+            changed = true;
+        }
         if (changed) {
             editor.apply();
         }
@@ -574,8 +622,16 @@ public final class MainActivity extends Activity {
     }
 
     private boolean validHttpUrl(String value) {
-        return value != null
-            && (value.startsWith("http://") || value.startsWith("https://"));
+        if (value == null) {
+            return false;
+        }
+        Uri uri = Uri.parse(value);
+        return ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))
+            && uri.getHost() != null;
+    }
+
+    private boolean isGatewaySource() {
+        return currentSource != null && currentSource.isGateway();
     }
 
     private String escapeHtml(String value) {
@@ -587,5 +643,21 @@ public final class MainActivity extends Activity {
 
     private void enterImmersiveMode() {
         getWindow().getDecorView().setSystemUiVisibility(IMMERSIVE_FLAGS);
+    }
+
+    private final class DirectStatusBridge {
+        @JavascriptInterface
+        public void statusChanged(String state) {
+            handler.post(() -> {
+                if (currentSource == null || currentSource.kind != DisplaySource.Kind.DIRECT) {
+                    return;
+                }
+                if ("live".equals(state)) {
+                    markPageHealthy();
+                } else if ("stale".equals(state) && pageLoaded) {
+                    handleLoadFailure();
+                }
+            });
+        }
     }
 }

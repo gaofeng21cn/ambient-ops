@@ -17,7 +17,21 @@ private struct AmbientLoadEntry: TimelineEntry {
     let machine: MachineStatus
 }
 
+private final class TimelineCompletion: @unchecked Sendable {
+    private let completion: (Timeline<AmbientLoadEntry>) -> Void
+
+    init(_ completion: @escaping (Timeline<AmbientLoadEntry>) -> Void) {
+        self.completion = completion
+    }
+
+    func callAsFunction(_ timeline: Timeline<AmbientLoadEntry>) {
+        completion(timeline)
+    }
+}
+
 private struct AmbientLoadProvider: TimelineProvider {
+    private let client = SharedStatusClient()
+
     func placeholder(in context: Context) -> AmbientLoadEntry {
         entry()
     }
@@ -27,7 +41,16 @@ private struct AmbientLoadProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<AmbientLoadEntry>) -> Void) {
-        completion(Timeline(entries: [entry()], policy: .after(.now.addingTimeInterval(15 * 60))))
+        let completion = TimelineCompletion(completion)
+        Task {
+            let nextEntry = await refreshedEntry()
+            completion(
+                Timeline(
+                    entries: [nextEntry],
+                    policy: .after(.now.addingTimeInterval(5 * 60))
+                )
+            )
+        }
     }
 
     private func entry() -> AmbientLoadEntry {
@@ -35,6 +58,18 @@ private struct AmbientLoadProvider: TimelineProvider {
         let status = stored?.status ?? DemoFixtures.status()
         let machine = status.focusedMachine(preferredID: stored?.focusedMachineID)
             ?? DemoFixtures.status().machines[0]
+        return AmbientLoadEntry(date: .now, status: status, machine: machine)
+    }
+
+    private func refreshedEntry() async -> AmbientLoadEntry {
+        guard let sourceURL = SharedSnapshotStore.sourceURL(),
+              let status = try? await client.fetchStatus(from: sourceURL),
+              let machine = status.focusedMachine(
+                preferredID: SharedSnapshotStore.load()?.focusedMachineID
+              ) else {
+            return entry()
+        }
+        SharedSnapshotStore.save(status, focusedMachineID: machine.machineId)
         return AmbientLoadEntry(date: .now, status: status, machine: machine)
     }
 }
@@ -80,6 +115,8 @@ private struct AmbientLoadWidgetView: View {
             .font(.caption)
             HStack(spacing: 6) {
                 Text("\(MetricFormat.tps(entry.machine.oneMinute.tps)) TPS")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.62)
                 Text("·")
                 Text("\(MetricFormat.integer(entry.machine.activeSessions)) active")
             }
@@ -111,6 +148,8 @@ private struct AmbientLoadWidgetView: View {
             Spacer()
             Text("\(MetricFormat.tps(entry.machine.oneMinute.tps)) TPS")
                 .font(.title3.monospacedDigit().weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.62)
             LoadGlyph(visual: entry.machine.loadVisualState)
                 .frame(height: 12)
         }
@@ -130,6 +169,8 @@ private struct AmbientLoadWidgetView: View {
                 Spacer()
                 Text("\(MetricFormat.tps(entry.machine.oneMinute.tps)) TPS")
                     .font(.title.monospacedDigit().weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.62)
             }
             LoadGlyph(visual: entry.machine.loadVisualState)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -188,6 +229,8 @@ struct AmbientLoadLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.trailing) {
                     Text(MetricFormat.tps(context.state.tps))
                         .font(.title3.monospacedDigit().weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.62)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
@@ -203,6 +246,8 @@ struct AmbientLoadLiveActivity: Widget {
             } compactTrailing: {
                 Text(MetricFormat.tps(context.state.tps))
                     .font(.caption2.monospacedDigit())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
             } minimal: {
                 Circle()
                     .fill(AmbientTheme.statusColor(context.state.state))

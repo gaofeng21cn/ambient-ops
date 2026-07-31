@@ -2,6 +2,73 @@ import XCTest
 @testable import AmbientOps
 
 final class AmbientOpsTests: XCTestCase {
+    func testTPSFormattingMatchesTheWebDisplay() {
+        XCTAssertEqual(MetricFormat.tps(56_840), "56,840")
+        XCTAssertEqual(MetricFormat.tps(2_329.4), "2,329")
+        XCTAssertEqual(MetricFormat.tps(98.75), "98.8")
+        XCTAssertEqual(MetricFormat.tps(0), "0")
+    }
+
+    func testPetPlaybackUsesOnlyPopulatedFrames() {
+        let idle = PetAnimationPlayback.forState("idle")
+        XCTAssertEqual(idle.row, 0)
+        XCTAssertEqual(idle.frames.map(\.column), [0, 1, 2, 3, 4, 5])
+        XCTAssertEqual(idle.durationMilliseconds, 6_600)
+
+        let running = PetAnimationPlayback.forState("running")
+        XCTAssertEqual(running.row, 7)
+        XCTAssertEqual(running.frames.map(\.column), [0, 1, 2, 3, 4, 5])
+        XCTAssertEqual(running.durationMilliseconds, 820)
+
+        let failed = PetAnimationPlayback.forState("failed")
+        XCTAssertEqual(failed.row, 5)
+        XCTAssertEqual(failed.frames.map(\.column), Array(0..<8))
+    }
+
+    func testPetPlaybackUsesAbsoluteElapsedTime() {
+        let running = PetAnimationPlayback.forState("running")
+        XCTAssertEqual(running.frameIndex(atElapsedMilliseconds: -1), 0)
+        XCTAssertEqual(running.frameIndex(atElapsedMilliseconds: 119), 0)
+        XCTAssertEqual(running.frameIndex(atElapsedMilliseconds: 120), 1)
+        XCTAssertEqual(running.frameIndex(atElapsedMilliseconds: 599), 4)
+        XCTAssertEqual(running.frameIndex(atElapsedMilliseconds: 600), 5)
+        XCTAssertEqual(running.frameIndex(atElapsedMilliseconds: 819), 5)
+        XCTAssertEqual(running.frameIndex(atElapsedMilliseconds: 820), 0)
+        XCTAssertEqual(running.frameIndex(atElapsedMilliseconds: (820 * 12) + 360), 3)
+    }
+
+    func testPetAtlasLayoutUsesNonSquareCodexCells() {
+        let v2 = PetAtlasLayout(
+            spriteVersionNumber: 2,
+            imageSize: CGSize(width: 1_536, height: 2_288)
+        )
+        XCTAssertEqual(v2.rowCount, 11)
+        XCTAssertEqual(
+            v2.textureRect(row: 7, column: 5),
+            CGRect(x: 0.625, y: 3.0 / 11.0, width: 0.125, height: 1.0 / 11.0)
+        )
+
+        let v1 = PetAtlasLayout(
+            spriteVersionNumber: 1,
+            imageSize: CGSize(width: 1_536, height: 1_872)
+        )
+        XCTAssertEqual(v1.rowCount, 9)
+    }
+
+    func testPetAtlasLayoutFallsBackToDeclaredVersion() {
+        XCTAssertEqual(
+            PetAtlasLayout(
+                spriteVersionNumber: 2,
+                imageSize: CGSize(width: 400, height: 400)
+            ).rowCount,
+            11
+        )
+        XCTAssertEqual(
+            PetAtlasLayout(spriteVersionNumber: 1, imageSize: nil).rowCount,
+            9
+        )
+    }
+
     func testAppIncludesEnglishAndSimplifiedChineseLocalizations() throws {
         let bundle = Bundle(for: AmbientOpsStore.self)
 
@@ -39,11 +106,11 @@ final class AmbientOpsTests: XCTestCase {
 
         XCTAssertTrue(
             try XCTUnwrap(englishInfo["NSLocalNetworkUsageDescription"])
-                .contains("self-hosted server")
+                .contains("Codex TPS")
         )
         XCTAssertTrue(
             try XCTUnwrap(chineseInfo["NSLocalNetworkUsageDescription"])
-                .contains("自托管服务器")
+                .contains("Codex TPS")
         )
 
         let chineseStringsPath = try XCTUnwrap(
@@ -63,16 +130,22 @@ final class AmbientOpsTests: XCTestCase {
         let requiredInteractions = [
             "Home",
             "Machines",
+            "Machine",
             "Display",
             "Settings",
             "Demo Mode",
             "Connect",
             "Find on Local Network",
-            "Allow Local Network Access?",
+            "Nearby sources",
             "Start Load Live Activity",
             "End Live Activity",
             "StandBy & Lock Screen",
             "Privacy",
+            "Connection",
+            "Current source",
+            "Search Again",
+            "Manual Connection",
+            "Preview",
         ]
 
         for key in requiredInteractions {
@@ -107,19 +180,16 @@ final class AmbientOpsTests: XCTestCase {
 
     @MainActor
     func testLiveModeCanDisableDemoAndClearsDemoSnapshot() {
-        let defaults = UserDefaults.standard
+        let suiteName = "AmbientOpsTests.demo.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
         let demoKey = "ambient-ops.demo-mode"
-        let previousDemoValue = defaults.object(forKey: demoKey)
         defer {
-            if let previousDemoValue {
-                defaults.set(previousDemoValue, forKey: demoKey)
-            } else {
-                defaults.removeObject(forKey: demoKey)
-            }
+            defaults.removePersistentDomain(forName: suiteName)
         }
 
         defaults.set(true, forKey: demoKey)
-        let store = AmbientOpsStore()
+        let store = AmbientOpsStore(defaults: defaults)
         XCTAssertTrue(store.isDemoMode)
         XCTAssertTrue(store.status.demo)
 
@@ -130,6 +200,26 @@ final class AmbientOpsTests: XCTestCase {
         XCTAssertFalse(store.status.demo)
         XCTAssertTrue(store.status.machines.isEmpty)
         XCTAssertEqual(defaults.object(forKey: demoKey) as? Bool, false)
+    }
+
+    @MainActor
+    func testFirstLaunchUsesAutomaticDiscoveryInsteadOfDemo() {
+        let suiteName = "AmbientOpsTests.first-launch.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = AmbientOpsStore(defaults: defaults)
+
+        XCTAssertFalse(store.isDemoMode)
+        XCTAssertFalse(store.status.demo)
+        XCTAssertTrue(store.isDiscovering)
+        XCTAssertEqual(store.connectionState, .loading)
+        XCTAssertEqual(defaults.object(forKey: "ambient-ops.demo-mode") as? Bool, false)
+
+        store.useLiveMode()
     }
 
     func testUnknownCPUDecodesAsNil() throws {
@@ -208,5 +298,102 @@ final class AmbientOpsTests: XCTestCase {
             "http://ambient-ops.local:8787"
         )
         XCTAssertNil(AmbientOpsClient.normalizedServerURL("not a host"))
+    }
+
+    func testSourceSelectionPrefersSavedThenGatewayThenUniqueDirect() throws {
+        let gateway = DiscoveredServer(
+            id: "gateway:home",
+            instanceID: "home",
+            name: "Home",
+            url: try XCTUnwrap(URL(string: "http://home.local:8787")),
+            version: "1.0",
+            kind: .gateway
+        )
+        let studio = DiscoveredServer(
+            id: "codexTPS:studio",
+            instanceID: "studio",
+            name: "Studio",
+            url: try XCTUnwrap(URL(string: "http://studio.local:7419")),
+            version: "1.0",
+            kind: .codexTPS
+        )
+        let notebook = DiscoveredServer(
+            id: "codexTPS:notebook",
+            instanceID: "notebook",
+            name: "Notebook",
+            url: try XCTUnwrap(URL(string: "http://notebook.local:7419")),
+            version: "1.0",
+            kind: .codexTPS
+        )
+
+        XCTAssertEqual(
+            SourceSelectionPolicy.automaticSource(
+                from: [gateway, studio],
+                preferredID: studio.id
+            ),
+            studio
+        )
+        XCTAssertEqual(
+            SourceSelectionPolicy.automaticSource(
+                from: [studio, gateway],
+                preferredID: nil
+            ),
+            gateway
+        )
+        XCTAssertEqual(
+            SourceSelectionPolicy.automaticSource(
+                from: [studio],
+                preferredID: nil
+            ),
+            studio
+        )
+        XCTAssertNil(
+            SourceSelectionPolicy.automaticSource(
+                from: [studio, notebook],
+                preferredID: nil
+            )
+        )
+    }
+
+    @MainActor
+    func testDirectProviderShowsHostNetworkWithoutMakingTheStatusFail() throws {
+        let encoded = try JSONEncoder().encode(DemoFixtures.status())
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object["provider"] = [
+            "kind": "codex-tps",
+            "scope": "machine",
+            "id": "studio",
+            "name": "Studio",
+        ]
+        object["demo"] = false
+        var capabilities = try XCTUnwrap(object["capabilities"] as? [String: Any])
+        capabilities["network"] = true
+        capabilities["networkHistory"] = false
+        capabilities["persistentHistory"] = false
+        capabilities["webDisplay"] = false
+        object["capabilities"] = capabilities
+        var network = try XCTUnwrap(object["network"] as? [String: Any])
+        network["status"] = "unavailable"
+        network["history"] = []
+        object["network"] = network
+        object["machines"] = Array(
+            try XCTUnwrap(object["machines"] as? [[String: Any]]).prefix(1)
+        )
+
+        let direct = try JSONDecoder().decode(
+            AmbientStatus.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        let store = AmbientOpsStore(automaticallyConnect: false)
+        store.useLiveMode()
+        store.status = direct
+
+        XCTAssertEqual(direct.effectiveProvider.scope, "machine")
+        XCTAssertEqual(direct.overallStatus, "live")
+        XCTAssertTrue(direct.capabilities.supportsNetwork)
+        XCTAssertTrue(store.availableDisplayModes.contains(.network))
+        XCTAssertEqual(store.providerLabel, "DIRECT · Studio")
     }
 }

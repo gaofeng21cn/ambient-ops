@@ -1,1 +1,1 @@
-"NSLocalNetworkUsageDescription" = "Ambient Ops 会在此局域网中发现并读取你自托管服务器的状态。";
+"NSLocalNetworkUsageDescription" = "Ambient Ops 会在此局域网中发现 Codex TPS 或你自托管的 Gateway，并读取聚合状态。";

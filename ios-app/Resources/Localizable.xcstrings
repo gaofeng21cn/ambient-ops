@@ -371,6 +371,16 @@
         }
       }
     },
+    "Machine" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主机"
+          }
+        }
+      }
+    },
     "Metrics" : {
       "localizations" : {
         "zh-Hans" : {
@@ -381,12 +391,12 @@
         }
       }
     },
-    "Nearby servers" : {
+    "Nearby sources" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "附近的服务器"
+            "value" : "附近的数据源"
           }
         }
       }
@@ -591,6 +601,16 @@
         }
       }
     },
+    "Source" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源"
+          }
+        }
+      }
+    },
     "Session identifiers" : {
       "localizations" : {
         "zh-Hans" : {
@@ -677,6 +697,116 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ambient Ops 只使用 Bonjour 查找此 Wi-Fi 网络中的自托管服务器，不会扫描设备，也不会把本地数据发送到云服务。"
+          }
+        }
+      }
+    },
+    "Connection" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接"
+          }
+        }
+      }
+    },
+    "Current source" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前数据源"
+          }
+        }
+      }
+    },
+    "Demo data" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示数据"
+          }
+        }
+      }
+    },
+    "Demo Mode uses sample fleet data for preview and App Store review." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示模式仅使用舰队样例数据，用于预览和 App Store 审核。"
+          }
+        }
+      }
+    },
+    "Gateway and Codex TPS" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gateway 与 Codex TPS"
+          }
+        }
+      }
+    },
+    "Manual Connection" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手动连接"
+          }
+        }
+      }
+    },
+    "No live source" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无实时数据源"
+          }
+        }
+      }
+    },
+    "Preview" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览"
+          }
+        }
+      }
+    },
+    "Sample fleet preview" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "舰队样例预览"
+          }
+        }
+      }
+    },
+    "Search Again" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新搜索"
+          }
+        }
+      }
+    },
+    "Searching local network…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在搜索局域网…"
           }
         }
       }
