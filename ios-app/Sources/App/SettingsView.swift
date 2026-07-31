@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var store: AmbientOpsStore
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @FocusState private var isServerAddressFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -70,6 +71,9 @@ struct SettingsView: View {
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
+                        .focused($isServerAddressFocused)
+                        .submitLabel(.done)
+                        .onSubmit { isServerAddressFocused = false }
 
                     Button("Connect", systemImage: "arrow.trianglehead.2.clockwise") {
                         Task { await store.connect() }
@@ -149,9 +153,18 @@ struct SettingsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             .safeAreaPadding(.bottom, verticalSizeClass == .compact ? 58 : 0)
             .background(AmbientTheme.background)
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isServerAddressFocused = false
+                    }
+                }
+            }
         }
     }
 

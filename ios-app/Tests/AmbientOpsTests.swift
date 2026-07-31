@@ -135,6 +135,7 @@ final class AmbientOpsTests: XCTestCase {
             "Settings",
             "Demo Mode",
             "Connect",
+            "Done",
             "Find on Local Network",
             "Nearby sources",
             "Start Load Live Activity",
