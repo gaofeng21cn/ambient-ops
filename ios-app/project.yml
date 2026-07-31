@@ -1,0 +1,117 @@
+name: AmbientOps
+options:
+  bundleIdPrefix: cn.gaofeng
+  developmentLanguage: en
+  deploymentTarget:
+    iOS: "18.0"
+  xcodeVersion: "26.0"
+settings:
+  base:
+    DEVELOPMENT_TEAM: SVVC4TA784
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: 1
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+packages: {}
+targets:
+  AmbientOps:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/App
+      - path: Sources/Shared
+      - path: Resources
+    info:
+      path: Config/AmbientOps-Info.plist
+      properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleDisplayName: Ambient Ops
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        NSLocalNetworkUsageDescription: Ambient Ops discovers and reads status from your self-hosted server on this local network.
+        NSBonjourServices:
+          - _ambient-ops._tcp
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: false
+        CFBundleURLTypes:
+          - CFBundleURLName: cn.gaofeng.ambientops
+            CFBundleURLSchemes:
+              - ambientops
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIRequiresFullScreen: false
+    entitlements:
+      path: Config/AmbientOps.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.cn.gaofeng.ambientops
+    dependencies:
+      - target: AmbientOpsWidgets
+        embed: true
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        PRODUCT_BUNDLE_IDENTIFIER: cn.gaofeng.ambientops
+        PRODUCT_NAME: AmbientOps
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: false
+  AmbientOpsWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/Widgets
+      - path: Sources/Shared
+      - path: Resources/PrivacyInfo.xcprivacy
+      - path: Resources/Localizable.xcstrings
+    info:
+      path: Config/AmbientOpsWidgets-Info.plist
+      properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleDisplayName: Ambient Ops Widgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Config/AmbientOpsWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.cn.gaofeng.ambientops
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cn.gaofeng.ambientops.widgets
+        PRODUCT_NAME: Ambient Ops Widgets
+        SKIP_INSTALL: true
+        APPLICATION_EXTENSION_API_ONLY: true
+  AmbientOpsTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: AmbientOps
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cn.gaofeng.ambientops.tests
+        CODE_SIGNING_ALLOWED: false
+schemes:
+  AmbientOps:
+    build:
+      targets:
+        AmbientOps: all
+        AmbientOpsWidgets: all
+        AmbientOpsTests: [test]
+    test:
+      targets:
+        - AmbientOpsTests
+    run:
+      config: Debug
+    archive:
+      config: Release

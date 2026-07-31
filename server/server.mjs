@@ -36,6 +36,10 @@ import {
   readUiRevision,
   UI_REVISION_PATH,
 } from "./ui-revision.mjs";
+import {
+  buildPublicStatus,
+  PUBLIC_STATUS_PATH,
+} from "./public-status.mjs";
 import packageMetadata from "../package.json" with { type: "json" };
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -225,6 +229,12 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && url.pathname === "/api/status") {
       return await json(response, 200, dashboard());
+    }
+    if (request.method === "GET" && url.pathname === PUBLIC_STATUS_PATH) {
+      return await json(response, 200, buildPublicStatus(dashboard(), {
+        instanceId,
+        serverVersion: packageMetadata.version,
+      }));
     }
     if (["GET", "HEAD"].includes(request.method) && url.pathname === UI_REVISION_PATH) {
       const body = Buffer.from(JSON.stringify({ revision: uiRevision }));

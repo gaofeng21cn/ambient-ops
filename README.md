@@ -5,7 +5,7 @@
 <h1 align="center">Ambient Ops</h1>
 
 <p align="center"><strong>A quiet, always-on, self-hosted view of operational state across your local network</strong></p>
-<p align="center">Codex TPS aggregates · Router telemetry · Browser and Android displays</p>
+<p align="center">Codex TPS aggregates · Router telemetry · Browser, Android, and native iOS displays</p>
 
 <p align="center">
   <a href="https://github.com/gaofeng21cn/ambient-ops/releases/latest"><img src="https://img.shields.io/github/v/release/gaofeng21cn/ambient-ops" alt="Latest release"></a>
@@ -35,6 +35,23 @@
   <tr>
     <td align="center"><sub>Machines</sub></td>
     <td align="center"><sub>Pet</sub></td>
+  </tr>
+</table>
+
+<p align="center"><strong>Native iPhone companion</strong></p>
+
+<table>
+  <tr>
+    <td width="25%"><img src="./docs/assets/readme-gallery/ios-home.png" alt="Ambient Ops native iPhone Home"></td>
+    <td width="25%"><img src="./docs/assets/readme-gallery/ios-load.png" alt="Uncropped portrait Load animation on iPhone"></td>
+    <td width="25%"><img src="./docs/assets/readme-gallery/ios-pet.png" alt="Codex Pet display on iPhone"></td>
+    <td width="25%"><img src="./docs/assets/readme-gallery/ios-live-activity.jpg" alt="Ambient Ops Load Live Activity on the iPhone Lock Screen"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Home</sub></td>
+    <td align="center"><sub>Load</sub></td>
+    <td align="center"><sub>Pet</sub></td>
+    <td align="center"><sub>Live Activity</sub></td>
   </tr>
 </table>
 
@@ -98,6 +115,7 @@ SNMPv3 router -------------- standard IF-MIB counters ------------+--> Ambient O
 /data ---------------------- state and short history -------------+       |
                                                                          +--> browsers
                                                                          +--> Android kiosk
+                                                                         +--> native iOS app
                                                                          +--> Prometheus
                                                                          +--> Home Assistant
                                                                               (optional)
@@ -110,6 +128,8 @@ not contain collection credentials or aggregation logic.
 ### What you get
 
 - Overview, Network, Machines, single-machine Load, Pet, and e-ink display surfaces
+- Native iOS Home, Machines, Display, Widgets, Live Activities, Dynamic Island,
+  and StandBy surfaces with a complete offline Demo Mode
 - Aggregate Codex throughput, active-session, and freshness state across machines
 - Standard IF-MIB `Counter64` download/upload metrics and optional latency
 - Prometheus text metrics and optional Home Assistant synchronization
@@ -255,6 +275,8 @@ The full contract is in the [Agent installation guide](docs/agent-installation.m
 - [Installation guide](docs/installation.md)
 - [Agent installation guide](docs/agent-installation.md)
 - [Security and privacy](docs/security.md)
+- [Native iOS app](docs/ios-app.md)
+- [iOS privacy policy](docs/privacy-policy.md)
 - [Agent push API](docs/agent-push-api.md)
 - [Router and SNMPv3](docs/unifi.md)
 - [Synology deployment](docs/deployment-synology.md)

@@ -5,7 +5,7 @@
 <h1 align="center">Ambient Ops</h1>
 
 <p align="center"><strong>把分散在局域网里的运行状态，汇总成一块安静、常亮、可自托管的信息屏</strong></p>
-<p align="center">Codex TPS 汇总指标 · 路由器网络状态 · 浏览器与 Android 常驻屏</p>
+<p align="center">Codex TPS 汇总指标 · 路由器网络状态 · 浏览器、Android 常驻屏与原生 iOS 客户端</p>
 
 <p align="center">
   <a href="https://github.com/gaofeng21cn/ambient-ops/releases/latest"><img src="https://img.shields.io/github/v/release/gaofeng21cn/ambient-ops" alt="最新版本"></a>
@@ -35,6 +35,23 @@
   <tr>
     <td align="center"><sub>机器</sub></td>
     <td align="center"><sub>宠物</sub></td>
+  </tr>
+</table>
+
+<p align="center"><strong>原生 iPhone 客户端</strong></p>
+
+<table>
+  <tr>
+    <td width="25%"><img src="./docs/assets/readme-gallery/ios-home.png" alt="Ambient Ops 原生 iPhone 首页"></td>
+    <td width="25%"><img src="./docs/assets/readme-gallery/ios-load.png" alt="iPhone 上完整显示的竖屏负载动画"></td>
+    <td width="25%"><img src="./docs/assets/readme-gallery/ios-pet.png" alt="iPhone 上的 Codex 宠物显示"></td>
+    <td width="25%"><img src="./docs/assets/readme-gallery/ios-live-activity.jpg" alt="iPhone 锁定屏幕上的 Ambient Ops 负载实时活动"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>首页</sub></td>
+    <td align="center"><sub>负载</sub></td>
+    <td align="center"><sub>宠物</sub></td>
+    <td align="center"><sub>实时活动</sub></td>
   </tr>
 </table>
 
@@ -92,6 +109,7 @@ SNMPv3 路由器 -------- 标准 IF-MIB 计数器 ------+--> Ambient Ops 容器
                                                |      |
 /data ---------------- 状态与短期历史 ---------+      +--> 浏览器
                                                       +--> Android 常驻屏
+                                                      +--> 原生 iOS 客户端
                                                       +--> Prometheus
                                                       +--> Home Assistant（可选）
 ```
@@ -102,6 +120,7 @@ SNMPv3 路由器 -------- 标准 IF-MIB 计数器 ------+--> Ambient Ops 容器
 ### 你会得到什么
 
 - 总览、网络、机器、单机负载、宠物和电子墨水屏六类显示页面
+- 原生 iOS 首页、机器、显示、Widget、实时活动、灵动岛与待机显示，并包含完整离线演示模式
 - 多台 Codex TPS 主机的聚合吞吐、活跃会话和新鲜度状态
 - 基于标准 IF-MIB `Counter64` 的下载、上传和可选网络延迟
 - Prometheus 文本指标和可选 Home Assistant 同步
@@ -239,6 +258,8 @@ docker compose --env-file .env -p ambient-ops \
 - [中文安装教程](docs/installation.zh-CN.md)
 - [中文 Agent 安装指南](docs/agent-installation.zh-CN.md)
 - [安全与隐私边界](docs/security.md)
+- [原生 iOS 客户端](docs/ios-app.md)
+- [iOS 隐私政策](docs/privacy-policy.md)
 - [Agent 上报接口](docs/agent-push-api.md)
 - [路由器与 SNMPv3](docs/unifi.md)
 - [群晖部署](docs/deployment-synology.md)

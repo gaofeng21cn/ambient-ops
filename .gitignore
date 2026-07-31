@@ -9,6 +9,9 @@ data/
 android-kiosk/.gradle/
 android-kiosk/local.properties
 android-kiosk/**/build/
+ios-app/*.xcodeproj/
+ios-app/.build/
+ios-app/DerivedData/
 *.log
 *.pem
 *.key
