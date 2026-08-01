@@ -681,6 +681,9 @@ function paintFleetPulseCanvas(context, width, height, elapsed, visual, workstat
     drawFleetLink(context, from, to, elapsed, tempo, density, active, pixel, fromIndex * 13 + toIndex);
   }
   positions.forEach((position, index) => {
+    drawFleetNodeFlow(context, position, nodes[index], elapsed, tempo, density, pixel, index, width);
+  });
+  positions.forEach((position, index) => {
     drawFleetNode(context, position, nodes[index], elapsed, workstation, pixel, index);
   });
   context.globalAlpha = 1;
@@ -692,7 +695,7 @@ function fleetNodePositions(count, width, height) {
   const top = rows === 1 ? height * .5 : height * .29;
   const bottom = height * .72;
   const size = rows === 1
-    ? Math.max(48, Math.min(74, height * .62, width * .22))
+    ? Math.max(58, Math.min(total <= 2 ? 108 : 88, height * .76, width * (total <= 2 ? .28 : .22)))
     : Math.max(38, Math.min(58, height * .43, width * .18));
   return Array.from({ length: total }, (_, index) => {
     const row = rows === 1 ? 0 : index < Math.ceil(total / 2) ? 0 : 1;
@@ -730,25 +733,78 @@ function drawFleetLink(context, from, to, elapsed, tempo, density, active, pixel
   const start = { x: from.x + dx * .14, y: from.y + dy * .14 };
   const end = { x: to.x - dx * .14, y: to.y - dy * .14 };
   context.save();
-  context.strokeStyle = active ? "rgba(57, 216, 145, .34)" : "rgba(91, 105, 116, .18)";
-  context.lineWidth = 1;
-  context.setLineDash([pixel * 2, pixel * 3]);
+  context.strokeStyle = active ? "rgba(57, 216, 145, .5)" : "rgba(91, 105, 116, .18)";
+  context.lineWidth = active ? Math.max(2, pixel) : 1;
+  context.setLineDash([pixel * 3, pixel * 2]);
   context.beginPath();
   context.moveTo(start.x, start.y);
   context.lineTo(end.x, end.y);
   context.stroke();
   context.setLineDash([]);
   if (active) {
-    const packetCount = Math.max(1, Math.round(2 + density * 6));
+    const packetCount = Math.max(3, Math.round(4 + density * 8));
     for (let index = 0; index < packetCount; index += 1) {
       const phase = loadParticlePhase(elapsed, Math.max(520, 2_600 / tempo), index / packetCount + seed * .071);
       const x = start.x + (end.x - start.x) * phase;
       const y = start.y + (end.y - start.y) * phase;
       context.globalAlpha = .35 + .65 * Math.sin(Math.PI * phase);
       context.fillStyle = index % 3 === 0 ? "#38bdf8" : "#39d891";
-      context.fillRect(Math.round(x), Math.round(y), pixel * (index % 4 === 0 ? 2 : 1), pixel);
+      const packetSize = pixel * (index % 4 === 0 ? 3 : 2);
+      context.fillRect(Math.round(x), Math.round(y - pixel / 2), packetSize, pixel * 2);
     }
   }
+  context.restore();
+}
+
+function drawFleetNodeFlow(context, position, node, elapsed, tempo, density, pixel, index, width) {
+  if (!nodeWorking(node)) return;
+  const intensity = clampVisual(Math.sqrt(Math.max(0, node.tps) / 60_000) * .75 + Math.min(1, node.sessions / 8) * .25);
+  const spriteSize = position.size || 54;
+  const laneY = position.y + spriteSize * .37;
+  const left = Math.max(pixel * 3, position.x - spriteSize * (.72 + intensity * .18));
+  const right = Math.min(width - pixel * 3, position.x + spriteSize * (.72 + intensity * .18));
+  const nodeLeft = position.x - spriteSize * .35;
+  const nodeRight = position.x + spriteSize * .35;
+  const duration = Math.max(420, 1_650 / Math.max(.4, tempo));
+  const packetCount = Math.max(2, Math.round(2 + density * 4 + intensity * 2));
+  const pressureColor = node.cpu !== null && node.cpu >= 82 ? "#f59e0b" : "#39d891";
+
+  context.save();
+  context.lineWidth = Math.max(1, pixel);
+  context.strokeStyle = "rgba(56, 189, 248, .34)";
+  context.beginPath();
+  context.moveTo(left, laneY);
+  context.lineTo(nodeLeft, laneY);
+  context.stroke();
+  context.strokeStyle = node.cpu !== null && node.cpu >= 82 ? "rgba(245, 158, 11, .42)" : "rgba(57, 216, 145, .42)";
+  context.beginPath();
+  context.moveTo(nodeRight, laneY);
+  context.lineTo(right, laneY);
+  context.stroke();
+
+  for (let packet = 0; packet < packetCount; packet += 1) {
+    const phase = loadParticlePhase(elapsed, duration, packet / packetCount + index * .19);
+    const inboundX = left + (nodeLeft - left) * phase;
+    const outboundX = nodeRight + (right - nodeRight) * phase;
+    const packetHeight = pixel * (packet % 3 === 0 ? 3 : 2);
+    context.globalAlpha = .45 + .55 * Math.sin(Math.PI * phase);
+    context.fillStyle = "#38bdf8";
+    context.fillRect(Math.round(inboundX), Math.round(laneY - packetHeight / 2), pixel * 3, packetHeight);
+    context.fillStyle = pressureColor;
+    context.fillRect(Math.round(outboundX), Math.round(laneY - packetHeight / 2), pixel * 3, packetHeight);
+  }
+
+  const pulsePhase = loadParticlePhase(elapsed, Math.max(700, duration * 1.15), index * .37);
+  const pulseSize = spriteSize * (.56 + pulsePhase * .38);
+  context.globalAlpha = (1 - pulsePhase) * (.25 + intensity * .28);
+  context.strokeStyle = pressureColor;
+  context.lineWidth = Math.max(1, pixel);
+  context.strokeRect(
+    Math.round(position.x - pulseSize / 2),
+    Math.round(position.y - pulseSize * .47),
+    Math.round(pulseSize),
+    Math.round(pulseSize * .94),
+  );
   context.restore();
 }
 
@@ -786,6 +842,25 @@ function drawFleetNode(context, position, node, elapsed, workstation, pixel, ind
   const lightSize = Math.max(2, pixel);
   context.fillRect(Math.round(position.x + spriteSize * .31), Math.round(position.y + spriteSize * .28), lightSize, lightSize);
   if (active) {
+    const scanPhase = loadParticlePhase(elapsed, Math.max(340, 1_050 - intensity * 430), index * .23);
+    context.globalAlpha = .42 + pulse * .4;
+    context.fillStyle = constrained ? "#ef6a62" : pressured ? "#f59e0b" : "#39d891";
+    context.fillRect(
+      Math.round(position.x - spriteSize * .19),
+      Math.round(position.y - spriteSize * .25 + spriteSize * .18 * scanPhase),
+      Math.round(spriteSize * .34),
+      Math.max(1, pixel),
+    );
+    for (let block = 0; block < 4; block += 1) {
+      const blockPhase = loadParticlePhase(elapsed, Math.max(420, 1_420 - intensity * 520), block * .21 + index * .13);
+      context.globalAlpha = .26 + blockPhase * .58;
+      context.fillRect(
+        Math.round(position.x - spriteSize * .18 + block * pixel * 2.4),
+        Math.round(position.y + spriteSize * .2),
+        pixel * 2,
+        pixel,
+      );
+    }
     context.globalAlpha = .45 + pulse * .5;
     context.fillRect(Math.round(position.x - spriteSize * .2), Math.round(position.y - spriteSize * .13), pixel * 2, pixel);
   }
