@@ -225,19 +225,6 @@ final class AmbientOpsTests: XCTestCase {
         XCTAssertEqual(LoadHistorySeries.coveredMinutes(merged), 30)
     }
 
-    func testTrendDomainMakesHighLoadVariationVisibleWithoutAddingSamples() {
-        let now = Date(timeIntervalSince1970: 1_800_000_000)
-        let points = [46_212.0, 59_717.0, 51_628.0].enumerated().map { index, tps in
-            LoadHistoryPoint(at: now.addingTimeInterval(Double(index) * 5), tps: tps)
-        }
-        let domain = LoadHistorySeries.trendDomain(points)
-
-        XCTAssertGreaterThan(domain.lowerBound, 0)
-        XCTAssertLessThan(domain.lowerBound, 46_212)
-        XCTAssertGreaterThan(domain.upperBound, 59_717)
-        XCTAssertGreaterThan(13_505 / (domain.upperBound - domain.lowerBound), 0.7)
-    }
-
     func testLocalHistoryReportsPartialWindowWhileCollecting() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let points = [

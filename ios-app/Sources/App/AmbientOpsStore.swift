@@ -92,19 +92,6 @@ enum LoadHistorySeries {
         return min(30, max(1, Int(ceil(last.timeIntervalSince(first) / 60))))
     }
 
-    static func trendDomain(_ points: [LoadHistoryPoint]) -> ClosedRange<Double> {
-        let values = points.map { max(0, $0.tps) }
-        let maximum = values.max() ?? 0
-        guard maximum > 0 else { return 0...1 }
-        let minimum = values.min() ?? 0
-        guard minimum > maximum * 0.15 else { return 0...(maximum / 0.92) }
-
-        let observedSpan = maximum - minimum
-        let span = max(observedSpan, maximum * 0.12, 1)
-        let padding = span * 0.12
-        let center = (minimum + maximum) / 2
-        return max(0, center - span / 2 - padding)...(center + span / 2 + padding)
-    }
 }
 
 @MainActor

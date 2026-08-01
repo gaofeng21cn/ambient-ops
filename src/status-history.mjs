@@ -73,24 +73,6 @@ export function historyCoverageMinutes(history, maximumMinutes = 30) {
   );
 }
 
-export function loadTrendDomain(values) {
-  const data = (Array.isArray(values) ? values : [])
-    .map((value) => Math.max(0, Number(value) || 0));
-  const maximum = Math.max(...data, 0);
-  if (maximum <= 0) return [0, 1];
-  const minimum = Math.min(...data);
-  if (minimum <= maximum * 0.15) return [0, maximum / 0.92];
-
-  const observedSpan = maximum - minimum;
-  const span = Math.max(observedSpan, maximum * 0.12, 1);
-  const padding = span * 0.12;
-  const center = (minimum + maximum) / 2;
-  return [
-    Math.max(0, center - span / 2 - padding),
-    center + span / 2 + padding,
-  ];
-}
-
 function positive(value, fallback) {
   return Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
 }

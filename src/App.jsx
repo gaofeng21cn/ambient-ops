@@ -50,7 +50,6 @@ import {
   historyCoverageMinutes,
   historyValuesInWindow,
   LOAD_TREND_WINDOW_MS,
-  loadTrendDomain,
   mergeHistorySamples,
 } from "./status-history.mjs";
 import {
@@ -410,7 +409,7 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
         </div>
         <div className="load-side-trend">
           <div><span>{loadTrendMinutes >= 30 ? "30 MIN TREND" : loadTrendMinutes > 0 ? `${loadTrendMinutes} MIN TREND` : "LIVE TREND"}</span><small>{formatTps(loadTrendAverage)} TPS AVG</small></div>
-          <Sparkline values={loadTrendValues} color="green" focusRange />
+          <Sparkline values={loadTrendValues} color="green" />
           <div className="load-side-axis">{loadTrendAxis(loadTrendMinutes).map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>
         </div>
         <div className="load-side-host">
@@ -1334,12 +1333,10 @@ function TrafficChart({ points = [], detailed = false, allowSampleData = false }
   );
 }
 
-function Sparkline({ values, color, mini = false, compact = false, focusRange = false }) {
+function Sparkline({ values, color, mini = false, compact = false }) {
   const data = values.length > 1 ? values : [0, 0];
-  const [minimum, maximum] = focusRange
-    ? loadTrendDomain(data)
-    : [0, Math.max(...data, 1)];
-  const points = linePoints(data, maximum, 200, 50, minimum);
+  const max = Math.max(...data, 1);
+  const points = linePoints(data, max, 200, 50);
   return (
     <svg className={`sparkline ${mini ? "mini" : ""} ${compact ? "compact" : ""}`} viewBox="0 0 200 50" preserveAspectRatio="none" aria-hidden="true">
       <polyline className={color} points={points} />
@@ -1347,12 +1344,10 @@ function Sparkline({ values, color, mini = false, compact = false, focusRange = 
   );
 }
 
-function linePoints(values, max, width = 1000, height = 300, min = 0) {
-  const span = Math.max(1, max - min);
+function linePoints(values, max, width = 1000, height = 300) {
   return values.map((value, index) => {
     const x = values.length === 1 ? 0 : index * width / (values.length - 1);
-    const ratio = min > 0 ? (value - min) / span : value / max * 0.92;
-    const y = height - Math.min(height, Math.max(0, ratio * height));
+    const y = height - Math.min(height, Math.max(0, value / max * height * 0.92));
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
 }

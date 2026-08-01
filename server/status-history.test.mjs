@@ -4,7 +4,6 @@ import {
   appendHistorySample,
   historyCoverageMinutes,
   historyValuesInWindow,
-  loadTrendDomain,
   mergeHistorySamples,
 } from "../src/status-history.mjs";
 
@@ -47,16 +46,4 @@ test("merges a short server history without discarding longer client coverage", 
     { at: "2026-07-29T00:11:00.000Z", tps: 30 },
   ]);
   assert.equal(historyCoverageMinutes(mergeHistorySamples(existing, incoming)), 11);
-});
-
-test("focuses a high-load trend on its real variation without inventing noise", () => {
-  const values = [46_212, 59_717, 51_628];
-  const [minimum, maximum] = loadTrendDomain(values);
-
-  assert.ok(minimum > 0);
-  assert.ok(minimum < Math.min(...values));
-  assert.ok(maximum > Math.max(...values));
-  assert.ok((Math.max(...values) - Math.min(...values)) / (maximum - minimum) > 0.7);
-  assert.deepEqual(loadTrendDomain([50_000, 50_000]), [46_280, 53_720]);
-  assert.deepEqual(loadTrendDomain([0, 50_000]), [0, 50_000 / 0.92]);
 });
