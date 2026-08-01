@@ -26,6 +26,7 @@ export function normalizeSnapshot(machineId, payload, receivedAt = new Date()) {
     activeSessions: Math.max(0, finite(payload.activeSessions)),
     cpuPercent: optionalPercent(payload.cpuPercent),
     memoryPercent: optionalPercent(payload.memoryPercent),
+    network: normalizeHostNetwork(payload.network, safeGeneratedAt),
     pet: normalizePet(payload.pet, safeGeneratedAt),
   };
 }
@@ -66,6 +67,30 @@ function optionalPercent(value) {
   return Math.max(0, Math.min(100, finite(value, 0)));
 }
 
+function normalizeHostNetwork(network, generatedAt) {
+  if (!network || typeof network !== "object" || Array.isArray(network)) return null;
+  const downloadMbps = optionalNumber(network.downloadMbps);
+  const uploadMbps = optionalNumber(network.uploadMbps);
+  if (downloadMbps === null && uploadMbps === null) return null;
+  const candidate = new Date(network.sampledAt || network.updatedAt || generatedAt);
+  const updatedAt = Number.isNaN(candidate.valueOf()) ? generatedAt : candidate.toISOString();
+  return {
+    status: "live",
+    source: "host",
+    downloadMbps,
+    uploadMbps,
+    clients: null,
+    latencyMs: null,
+    updatedAt,
+    error: null,
+  };
+}
+
+function optionalNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  return Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : null;
+}
+
 function normalizePet(pet, generatedAt) {
   if (!pet || typeof pet !== "object" || Array.isArray(pet)) return null;
   const id = String(pet.id || "").trim().toLowerCase();
@@ -98,7 +123,15 @@ function age(snapshot, now) {
   return Math.max(0, Math.round((now.valueOf() - new Date(snapshot.generatedAt).valueOf()) / 1000));
 }
 
-export function buildDashboard({ machines, machineHistory = new Map(), network, history, demo }, options = {}) {
+export function buildDashboard({
+  machines,
+  machineHistory = new Map(),
+  machineNetworkHistory = new Map(),
+  fleetHistory = [],
+  network,
+  history,
+  demo,
+}, options = {}) {
   const now = options.now || new Date();
   const liveAfterSeconds = options.liveAfterSeconds || 30;
   const staleAfterSeconds = options.staleAfterSeconds || 300;
@@ -117,11 +150,16 @@ export function buildDashboard({ machines, machineHistory = new Map(), network, 
             : current.status === "stale" ? "waiting" : "failed",
         }
       : null;
+    const hostNetworkHistory = historyForMachine(machineNetworkHistory, snapshot.machineId);
+    const hostNetwork = snapshot.network
+      ? { ...networkFreshness(snapshot.network, now, liveAfterSeconds, staleAfterSeconds), history: hostNetworkHistory }
+      : { status: "unavailable", source: "host", downloadMbps: null, uploadMbps: null, history: [] };
     return {
       ...snapshot,
       ...current,
       cachePercent,
       pet,
+      network: hostNetwork,
       tpsHistory: historyForMachine(machineHistory, snapshot.machineId),
     };
   })
@@ -156,30 +194,38 @@ export function buildDashboard({ machines, machineHistory = new Map(), network, 
   }
 
   const liveMachines = renderedMachines.filter((machine) => machine.status === "live").length;
+  const workingMachines = aggregateMachines.filter((machine) => (
+    Number(machine.oneMinute?.tps || 0) > 0 || Number(machine.activeSessions || 0) > 0
+  )).length;
   const staleMachines = renderedMachines.filter((machine) => machine.status === "stale").length;
   const codexStatus = liveMachines > 0 ? "live" : staleMachines > 0 ? "stale" : "error";
   const renderedNetwork = networkFreshness(network, now, liveAfterSeconds, staleAfterSeconds);
   const networkStatus = renderedNetwork.status;
+
+  const aggregate = {
+    status: codexStatus,
+    oneMinuteTps,
+    fiveMinuteTps,
+    cachePercent: cacheWeight ? Math.round(weightedCache / cacheWeight) : 0,
+    activeSessions,
+    cpuPercent: cpuReportedMachineCount ? Math.round(cpuTotal / cpuReportedMachineCount) : null,
+    cpuReportedMachineCount,
+    memoryPercent: memoryReportedMachineCount ? Math.round(memoryTotal / memoryReportedMachineCount) : null,
+    memoryReportedMachineCount,
+    machineCount: renderedMachines.length,
+    liveMachineCount: liveMachines,
+    staleMachineCount: staleMachines,
+    workingMachineCount: workingMachines,
+    tpsHistory: Array.isArray(fleetHistory) ? fleetHistory : [],
+  };
 
   return {
     generatedAt: now.toISOString(),
     demo,
     overallStatus: networkStatus === "error" || codexStatus === "error" ? "error" : networkStatus === "stale" || codexStatus === "stale" ? "stale" : "live",
     network: { ...renderedNetwork, history },
-    codex: {
-      status: codexStatus,
-      oneMinuteTps,
-      fiveMinuteTps,
-      cachePercent: cacheWeight ? Math.round(weightedCache / cacheWeight) : 0,
-      activeSessions,
-      cpuPercent: cpuReportedMachineCount ? Math.round(cpuTotal / cpuReportedMachineCount) : null,
-      cpuReportedMachineCount,
-      memoryPercent: memoryReportedMachineCount ? Math.round(memoryTotal / memoryReportedMachineCount) : null,
-      memoryReportedMachineCount,
-      machineCount: renderedMachines.length,
-      liveMachineCount: liveMachines,
-      staleMachineCount: staleMachines,
-    },
+    fleet: aggregate,
+    codex: { ...aggregate },
     machines: renderedMachines,
   };
 }

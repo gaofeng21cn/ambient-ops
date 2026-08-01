@@ -111,6 +111,50 @@ test("dashboard aggregates machine throughput", () => {
   assert.equal(dashboard.codex.oneMinuteTps, 30);
   assert.equal(dashboard.codex.fiveMinuteTps, 26);
   assert.equal(dashboard.codex.activeSessions, 5);
+  assert.equal(dashboard.fleet.oneMinuteTps, 30);
+  assert.equal(dashboard.fleet.liveMachineCount, 2);
+  assert.equal(dashboard.fleet.workingMachineCount, 2);
+});
+
+test("dashboard exposes persisted fleet and per-host network histories", () => {
+  const now = new Date("2026-07-25T00:00:10.000Z");
+  const machines = new Map([
+    ["a", normalizeSnapshot("a", {
+      generatedAt: now,
+      oneMinute: { tps: 20 },
+      network: { downloadMbps: 123.4, uploadMbps: 12.3, sampledAt: now },
+    }, now)],
+  ]);
+  const fleetHistory = [{ at: "2026-07-25T00:00:10.000Z", tps: 20 }];
+  const machineNetworkHistory = new Map([["a", [{
+    at: "2026-07-25T00:00:10.000Z",
+    downloadMbps: 123.4,
+    uploadMbps: 12.3,
+  }]]]);
+
+  const dashboard = buildDashboard({
+    machines,
+    machineNetworkHistory,
+    fleetHistory,
+    network: { status: "live" },
+    history: [],
+    demo: false,
+  }, { now });
+
+  assert.deepEqual(dashboard.fleet.tpsHistory, fleetHistory);
+  assert.equal(dashboard.machines[0].network.source, "host");
+  assert.deepEqual(dashboard.machines[0].network.history, machineNetworkHistory.get("a"));
+});
+
+test("dashboard keeps absent host network telemetry unavailable", () => {
+  const now = new Date("2026-07-25T00:00:10.000Z");
+  const machines = new Map([
+    ["a", normalizeSnapshot("a", { generatedAt: now }, now)],
+  ]);
+  const dashboard = buildDashboard({ machines, network: { status: "live" }, history: [], demo: false }, { now });
+
+  assert.equal(dashboard.machines[0].network.status, "unavailable");
+  assert.equal(dashboard.machines[0].network.downloadMbps, null);
 });
 
 test("dashboard exposes the persisted TPS history for each rendered machine", () => {
@@ -190,6 +234,7 @@ test("a stale duplicate stays visible but is excluded from aggregate TPS", () =>
   );
   assert.equal(dashboard.machines.find((machine) => machine.machineId === "stale").status, "stale");
   assert.equal(dashboard.codex.oneMinuteTps, 20);
+  assert.equal(dashboard.fleet.workingMachineCount, 1);
 });
 
 test("projects a host pet to waiting when its machine is stale", () => {

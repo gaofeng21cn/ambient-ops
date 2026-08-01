@@ -104,6 +104,24 @@ Both values are percentages in the inclusive range `0..100`. They are
 aggregated only from live machines; when a client does not report them, the
 display shows `N/A` rather than treating the host as idle.
 
+Agents may also include current aggregate host network throughput. The values
+cover the host, not the Gateway WAN, and contain no interface names, addresses,
+or connection identifiers:
+
+```json
+{
+  "network": {
+    "downloadMbps": 123.4,
+    "uploadMbps": 12.3,
+    "sampledAt": "2026-07-25T12:00:00.000Z"
+  }
+}
+```
+
+The Gateway keeps a bounded per-machine history from these samples. Missing
+host network telemetry remains `N/A`; the display never substitutes WAN values
+for a host.
+
 `pet` is optional. Accepted states are `idle`, `running`, `waiting`, `review`,
 and `failed`. The server retains only the fields shown above, validates the pet
 ID and asset hash, and projects a stale/error machine to `waiting`/`failed`

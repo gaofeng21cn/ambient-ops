@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   LOAD_VISUAL_MODEL_VERSION,
   loadFlowChannels,
+  fleetLoadPresentation,
   loadParticlePhase,
   loadSceneProfile,
   loadState,
@@ -211,4 +212,19 @@ test("falls back to local v1 calculation for legacy providers without visual sta
 
   assert.equal(presentation.visualSource, "fallback");
   assert.equal(presentation.state.id, "constrained");
+});
+
+test("normalizes fleet activity by live capacity while preserving exact aggregate TPS", () => {
+  const load = fleetLoadPresentation({
+    oneMinuteTps: 120_000,
+    activeSessions: 12,
+    cpuPercent: 62,
+    liveMachineCount: 3,
+    workingMachineCount: 2,
+  });
+
+  assert.equal(load.tps, 120_000);
+  assert.equal(load.sessions, 12);
+  assert.ok(load.score > 0 && load.score < 1);
+  assert.notEqual(load.state.id, "constrained");
 });

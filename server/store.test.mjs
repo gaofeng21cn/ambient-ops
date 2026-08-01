@@ -46,6 +46,40 @@ test("persists bounded per-machine TPS history across restarts", async () => {
   }
 });
 
+test("persists fleet TPS and per-machine network history across restarts", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ambient-ops-store-"));
+  try {
+    const store = new StatusStore(dataDir);
+    await store.load();
+    await store.setMachine({
+      ...machine("live", "2026-07-25T00:00:00.000Z", 10),
+      network: {
+        source: "host",
+        updatedAt: "2026-07-25T00:00:00.000Z",
+        downloadMbps: 100,
+        uploadMbps: 20,
+      },
+    });
+    await store.recordFleetHistory({ at: "2026-07-25T00:00:00.000Z", tps: 10 });
+    await store.recordFleetHistory({ at: "2026-07-25T00:00:10.000Z", tps: 20 });
+
+    const reloaded = new StatusStore(dataDir);
+    await reloaded.load();
+
+    assert.deepEqual(reloaded.fleetHistory, [
+      { at: "2026-07-25T00:00:00.000Z", tps: 10 },
+      { at: "2026-07-25T00:00:10.000Z", tps: 20 },
+    ]);
+    assert.deepEqual(reloaded.machineNetworkHistory.get("live"), [{
+      at: "2026-07-25T00:00:00.000Z",
+      downloadMbps: 100,
+      uploadMbps: 20,
+    }]);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("loads legacy machine state whose bundled pet has no asset hash", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "ambient-ops-store-"));
   try {

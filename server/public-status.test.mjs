@@ -14,6 +14,15 @@ test("projects the dashboard into a versioned mobile contract", () => {
     overallStatus: "live",
     network: { status: "live", history: [] },
     codex: { status: "live", oneMinuteTps: 60000 },
+    fleet: {
+      status: "live",
+      oneMinuteTps: 60000,
+      activeSessions: 10,
+      cpuPercent: 97,
+      liveMachineCount: 1,
+      workingMachineCount: 1,
+      tpsHistory: [{ at: "2026-07-30T23:59:55.000Z", tps: 58000 }],
+    },
     machines: [{
       machineId: "studio",
       machineName: "Studio",
@@ -43,12 +52,18 @@ test("projects the dashboard into a versioned mobile contract", () => {
   assert.equal(status.capabilities.loadVisualState, true);
   assert.equal(status.capabilities.machineHistory, true);
   assert.equal(status.capabilities.persistentHistory, true);
+  assert.equal(status.capabilities.fleetHistory, true);
+  assert.equal(status.capabilities.hostNetwork, true);
   assert.equal(status.capabilities.webDisplay, true);
   assert.equal(status.capabilities.liveActivityPush, false);
   assert.equal(status.machines[0].loadVisualState.modelVersion, 1);
   assert.equal(status.machines[0].loadVisualState.state, "constrained");
   assert.ok(status.machines[0].loadVisualState.taskDensity > 0.8);
   assert.deepEqual(status.machines[0].tpsHistory, [
+    { at: "2026-07-30T23:59:55.000Z", tps: 58000 },
+  ]);
+  assert.equal(status.fleet.loadVisualState.state, "constrained");
+  assert.deepEqual(status.fleet.tpsHistory, [
     { at: "2026-07-30T23:59:55.000Z", tps: 58000 },
   ]);
 });
@@ -61,6 +76,14 @@ test("preserves unknown CPU as activity rather than invented pressure", () => {
     overallStatus: "live",
     network: { status: "live", history: [] },
     codex: { status: "live" },
+    fleet: {
+      status: "live",
+      oneMinuteTps: 60000,
+      activeSessions: 10,
+      cpuPercent: null,
+      liveMachineCount: 1,
+      workingMachineCount: 1,
+    },
     machines: [{
       machineId: "mac",
       machineName: "Mac",
@@ -72,4 +95,5 @@ test("preserves unknown CPU as activity rather than invented pressure", () => {
 
   assert.equal(status.machines[0].loadVisualState.state, "heavy");
   assert.equal(status.machines[0].loadVisualState.pressure, 0);
+  assert.notEqual(status.fleet.loadVisualState.state, "constrained");
 });

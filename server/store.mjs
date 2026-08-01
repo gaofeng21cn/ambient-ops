@@ -1,6 +1,10 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { appendHistorySample } from "../src/status-history.mjs";
+import {
+  appendHistorySample,
+  STATUS_HISTORY_RETENTION_MS,
+  STATUS_HISTORY_SAMPLE_MS,
+} from "../src/status-history.mjs";
 
 export class StatusStore {
   constructor(dataDir, { networkPersistIntervalMs = 5000 } = {}) {
@@ -8,6 +12,8 @@ export class StatusStore {
     this.path = join(dataDir, "state.json");
     this.machines = new Map();
     this.machineHistory = new Map();
+    this.machineNetworkHistory = new Map();
+    this.fleetHistory = [];
     this.network = { status: "error", source: "unconfigured", error: "UniFi is not configured" };
     this.networkHistory = [];
     this.persistChain = Promise.resolve();
@@ -28,6 +34,13 @@ export class StatusStore {
           Array.isArray(history) ? history.slice(-1_000) : [],
         ]),
       );
+      this.machineNetworkHistory = new Map(
+        Object.entries(saved.machineNetworkHistory || {}).map(([machineId, history]) => [
+          machineId,
+          Array.isArray(history) ? history.slice(-1_000) : [],
+        ]),
+      );
+      this.fleetHistory = Array.isArray(saved.fleetHistory) ? saved.fleetHistory.slice(-1_000) : [];
       this.network = saved.network || this.network;
       this.networkHistory = (saved.networkHistory || []).slice(-300);
     } catch (error) {
@@ -44,6 +57,7 @@ export class StatusStore {
   async removeMachine(machineId) {
     if (!this.machines.delete(machineId)) return false;
     this.machineHistory.delete(machineId);
+    this.machineNetworkHistory.delete(machineId);
     await this.persist();
     return true;
   }
@@ -56,6 +70,7 @@ export class StatusStore {
       if (!Number.isFinite(receivedAt) || receivedAt < cutoff) {
         this.machines.delete(machineId);
         this.machineHistory.delete(machineId);
+        this.machineNetworkHistory.delete(machineId);
         removed.push(machineId);
       }
     }
@@ -87,6 +102,8 @@ export class StatusStore {
     const body = JSON.stringify({
       machines: [...this.machines.values()],
       machineHistory: Object.fromEntries(this.machineHistory),
+      machineNetworkHistory: Object.fromEntries(this.machineNetworkHistory),
+      fleetHistory: this.fleetHistory,
       network: this.network,
       networkHistory: this.networkHistory,
     }, null, 2);
@@ -121,5 +138,44 @@ export class StatusStore {
       },
     );
     this.machineHistory.set(snapshot.machineId, history);
+    if (snapshot.network) {
+      const networkHistory = appendNetworkHistorySample(
+        this.machineNetworkHistory.get(snapshot.machineId),
+        {
+          at: snapshot.network.updatedAt || snapshot.generatedAt,
+          downloadMbps: snapshot.network.downloadMbps,
+          uploadMbps: snapshot.network.uploadMbps,
+        },
+      );
+      this.machineNetworkHistory.set(snapshot.machineId, networkHistory);
+    }
   }
+
+  recordFleetHistory(sample) {
+    this.fleetHistory = appendHistorySample(this.fleetHistory, sample, { sampleIntervalMs: 10_000 });
+    return this.persist();
+  }
+}
+
+function appendNetworkHistorySample(history, sample) {
+  const sampleAt = new Date(sample?.at).valueOf();
+  if (!Number.isFinite(sampleAt)) return Array.isArray(history) ? history : [];
+  const cutoff = sampleAt - STATUS_HISTORY_RETENTION_MS;
+  const retained = (Array.isArray(history) ? history : []).filter((entry) => {
+    const at = new Date(entry?.at).valueOf();
+    return Number.isFinite(at) && at >= cutoff && at <= sampleAt;
+  });
+  const normalized = {
+    at: new Date(sampleAt).toISOString(),
+    downloadMbps: Math.max(0, Number(sample?.downloadMbps) || 0),
+    uploadMbps: Math.max(0, Number(sample?.uploadMbps) || 0),
+  };
+  const last = retained.at(-1);
+  if (!last) return [normalized];
+  const lastAt = new Date(last.at).valueOf();
+  if (sampleAt < lastAt) return retained;
+  if (sampleAt - lastAt < STATUS_HISTORY_SAMPLE_MS) {
+    return [...retained.slice(0, -1), { ...normalized, at: last.at }];
+  }
+  return [...retained, normalized].slice(-1_000);
 }

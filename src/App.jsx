@@ -53,6 +53,7 @@ import {
   mergeHistorySamples,
 } from "./status-history.mjs";
 import {
+  fleetLoadPresentation,
   loadParticlePhase,
   machineLoadPresentation,
 } from "./load-model.mjs";
@@ -76,6 +77,7 @@ const EMPTY_STATUS = {
   overallStatus: "error",
   network: { status: "error", history: [] },
   codex: { status: "error", oneMinuteTps: 0, fiveMinuteTps: 0, cachePercent: 0, activeSessions: 0, cpuPercent: null, machineCount: 0 },
+  fleet: { status: "error", oneMinuteTps: 0, fiveMinuteTps: 0, cachePercent: 0, activeSessions: 0, cpuPercent: null, machineCount: 0, liveMachineCount: 0, workingMachineCount: 0, tpsHistory: [] },
   machines: [],
 };
 
@@ -230,6 +232,11 @@ function useStatus(statusEndpoint = "/api/v1/status") {
 
 function Dashboard({ status, connection, displayConnection }) {
   const [view, setView] = useState(() => initialView(displayConnection));
+  const [displayScope, setDisplayScope] = useState(() => {
+    const stored = localStorage.getItem("ambient-ops-display-scope");
+    if (stored === "fleet" || stored === "host") return stored;
+    return displayConnection.embedded ? "host" : "fleet";
+  });
   const [selectedMachineId, setSelectedMachineId] = useState(
     () => localStorage.getItem("ambient-ops-machine-id") || status.machines[0]?.machineId || null,
   );
@@ -242,6 +249,9 @@ function Dashboard({ status, connection, displayConnection }) {
   );
   const pointerStart = useRef(null);
   const selectedMachine = selectDisplayMachine(status.machines, selectedMachineId, machineFollowMode);
+  const scopedNetwork = networkForDisplay(status, displayScope, selectedMachine);
+  const scopedCodex = codexForDisplay(status, displayScope, selectedMachine);
+  const fleet = fleetForStatus(status);
 
   useEffect(() => {
     window.AmbientOpsNative?.statusChanged?.(connection);
@@ -259,6 +269,10 @@ function Dashboard({ status, connection, displayConnection }) {
     }
     localStorage.setItem("ambient-ops-machine-mode", machineFollowMode);
   }, [machineFollowMode, selectedMachineId]);
+
+  useEffect(() => {
+    localStorage.setItem("ambient-ops-display-scope", displayScope);
+  }, [displayScope]);
 
   const switchBy = useCallback((offset) => {
     setView((current) => VIEWS[(VIEWS.indexOf(current) + offset + VIEWS.length) % VIEWS.length]);
@@ -279,6 +293,7 @@ function Dashboard({ status, connection, displayConnection }) {
   const goToMachine = (machineId) => {
     setSelectedMachineId(machineId);
     setMachineFollowMode("fixed");
+    setDisplayScope("host");
     setView("machines");
   };
   const selectMachine = (machineId) => {
@@ -294,21 +309,25 @@ function Dashboard({ status, connection, displayConnection }) {
 
   return (
     <div className="app-shell" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-      <Header status={status} connection={connection} view={view} />
+      <Header status={status} connection={connection} view={view} displayScope={displayScope} onDisplayScope={setDisplayScope} />
       <main className="view-stage">
-        {view === "overview" ? <Overview status={status} onMachine={goToMachine} onAllMachines={() => setView("machines")} /> : null}
-        {view === "network" ? <NetworkView network={status.network} /> : null}
+        {view === "overview" ? <Overview status={status} network={scopedNetwork} codex={scopedCodex} displayScope={displayScope} selected={selectedMachine} onMachine={goToMachine} onAllMachines={() => setView("machines")} /> : null}
+        {view === "network" ? <NetworkView network={scopedNetwork} displayScope={displayScope} /> : null}
         {view === "machines" ? (
           <MachinesView
             machines={status.machines}
             selected={selectedMachine}
+            displayScope={displayScope}
             onSelect={selectMachine}
+            onFocus={goToMachine}
           />
         ) : null}
         {view === "load" ? (
           <LoadView
             machines={status.machines}
             selected={selectedMachine}
+            fleet={fleet}
+            displayScope={displayScope}
             followMode={machineFollowMode}
             onFollowMode={changeMachineFollowMode}
             onSelect={selectMachine}
@@ -318,6 +337,8 @@ function Dashboard({ status, connection, displayConnection }) {
           <PetView
             machines={status.machines}
             selected={selectedMachine}
+            fleet={fleet}
+            displayScope={displayScope}
             followMode={machineFollowMode}
             onFollowMode={changeMachineFollowMode}
             onSelect={selectMachine}
@@ -335,12 +356,13 @@ function initialView(displayConnection = DISPLAY_CONNECTION) {
   return VIEWS.includes(route) ? route : "overview";
 }
 
-function Header({ status, connection, view }) {
+function Header({ status, connection, view, displayScope, onDisplayScope }) {
   const now = useClock();
   return (
     <header className="top-header">
       <div className="header-identity">
         <h1>{VIEW_LABELS[view] || "Overview"}</h1>
+        <ScopeSwitch value={displayScope} onChange={onDisplayScope} />
         <span className="header-site-name">{status.site?.name || "Ambient Ops"}</span>
       </div>
       <div className="header-status">
@@ -357,7 +379,33 @@ function Header({ status, connection, view }) {
   );
 }
 
-function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
+function ScopeSwitch({ value, onChange }) {
+  return (
+    <div className="scope-switch" role="group" aria-label="Display scope">
+      {[
+        ["fleet", "FLEET"],
+        ["host", "HOST"],
+      ].map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          className={value === id ? "active" : ""}
+          aria-pressed={value === id}
+          onClick={() => onChange(id)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function LoadView({ machines, selected, fleet, displayScope, followMode, onFollowMode, onSelect }) {
+  if (displayScope === "fleet") return <FleetLoadView machines={machines} fleet={fleet} />;
+  return <HostLoadView machines={machines} selected={selected} followMode={followMode} onFollowMode={onFollowMode} onSelect={onSelect} />;
+}
+
+function HostLoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
   if (!selected) return <section className="load-view"><EmptyState /></section>;
   const Icon = machineIcon(selected.platform);
   const load = machineLoadPresentation(selected);
@@ -378,7 +426,7 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
             <PetMachineControl machines={machines} selected={selected} followMode={followMode} onFollowMode={onFollowMode} onSelect={onSelect} ariaLabel="Load host" />
           </div>
           <div className="load-canvas-title">
-            <span>DEVELOPMENT LOAD</span>
+            <span>HOST LOAD</span>
             <strong>{state.label}</strong>
             <small>{loadStateDescription(state.id)}</small>
           </div>
@@ -403,7 +451,7 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
           <Sparkline values={shortTrendValues} color="green" />
         </div>
         <div className="load-side-stats">
-          <LoadStat label="ACTIVE" value={load.sessions} unit="CONVERSATIONS" accent="green" />
+          <LoadStat label="ACTIVE" value={load.sessions} unit="SESSIONS" accent="green" />
           <LoadStat label="CPU" value={load.cpu === null ? "N/A" : `${Math.round(load.cpu)}%`} unit="HOST" accent={load.cpu === null ? "muted" : load.cpu > 80 ? "amber" : "green"} />
           <LoadStat label="CACHE" value={`${selected.cachePercent || 0}%`} />
         </div>
@@ -420,6 +468,339 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
       </aside>
     </section>
   );
+}
+
+function FleetLoadView({ machines, fleet }) {
+  const load = fleetLoadPresentation(fleet);
+  const state = load.state;
+  const shortTrendValues = historyValuesInWindow(fleet.tpsHistory, 5 * 60 * 1_000);
+  const loadTrendValues = historyValuesInWindow(fleet.tpsHistory, LOAD_TREND_WINDOW_MS);
+  const loadTrendMinutes = historyCoverageMinutes(fleet.tpsHistory);
+  const loadTrendAverage = loadTrendValues.length
+    ? loadTrendValues.reduce((total, value) => total + value, 0) / loadTrendValues.length
+    : Number(fleet.fiveMinuteTps || 0);
+  const liveNodes = Math.max(0, Number(fleet.liveMachineCount) || 0);
+  const totalNodes = Math.max(liveNodes, Number(fleet.machineCount) || machines.length);
+  const cpuReported = Math.max(0, Number(fleet.cpuReportedMachineCount) || 0);
+  const status = liveNodes > 0 ? "live" : totalNodes > 0 ? "stale" : "error";
+
+  return (
+    <section className={`load-view fleet-load-view load-state-${state.id}`}>
+      <div className="load-canvas">
+        <div className="load-canvas-head fleet-load-head">
+          <div className="fleet-load-identity">
+            <Network size={17} />
+            <div><strong>{totalNodes} NODES</strong><span>{fleet.workingMachineCount || 0} WORKING</span></div>
+          </div>
+          <div className="load-canvas-title">
+            <span>FLEET LOAD</span>
+            <strong>{state.label}</strong>
+            <small>{fleetLoadDescription(state.id)}</small>
+          </div>
+        </div>
+        <div className="load-field-header">
+          <span>FLEET ACTIVITY FIELD</span>
+          <div className="load-field-legend" aria-hidden="true">
+            <i className="density" /> NODES
+            <i className="rhythm" /> FLOW
+          </div>
+        </div>
+        <FleetPulseField state={state} machines={machines} fleet={fleet} load={load} />
+        <div className="load-canvas-footer">
+          <LoadScale score={load.score} />
+          <span>{fleet.workingMachineCount || 0}/{liveNodes || 0} WORKING · {formatTps(load.tps)} TPS</span>
+        </div>
+      </div>
+      <aside className="load-side-metrics">
+        <div className="load-side-primary">
+          <span>1 MINUTE</span>
+          <div><strong>{formatTps(load.tps)}</strong><small>TPS</small></div>
+          <Sparkline values={shortTrendValues} color="green" />
+        </div>
+        <div className="load-side-stats">
+          <LoadStat label="ACTIVE" value={load.sessions} unit="SESSIONS" accent="green" />
+          <LoadStat label="NODES" value={`${liveNodes}/${totalNodes}`} unit="LIVE / TOTAL" accent={liveNodes === totalNodes && totalNodes > 0 ? "green" : "amber"} />
+          <LoadStat
+            label="CPU"
+            value={load.cpu === null ? "N/A" : `${Math.round(load.cpu)}%`}
+            unit={cpuReported ? `${cpuReported}/${liveNodes || totalNodes} HOSTS` : "NO REPORTS"}
+            accent={load.cpu === null ? "muted" : load.cpu > 80 ? "amber" : "green"}
+          />
+        </div>
+        <div className="load-side-trend">
+          <div><span>{loadTrendMinutes >= 30 ? "30 MIN TREND" : loadTrendMinutes > 0 ? `${loadTrendMinutes} MIN TREND` : "LIVE TREND"}</span><small>{formatTps(loadTrendAverage)} TPS AVG</small></div>
+          <Sparkline values={loadTrendValues} color="green" />
+          <div className="load-side-axis">{loadTrendAxis(loadTrendMinutes).map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>
+        </div>
+        <div className="load-side-host fleet-load-freshness">
+          <span className={`load-host-freshness ${status}`}><i /> {fleet.workingMachineCount || 0} WORKING · {liveNodes} CONNECTED</span>
+        </div>
+      </aside>
+    </section>
+  );
+}
+
+function fleetLoadDescription(stateId) {
+  return {
+    quiet: "fleet standing by",
+    active: "nodes in motion",
+    heavy: "parallel fleet work",
+    constrained: "host pressure detected",
+  }[stateId] || "fleet activity";
+}
+
+function FleetPulseField({ state, machines, fleet, load }) {
+  const canvasRef = useRef(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const reduceMotion = shouldReduceKioskMotion(navigator.userAgent, prefersReducedMotion);
+  const visualNodes = useMemo(() => fleetVisualNodes(machines), [machines]);
+  const visual = useMemo(() => ({
+    ...load.sceneProfile,
+    stateId: state.id,
+    nodes: visualNodes,
+    liveNodes: Number(fleet.liveMachineCount) || 0,
+    workingNodes: Number(fleet.workingMachineCount) || 0,
+  }), [fleet.liveMachineCount, fleet.workingMachineCount, load.sceneProfile, state.id, visualNodes]);
+  const visualRef = useRef(visual);
+  visualRef.current = visual;
+  useFleetPulseMotion(canvasRef, visualRef, reduceMotion);
+
+  return (
+    <div className={`load-pixel-field fleet-pulse-field load-pixel-${state.id}`} role="img" aria-label={`${state.label} fleet activity animation across ${fleet.machineCount || machines.length} nodes`}>
+      <canvas ref={canvasRef} className="load-pixel-canvas" aria-hidden="true" />
+    </div>
+  );
+}
+
+function fleetVisualNodes(machines) {
+  const ordered = [...machines].sort((left, right) => {
+    const statusRank = { live: 0, stale: 1, error: 2 };
+    const statusDifference = (statusRank[left.status] ?? 3) - (statusRank[right.status] ?? 3);
+    if (statusDifference) return statusDifference;
+    return Number(right.oneMinute?.tps || 0) - Number(left.oneMinute?.tps || 0);
+  });
+  if (ordered.length <= 6) return ordered.map(fleetNodeFromMachine);
+  const groups = Array.from({ length: 6 }, () => []);
+  ordered.forEach((machine, index) => groups[index % groups.length].push(machine));
+  return groups.map((group, index) => ({
+    id: `group-${index}`,
+    name: `${group.length} nodes`,
+    status: group.some((machine) => machine.status === "live") ? "live" : group.some((machine) => machine.status === "stale") ? "stale" : "error",
+    tps: group.reduce((total, machine) => total + Number(machine.oneMinute?.tps || 0), 0),
+    sessions: group.reduce((total, machine) => total + Number(machine.activeSessions || 0), 0),
+    cpu: averageReported(group.map((machine) => machine.cpuPercent)),
+  }));
+}
+
+function fleetNodeFromMachine(machine) {
+  return {
+    id: machine.machineId,
+    name: machine.machineName,
+    status: machine.status,
+    tps: Number(machine.oneMinute?.tps || 0),
+    sessions: Number(machine.activeSessions || 0),
+    cpu: finiteMetric(machine.cpuPercent),
+  };
+}
+
+function averageReported(values) {
+  const reported = values.map(finiteMetric).filter((value) => value !== null);
+  return reported.length ? reported.reduce((sum, value) => sum + value, 0) / reported.length : null;
+}
+
+function finiteMetric(value) {
+  return value === null || value === undefined || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
+}
+
+function useFleetPulseMotion(canvasRef, visualRef, reduceMotion) {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const field = canvas?.parentElement;
+    if (!canvas || !field) return undefined;
+    const context = canvas.getContext("2d");
+    if (!context) return undefined;
+    let width = 0;
+    let height = 0;
+    const resize = () => {
+      const bounds = field.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = Math.max(1, bounds.width);
+      height = Math.max(1, bounds.height);
+      canvas.width = Math.max(1, Math.round(width * dpr));
+      canvas.height = Math.max(1, Math.round(height * dpr));
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.imageSmoothingEnabled = false;
+    };
+    resize();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(resize) : null;
+    observer?.observe(field);
+    let assetReady = false;
+    const workstation = new Image();
+    workstation.decoding = "async";
+    workstation.onload = () => { assetReady = true; };
+    workstation.src = `${import.meta.env.BASE_URL}load/fleet-workstation.webp`;
+    const startedAt = performance.now();
+    let animationFrame = null;
+    let lastPaintAt = -Infinity;
+    const paint = (timestamp) => {
+      const frameBudget = reduceMotion ? 140 : 34;
+      if (timestamp - lastPaintAt >= frameBudget) {
+        lastPaintAt = timestamp;
+        paintFleetPulseCanvas(context, width, height, timestamp - startedAt, visualRef.current, assetReady ? workstation : null);
+      }
+      animationFrame = requestAnimationFrame(paint);
+    };
+    paint(startedAt);
+    return () => {
+      if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+      observer?.disconnect();
+      workstation.onload = null;
+    };
+  }, [canvasRef, reduceMotion, visualRef]);
+}
+
+function paintFleetPulseCanvas(context, width, height, elapsed, visual, workstation) {
+  if (width <= 1 || height <= 1) return;
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = "#05090d";
+  context.fillRect(0, 0, width, height);
+  const pixel = Math.max(2, Math.round(Math.min(width, height) / 85));
+  drawWorkstationGrid(context, width, height, pixel, clampVisual(visual.activity));
+  const nodes = visual.nodes.length ? visual.nodes : [{ id: "standby", status: "error", tps: 0, sessions: 0, cpu: null }];
+  const positions = fleetNodePositions(nodes.length, width, height);
+  const links = fleetNodeLinks(nodes.length);
+  const tempo = Math.max(.25, Number(visual.tempo) || .25);
+  const density = clampVisual(visual.taskDensity);
+
+  for (const [fromIndex, toIndex] of links) {
+    const from = positions[fromIndex];
+    const to = positions[toIndex];
+    const active = nodeWorking(nodes[fromIndex]) || nodeWorking(nodes[toIndex]);
+    drawFleetLink(context, from, to, elapsed, tempo, density, active, pixel, fromIndex * 13 + toIndex);
+  }
+  positions.forEach((position, index) => {
+    drawFleetNode(context, position, nodes[index], elapsed, workstation, pixel, index);
+  });
+  context.globalAlpha = 1;
+}
+
+function fleetNodePositions(count, width, height) {
+  const total = Math.max(1, Math.min(6, count));
+  const rows = total <= 3 ? 1 : 2;
+  const top = rows === 1 ? height * .5 : height * .29;
+  const bottom = height * .72;
+  const size = rows === 1
+    ? Math.max(48, Math.min(74, height * .62, width * .22))
+    : Math.max(38, Math.min(58, height * .43, width * .18));
+  return Array.from({ length: total }, (_, index) => {
+    const row = rows === 1 ? 0 : index < Math.ceil(total / 2) ? 0 : 1;
+    const rowStart = rows === 1 || row === 0 ? 0 : Math.ceil(total / 2);
+    const rowCount = rows === 1
+      ? total
+      : row === 0 ? Math.ceil(total / 2) : total - Math.ceil(total / 2);
+    const column = index - rowStart;
+    return {
+      x: width * (.12 + (column + .5) * .76 / Math.max(1, rowCount)),
+      y: row === 0 ? top : bottom,
+      size,
+    };
+  });
+}
+
+function fleetNodeLinks(count) {
+  if (count <= 1) return [];
+  const links = [];
+  const firstRowCount = Math.ceil(count / 2);
+  for (let index = 0; index < firstRowCount - 1; index += 1) links.push([index, index + 1]);
+  for (let index = firstRowCount; index < count - 1; index += 1) links.push([index, index + 1]);
+  if (count > 3) {
+    for (let index = 0; index < count - firstRowCount; index += 1) links.push([index, firstRowCount + index]);
+    if (count >= 5) links.push([1, count - 1]);
+  }
+  return links;
+}
+
+function drawFleetLink(context, from, to, elapsed, tempo, density, active, pixel, seed) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 1) return;
+  const start = { x: from.x + dx * .14, y: from.y + dy * .14 };
+  const end = { x: to.x - dx * .14, y: to.y - dy * .14 };
+  context.save();
+  context.strokeStyle = active ? "rgba(57, 216, 145, .34)" : "rgba(91, 105, 116, .18)";
+  context.lineWidth = 1;
+  context.setLineDash([pixel * 2, pixel * 3]);
+  context.beginPath();
+  context.moveTo(start.x, start.y);
+  context.lineTo(end.x, end.y);
+  context.stroke();
+  context.setLineDash([]);
+  if (active) {
+    const packetCount = Math.max(1, Math.round(2 + density * 6));
+    for (let index = 0; index < packetCount; index += 1) {
+      const phase = loadParticlePhase(elapsed, Math.max(520, 2_600 / tempo), index / packetCount + seed * .071);
+      const x = start.x + (end.x - start.x) * phase;
+      const y = start.y + (end.y - start.y) * phase;
+      context.globalAlpha = .35 + .65 * Math.sin(Math.PI * phase);
+      context.fillStyle = index % 3 === 0 ? "#38bdf8" : "#39d891";
+      context.fillRect(Math.round(x), Math.round(y), pixel * (index % 4 === 0 ? 2 : 1), pixel);
+    }
+  }
+  context.restore();
+}
+
+function drawFleetNode(context, position, node, elapsed, workstation, pixel, index) {
+  const active = nodeWorking(node);
+  const pressured = node.cpu !== null && node.cpu >= 82;
+  const constrained = active && node.cpu !== null && node.cpu >= 90;
+  const color = constrained ? "#ef6a62" : pressured ? "#f59e0b" : active ? "#25d06f" : node.status === "stale" ? "#8e99a3" : "#59636d";
+  const intensity = clampVisual(Math.sqrt(Math.max(0, node.tps) / 60_000) * .75 + Math.min(1, node.sessions / 8) * .25);
+  const pulse = .5 + .5 * Math.sin(elapsed / Math.max(210, 900 - intensity * 470) + index * 1.7);
+  const spriteSize = position.size || 54;
+  context.save();
+  context.globalAlpha = node.status === "live" ? .96 : .34;
+  context.fillStyle = color;
+  context.globalAlpha *= active ? .09 + pulse * .12 : .035;
+  context.fillRect(position.x - spriteSize * .58, position.y - spriteSize * .52, spriteSize * 1.16, spriteSize * .96);
+  context.globalAlpha = node.status === "live" ? .92 : .32;
+  if (workstation) {
+    context.imageSmoothingEnabled = false;
+    context.drawImage(workstation, Math.round(position.x - spriteSize / 2), Math.round(position.y - spriteSize / 2), spriteSize, spriteSize);
+  } else {
+    drawFleetFallbackNode(context, position, spriteSize, color, pixel);
+  }
+  context.globalAlpha = node.status === "live" ? .52 + pulse * .28 : .62;
+  context.strokeStyle = color;
+  context.lineWidth = 1;
+  context.strokeRect(
+    Math.round(position.x - spriteSize * .48),
+    Math.round(position.y - spriteSize * .46),
+    Math.round(spriteSize * .96),
+    Math.round(spriteSize * .9),
+  );
+  context.globalAlpha = 1;
+  context.fillStyle = color;
+  const lightSize = Math.max(2, pixel);
+  context.fillRect(Math.round(position.x + spriteSize * .31), Math.round(position.y + spriteSize * .28), lightSize, lightSize);
+  if (active) {
+    context.globalAlpha = .45 + pulse * .5;
+    context.fillRect(Math.round(position.x - spriteSize * .2), Math.round(position.y - spriteSize * .13), pixel * 2, pixel);
+  }
+  context.restore();
+}
+
+function drawFleetFallbackNode(context, position, size, color, pixel) {
+  context.strokeStyle = color;
+  context.lineWidth = Math.max(1, pixel / 2);
+  context.strokeRect(position.x - size * .28, position.y - size * .3, size * .56, size * .38);
+  context.strokeRect(position.x - size * .36, position.y + size * .12, size * .72, size * .2);
+}
+
+function nodeWorking(node) {
+  return node.status === "live" && (Number(node.tps || 0) > 0 || Number(node.sessions || 0) > 0);
 }
 
 function LoadScale({ score }) {
@@ -725,14 +1106,14 @@ function LoadStat({ label, value, unit, accent = "" }) {
   );
 }
 
-function Overview({ status, onMachine, onAllMachines }) {
+function Overview({ status, network, codex, displayScope, selected, onMachine, onAllMachines }) {
   return (
     <>
-      <DeviceOverview status={status} />
+      <DeviceOverview network={network} codex={codex} displayScope={displayScope} />
       <div className="overview-grid">
-        <Panel className="internet-panel" title="Internet" icon={Globe2} action={<span className="panel-action">WAN: Primary <StatusLabel status={status.network.status} compact /></span>}>
-          <ThroughputSummary network={status.network} />
-          <TrafficChart points={status.network.history} allowSampleData={status.demo} />
+        <Panel className="internet-panel" title={displayScope === "fleet" ? "Internet" : "Host Network"} icon={Globe2} action={<span className="panel-action">{displayScope === "fleet" ? "WAN" : selected?.machineName || "HOST"} <StatusLabel status={network.status} compact /></span>}>
+          <ThroughputSummary network={network} />
+          <TrafficChart points={network.history} allowSampleData={displayScope === "fleet" && status.demo} emptyLabel={displayScope === "fleet" ? "Waiting for WAN samples" : "Waiting for host samples"} />
           <div className="chart-legend">
             <Legend color="blue" label="Download" />
             <Legend color="green" label="Upload" />
@@ -740,9 +1121,9 @@ function Overview({ status, onMachine, onAllMachines }) {
           </div>
         </Panel>
         <div className="right-column">
-          <Panel className="codex-panel" title="Codex" icon={Bot} action={<StatusLabel status={status.codex.status} />}>
-            <CodexSummary codex={status.codex} />
-            <Sparkline values={status.codex.tpsHistory?.map((sample) => sample.tps) || []} color="green" compact />
+          <Panel className="codex-panel" title={displayScope === "fleet" ? "Fleet Codex" : selected?.machineName || "Host Codex"} icon={Bot} action={<StatusLabel status={codex.status} />}>
+            <CodexSummary codex={codex} />
+            <Sparkline values={codex.tpsHistory?.map((sample) => sample.tps) || []} color="green" compact />
           </Panel>
           <Panel className="machine-panel" title={`Machines (${status.machines.length})`} icon={Monitor} action={<button className="panel-link" type="button" onClick={onAllMachines}>All <ChevronRight size={20} /></button>}>
             <MachineList machines={status.machines} onMachine={onMachine} />
@@ -753,22 +1134,24 @@ function Overview({ status, onMachine, onAllMachines }) {
   );
 }
 
-function DeviceOverview({ status }) {
-  const liveMachines = status.machines.filter((machine) => machine.status === "live").length;
+function DeviceOverview({ network, codex, displayScope }) {
+  const cpu = finiteMetric(codex.cpuPercent);
   return (
     <section className="device-overview">
       <div className="device-primary-metrics">
-        <DeviceMetric label="Download" value={formatMetric(status.network.downloadMbps)} unit="Mbps" accent="download" />
-        <DeviceMetric label="Upload" value={formatMetric(status.network.uploadMbps)} unit="Mbps" accent="upload" />
-        <DeviceMetric label="Codex" value={formatTps(status.codex.oneMinuteTps)} unit="TPS" accent="codex" />
+        <DeviceMetric label="Download" value={formatMetric(network.downloadMbps)} unit="Mbps" accent="download" />
+        <DeviceMetric label="Upload" value={formatMetric(network.uploadMbps)} unit="Mbps" accent="upload" />
+        <DeviceMetric label={displayScope === "fleet" ? "Fleet Codex" : "Host Codex"} value={formatTps(codex.oneMinuteTps)} unit="TPS" accent="codex" />
       </div>
       <section className="device-airview">
-        <AirViewChart points={status.network.history} allowSampleData={status.demo} />
+        <AirViewChart points={network.history} allowSampleData={network.source === "demo"} emptyLabel={displayScope === "fleet" ? "Waiting for WAN samples" : "Waiting for host samples"} />
       </section>
       <div className="device-summary-grid">
-        <DeviceStat label="CODEX 5M" value={formatTps(status.codex.fiveMinuteTps)} unit="TPS" />
-        <DeviceStat label="CACHE" value={status.codex.cachePercent} unit="%" />
-        <DeviceStat label="LIVE" value={`${liveMachines}/${status.machines.length}`} accent={liveMachines === status.machines.length ? "green" : "amber"} />
+        <DeviceStat label="CODEX 5M" value={formatTps(codex.fiveMinuteTps)} unit="TPS" />
+        <DeviceStat label="ACTIVE" value={codex.activeSessions || 0} />
+        {displayScope === "fleet"
+          ? <DeviceStat label="NODES" value={`${codex.liveMachineCount || 0}/${codex.machineCount || 0}`} accent={codex.liveMachineCount === codex.machineCount && codex.machineCount > 0 ? "green" : "amber"} />
+          : <DeviceStat label="CPU" value={cpu === null ? "N/A" : Math.round(cpu)} unit={cpu === null ? "" : "%"} accent={cpu !== null && cpu > 80 ? "amber" : "green"} />}
       </div>
     </section>
   );
@@ -793,14 +1176,14 @@ function DeviceStat({ label, value, unit, accent = "" }) {
   );
 }
 
-function AirViewChart({ points = [], allowSampleData = false }) {
+function AirViewChart({ points = [], allowSampleData = false, emptyLabel = "Waiting for WAN samples" }) {
   const chartId = useId().replace(/:/g, "");
   const fillId = `${chartId}-airview-fill`;
   const uploadFillId = `${chartId}-airview-upload-fill`;
   const downloadStrokeId = `${chartId}-airview-download-stroke`;
   const uploadStrokeId = `${chartId}-airview-upload-stroke`;
   const data = trafficData(points, allowSampleData);
-  if (data.length === 0) return <div className="airview-empty">Waiting for WAN samples</div>;
+  if (data.length === 0) return <div className="airview-empty">{emptyLabel}</div>;
   const downloadValues = smoothTrafficValues(data.map((point) => point.downloadMbps || 0));
   const uploadValues = smoothTrafficValues(data.map((point) => point.uploadMbps || 0));
   const max = trafficScale([downloadValues, uploadValues]);
@@ -853,26 +1236,26 @@ function AirViewChart({ points = [], allowSampleData = false }) {
   );
 }
 
-function NetworkView({ network }) {
+function NetworkView({ network, displayScope }) {
   const clients = networkClientsMetric(network);
   const latency = networkLatencyMetric(network);
   return (
     <>
-      <DeviceNetworkView network={network} />
+      <DeviceNetworkView network={network} displayScope={displayScope} />
       <div className="network-view">
         <section className="network-hero">
-          <div className="section-heading"><Globe2 size={26} /><h2>Internet</h2><StatusLabel status={network.status} /></div>
+          <div className="section-heading"><Globe2 size={26} /><h2>{displayScope === "fleet" ? "Internet" : "Host Network"}</h2><StatusLabel status={network.status} /></div>
           <ThroughputSummary network={network} large />
           <div className="network-facts">
-            <Fact label="Connected clients" value={clients.value} />
-            <Fact label="Probe latency" value={`${latency.value}${latency.unit ? ` ${latency.unit}` : ""}`} accent={latency.accent} />
-            <Fact label="Data source" value={network.source === "unifi" ? "UniFi Gateway" : network.source === "unifi-snmp-v3" ? "UniFi SNMPv3" : network.source === "demo" ? "Demonstration" : "Unconfigured"} />
+            {displayScope === "fleet" ? <Fact label="Connected clients" value={clients.value} /> : null}
+            {displayScope === "fleet" ? <Fact label="Probe latency" value={`${latency.value}${latency.unit ? ` ${latency.unit}` : ""}`} accent={latency.accent} /> : null}
+            <Fact label="Data source" value={networkSourceLabel(network, displayScope)} />
             <Fact label="Last update" value={formatAge(network.updatedAt)} />
           </div>
         </section>
         <section className="network-chart-wrap">
-          <div className="section-heading"><Activity size={24} /><h2>WAN throughput</h2><span>Last {historyWindowSeconds(network.history)}s</span></div>
-          <TrafficChart points={network.history} detailed allowSampleData={network.source === "demo"} />
+          <div className="section-heading"><Activity size={24} /><h2>{displayScope === "fleet" ? "WAN throughput" : "Host throughput"}</h2><span>Last {historyWindowSeconds(network.history)}s</span></div>
+          <TrafficChart points={network.history} detailed allowSampleData={network.source === "demo"} emptyLabel={displayScope === "fleet" ? "Waiting for WAN samples" : "Waiting for host samples"} />
           <div className="chart-legend"><Legend color="blue" label="Download" /><Legend color="green" label="Upload" /></div>
         </section>
       </div>
@@ -880,7 +1263,7 @@ function NetworkView({ network }) {
   );
 }
 
-function DeviceNetworkView({ network }) {
+function DeviceNetworkView({ network, displayScope }) {
   const clients = networkClientsMetric(network);
   const latency = networkLatencyMetric(network);
   return (
@@ -889,19 +1272,21 @@ function DeviceNetworkView({ network }) {
         <DeviceMetric label="Download" value={formatMetric(network.downloadMbps)} unit="Mbps" accent="download" />
         <DeviceMetric label="Upload" value={formatMetric(network.uploadMbps)} unit="Mbps" accent="upload" />
       </div>
-      <section className="device-airview network-airview"><AirViewChart points={network.history} allowSampleData={network.source === "demo"} /></section>
+      <section className="device-airview network-airview"><AirViewChart points={network.history} allowSampleData={network.source === "demo"} emptyLabel={displayScope === "fleet" ? "Waiting for WAN samples" : "Waiting for host samples"} /></section>
       <div className="device-summary-grid network-summary">
-        <DeviceStat label="CLIENTS" value={clients.value} />
-        <DeviceStat label="LATENCY" value={latency.value} unit={latency.unit} accent={latency.accent} />
+        {displayScope === "fleet" ? <DeviceStat label="CLIENTS" value={clients.value} /> : <DeviceStat label="SOURCE" value={network.source === "host" ? "HOST" : "N/A"} />}
+        {displayScope === "fleet" ? <DeviceStat label="LATENCY" value={latency.value} unit={latency.unit} accent={latency.accent} /> : <DeviceStat label="UPDATED" value={network.updatedAt ? formatDuration(Math.max(0, Math.round((Date.now() - new Date(network.updatedAt).valueOf()) / 1000))).toUpperCase() : "N/A"} />}
       </div>
     </section>
   );
 }
 
-function MachinesView({ machines, selected, onSelect }) {
+function MachinesView({ machines, selected, displayScope, onSelect, onFocus }) {
   return (
     <>
-      <DeviceMachinesView machines={machines} selected={selected} onSelect={onSelect} />
+      {displayScope === "fleet"
+        ? <DeviceFleetMachinesView machines={machines} onFocus={onFocus} />
+        : <DeviceMachinesView machines={machines} selected={selected} displayScope={displayScope} onSelect={onSelect} />}
       <div className="machines-view">
         <section className="machine-directory">
           <div className="section-heading"><Monitor size={26} /><h2>Machines</h2><span>{machines.length} agents</span></div>
@@ -915,12 +1300,48 @@ function MachinesView({ machines, selected, onSelect }) {
   );
 }
 
-function DeviceMachinesView({ machines, selected, onSelect }) {
+function DeviceFleetMachinesView({ machines, onFocus }) {
+  const ordered = [...machines].sort((left, right) => {
+    const rank = { error: 0, stale: 1, live: 2 };
+    const statusDifference = (rank[left.status] ?? 3) - (rank[right.status] ?? 3);
+    return statusDifference || Number(right.oneMinute?.tps || 0) - Number(left.oneMinute?.tps || 0);
+  });
+  const visible = ordered.slice(0, 4);
+  const working = machines.filter(isMachineWorking).length;
+  if (!visible.length) return <section className="device-fleet-machines-view"><EmptyState /></section>;
+  return (
+    <section className="device-fleet-machines-view">
+      <div className="fleet-machine-directory-head">
+        <span>{machines.length} NODES</span>
+        <strong>{working} WORKING</strong>
+        {machines.length > visible.length ? <small>+{machines.length - visible.length} MORE</small> : null}
+      </div>
+      <div className="fleet-machine-directory">
+        {visible.map((machine) => {
+          const Icon = machineIcon(machine.platform);
+          const activity = machineActivity(machine);
+          const cpu = finiteMetric(machine.cpuPercent);
+          return (
+            <button type="button" key={machine.machineId} onClick={() => onFocus(machine.machineId)}>
+              <Icon />
+              <div className="fleet-machine-name"><strong>{machine.machineName}</strong><span className={machine.status}>{machine.status.toUpperCase()} · {activity.label}</span></div>
+              <div className="fleet-machine-value"><strong>{formatTps(machine.oneMinute?.tps)}</strong><span>TPS</span></div>
+              <div className="fleet-machine-facts"><span>{machine.activeSessions || 0} ACTIVE</span><span>{cpu === null ? "CPU N/A" : `${Math.round(cpu)}% CPU`}</span></div>
+              <ChevronRight />
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function DeviceMachinesView({ machines, selected, displayScope, onSelect }) {
   if (!selected) return <section className="device-machines-view"><EmptyState /></section>;
   const activity = machineActivity(selected);
   return (
     <section className="device-machines-view">
-      <div className="device-machine-tabs">
+      <div className="device-machine-tabs" aria-label={displayScope === "fleet" ? "Fleet machines" : "Host selector"}>
         {machines.map((machine) => (
           <button
             className={selected.machineId === machine.machineId ? "selected" : ""}
@@ -951,7 +1372,58 @@ function DeviceMachinesView({ machines, selected, onSelect }) {
   );
 }
 
-function PetView({ machines, selected, followMode, onFollowMode, onSelect }) {
+function PetView({ machines, selected, fleet, displayScope, followMode, onFollowMode, onSelect }) {
+  if (displayScope === "fleet") return <FleetPetView machines={machines} fleet={fleet} />;
+  return <HostPetView machines={machines} selected={selected} followMode={followMode} onFollowMode={onFollowMode} onSelect={onSelect} />;
+}
+
+function FleetPetView({ machines, fleet }) {
+  const featured = [...machines]
+    .sort((left, right) => {
+      const statusRank = { error: 0, stale: 1, live: 2 };
+      const difference = (statusRank[left.status] ?? 3) - (statusRank[right.status] ?? 3);
+      return difference || Number(right.oneMinute?.tps || 0) - Number(left.oneMinute?.tps || 0);
+    })
+    .slice(0, 4);
+  const overflow = Math.max(0, machines.length - featured.length);
+  return (
+    <section className="pet-view fleet-pet-view">
+      <div className="pet-stage fleet-pet-stage">
+        <div className="fleet-pet-grid">
+          {featured.map((machine) => {
+            const pet = machine.pet;
+            const spriteUrl = resolvePetSpriteUrl(pet);
+            return (
+              <div className={`fleet-pet-node ${machine.status}`} key={machine.machineId}>
+                {pet && spriteUrl ? (
+                  <PetSprite key={petSpriteKey(machine, pet)} pet={pet} machineName={machine.machineName} spriteUrl={spriteUrl} />
+                ) : (
+                  <div className="fleet-pet-machine" aria-hidden="true"><Monitor /></div>
+                )}
+                <div><strong>{machine.machineName}</strong><span>{machineActivity(machine).label} · {formatTps(machine.oneMinute?.tps)} TPS</span></div>
+              </div>
+            );
+          })}
+        </div>
+        {overflow ? <div className="fleet-pet-overflow">+{overflow} NODES</div> : null}
+      </div>
+      <div className="pet-metrics fleet-pet-metrics">
+        <div className="pet-primary-metric">
+          <span>FLEET · 1 MINUTE</span>
+          <div><strong>{formatTps(fleet.oneMinuteTps)}</strong><small>TPS</small></div>
+        </div>
+        <div className="pet-secondary-metrics">
+          <PetTokenStat label="ACTIVE" value={fleet.activeSessions || 0} detail="CONVERSATIONS" />
+          <PetTokenStat label="WORKING" value={fleet.workingMachineCount || 0} detail={`${fleet.liveMachineCount || 0} CONNECTED`} />
+          <PetTokenStat label="CPU" value={fleet.cpuPercent === null || fleet.cpuPercent === undefined ? "N/A" : `${Math.round(fleet.cpuPercent)}%`} detail={`${fleet.cpuReportedMachineCount || 0}/${fleet.liveMachineCount || fleet.machineCount || 0} HOSTS`} />
+        </div>
+        <div className="pet-host-status"><StatusLabel status={fleet.status} /><span>FLEET COMPANIONS</span></div>
+      </div>
+    </section>
+  );
+}
+
+function HostPetView({ machines, selected, followMode, onFollowMode, onSelect }) {
   if (!selected) return <section className="pet-view"><EmptyState /></section>;
   const pet = selected.pet;
   const spriteUrl = resolvePetSpriteUrl(pet);
@@ -1295,13 +1767,13 @@ function TokenBar({ label, value, max, color }) {
   );
 }
 
-function TrafficChart({ points = [], detailed = false, allowSampleData = false }) {
+function TrafficChart({ points = [], detailed = false, allowSampleData = false, emptyLabel = "Waiting for WAN samples" }) {
   const chartId = useId().replace(/:/g, "");
   const downloadFillId = `${chartId}-download-fill`;
   const uploadFillId = `${chartId}-upload-fill`;
   const data = trafficData(points, allowSampleData);
   if (data.length === 0) {
-    return <div className={`traffic-chart chart-empty ${detailed ? "detailed" : ""}`}><Activity size={32} /><strong>Waiting for WAN samples</strong><span>The last known values will appear here when the gateway reports data.</span></div>;
+    return <div className={`traffic-chart chart-empty ${detailed ? "detailed" : ""}`}><Activity size={32} /><strong>{emptyLabel}</strong><span>Values appear when the selected source reports aggregate throughput.</span></div>;
   }
   const downloadValues = smoothTrafficValues(data.map((point) => point.downloadMbps || 0));
   const uploadValues = smoothTrafficValues(data.map((point) => point.uploadMbps || 0));
@@ -1384,7 +1856,16 @@ function historyWindowSeconds(points = []) {
 }
 
 function networkUnavailableLabel(network) {
-  return !network.source || network.source === "unconfigured" || network.status === "error" ? "N/A" : "WAIT";
+  return !network.source || network.source === "unconfigured" || network.status === "error" || network.status === "unavailable" ? "N/A" : "WAIT";
+}
+
+function networkSourceLabel(network, displayScope) {
+  if (displayScope === "host") return network.source === "host" ? "Host telemetry" : "Unavailable";
+  return network.source === "unifi"
+    ? "UniFi Gateway"
+    : network.source === "unifi-snmp-v3"
+      ? "UniFi SNMPv3"
+      : network.source === "demo" ? "Demonstration" : "Unconfigured";
 }
 
 function networkClientsMetric(network) {
@@ -1404,6 +1885,8 @@ function networkLatencyMetric(network) {
 }
 
 function machineActivity(machine) {
+  if (machine?.status === "error") return { active: false, label: "OFFLINE", detail: machine.platform };
+  if (machine?.status === "stale") return { active: false, label: "IDLE", detail: "STALE TELEMETRY" };
   const currentTps = Number(machine.oneMinute?.tps || 0);
   if (currentTps > 0.005) return { active: true, label: "WORKING", detail: machine.platform };
 
@@ -1425,6 +1908,10 @@ function machineActivity(machine) {
     return { active: false, label: "IDLE", detail: "ACTIVE <5M" };
   }
   return { active: false, label: "IDLE", detail: "5M NO ACTIVITY" };
+}
+
+function isMachineWorking(machine) {
+  return machine?.status === "live" && machineActivity(machine).active;
 }
 
 function BottomNav({ view, setView, status, connection }) {
@@ -1470,7 +1957,7 @@ function FullscreenButton() {
 }
 
 function StatusLabel({ status = "error", compact = false, age }) {
-  const label = status === "live" ? "LIVE" : status === "stale" ? "STALE" : "ERROR";
+  const label = status === "live" ? "LIVE" : status === "stale" ? "STALE" : status === "unavailable" ? "N/A" : "ERROR";
   return (
     <span className={`status-label ${status} ${compact ? "compact" : ""}`}>
       <i /> <span>{label}</span>{age && status !== "live" ? <small>{formatDuration(age)}</small> : null}
@@ -1520,14 +2007,71 @@ function mergeStatusHistory(previous, next) {
     const sourceHistory = mergeHistorySamples(prior?.tpsHistory, machine.tpsHistory);
     return { ...machine, tpsHistory: appendHistorySample(sourceHistory, sample) };
   });
-  const codexHistory = appendHistorySample(previous?.codex?.tpsHistory, {
+  const incomingFleet = fleetForStatus(next);
+  const previousFleet = fleetForStatus(previous || {});
+  const fleetSourceHistory = mergeHistorySamples(previousFleet.tpsHistory, incomingFleet.tpsHistory);
+  const fleetHistory = appendHistorySample(fleetSourceHistory, {
     at: next.generatedAt,
-    tps: Number(next.codex?.oneMinuteTps || 0),
+    tps: Number(incomingFleet.oneMinuteTps || 0),
   });
+  const fleet = { ...incomingFleet, tpsHistory: fleetHistory };
   return {
     ...next,
-    codex: { ...next.codex, tpsHistory: codexHistory },
+    fleet,
+    codex: { ...next.codex, tpsHistory: fleetHistory },
     machines,
+  };
+}
+
+function fleetForStatus(status = {}) {
+  const source = status.fleet || status.codex || {};
+  const machines = status.machines || [];
+  return {
+    status: source.status || status.codex?.status || "error",
+    oneMinuteTps: Number(source.oneMinuteTps ?? status.codex?.oneMinuteTps) || 0,
+    fiveMinuteTps: Number(source.fiveMinuteTps ?? status.codex?.fiveMinuteTps) || 0,
+    cachePercent: Number(source.cachePercent ?? status.codex?.cachePercent) || 0,
+    activeSessions: Number(source.activeSessions ?? status.codex?.activeSessions) || 0,
+    cpuPercent: finiteMetric(source.cpuPercent ?? status.codex?.cpuPercent),
+    cpuReportedMachineCount: Number(source.cpuReportedMachineCount ?? status.codex?.cpuReportedMachineCount) || 0,
+    memoryPercent: finiteMetric(source.memoryPercent ?? status.codex?.memoryPercent),
+    memoryReportedMachineCount: Number(source.memoryReportedMachineCount ?? status.codex?.memoryReportedMachineCount) || 0,
+    machineCount: Number(source.machineCount ?? status.codex?.machineCount) || machines.length,
+    liveMachineCount: Number(source.liveMachineCount ?? status.codex?.liveMachineCount) || 0,
+    staleMachineCount: Number(source.staleMachineCount ?? status.codex?.staleMachineCount) || 0,
+    workingMachineCount: Number(source.workingMachineCount) || machines.filter((machine) => nodeWorking(fleetNodeFromMachine(machine))).length,
+    tpsHistory: Array.isArray(source.tpsHistory) ? source.tpsHistory : [],
+    loadVisualState: source.loadVisualState || null,
+  };
+}
+
+function codexForDisplay(status, displayScope, machine) {
+  if (displayScope === "fleet") return fleetForStatus(status);
+  if (!machine) return EMPTY_STATUS.codex;
+  return {
+    status: machine.status,
+    oneMinuteTps: Number(machine.oneMinute?.tps) || 0,
+    fiveMinuteTps: Number(machine.fiveMinutes?.tps) || 0,
+    cachePercent: Number(machine.cachePercent) || 0,
+    activeSessions: Number(machine.activeSessions) || 0,
+    cpuPercent: finiteMetric(machine.cpuPercent),
+    cpuReportedMachineCount: finiteMetric(machine.cpuPercent) === null ? 0 : 1,
+    machineCount: 1,
+    liveMachineCount: machine.status === "live" ? 1 : 0,
+    staleMachineCount: machine.status === "stale" ? 1 : 0,
+    tpsHistory: machine.tpsHistory || [],
+  };
+}
+
+function networkForDisplay(status, displayScope, machine) {
+  if (displayScope === "fleet") return status.network || EMPTY_STATUS.network;
+  if (status.provider?.scope === "machine" && status.network?.source === "host") return status.network;
+  return machine?.network || {
+    status: "unavailable",
+    source: "host",
+    downloadMbps: null,
+    uploadMbps: null,
+    history: [],
   };
 }
 
@@ -1545,7 +2089,9 @@ function machineIcon(platform = "") {
 }
 
 function formatMetric(value) {
-  return Number.isFinite(Number(value)) ? Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--";
+  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value))
+    ? Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : "N/A";
 }
 
 function formatScale(value) {

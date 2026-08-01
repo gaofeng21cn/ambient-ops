@@ -80,6 +80,41 @@ export function machineLoadPresentation(machine) {
   };
 }
 
+export function fleetLoadPresentation(fleet) {
+  const liveNodes = Math.max(1, Number(fleet?.liveMachineCount) || 0);
+  const workingNodes = Math.max(0, Number(fleet?.workingMachineCount) || 0);
+  const base = singleMachineLoad({
+    oneMinute: { tps: Math.max(0, Number(fleet?.oneMinuteTps) || 0) / liveNodes },
+    activeSessions: Math.max(0, Number(fleet?.activeSessions) || 0) / liveNodes,
+    cpuPercent: finiteOrNull(fleet?.cpuPercent),
+  });
+  const engagement = clamp(workingNodes / liveNodes, 0, 1);
+  const load = {
+    ...base,
+    tps: Math.max(0, Number(fleet?.oneMinuteTps) || 0),
+    sessions: Math.max(0, Number(fleet?.activeSessions) || 0),
+    score: clamp(base.score * 0.78 + engagement * 0.22, 0, 1),
+  };
+  const supplied = normalizedLoadVisualState(fleet?.loadVisualState);
+  if (supplied) {
+    return {
+      ...load,
+      score: supplied.score,
+      constrained: supplied.constrained,
+      state: LOAD_STATE_BY_ID.get(supplied.state),
+      sceneProfile: supplied,
+      visualSource: "provider",
+      modelVersion: supplied.modelVersion,
+    };
+  }
+  return {
+    ...load,
+    state: loadState(load.score, load).definition,
+    sceneProfile: loadSceneProfile(load),
+    visualSource: "fallback",
+  };
+}
+
 export function normalizedLoadVisualState(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const definition = LOAD_STATE_BY_ID.get(value.state);

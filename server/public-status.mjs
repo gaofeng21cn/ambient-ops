@@ -1,5 +1,6 @@
 import {
   LOAD_VISUAL_MODEL_VERSION,
+  fleetLoadPresentation,
   loadSceneProfile,
   loadState,
   singleMachineLoad,
@@ -33,13 +34,24 @@ export function buildPublicStatus(dashboard, {
       networkHistory: true,
       machineHistory: true,
       persistentHistory: true,
+      fleetHistory: true,
+      hostNetwork: true,
       pets: true,
       webDisplay: true,
       liveActivityPush: false,
     },
     network: dashboard.network,
     codex: dashboard.codex,
+    fleet: projectFleet(dashboard.fleet),
     machines: dashboard.machines.map(projectMachine),
+  };
+}
+
+function projectFleet(fleet) {
+  const load = fleetLoadPresentation(fleet);
+  return {
+    ...fleet,
+    loadVisualState: visualState(load),
   };
 }
 
@@ -48,13 +60,19 @@ function projectMachine(machine) {
   const state = loadState(load.score, load).definition;
   return {
     ...machine,
-    loadVisualState: {
-      modelVersion: LOAD_VISUAL_MODEL_VERSION,
-      state: state.id,
-      label: state.label,
-      score: load.score,
-      constrained: load.constrained,
-      ...loadSceneProfile(load),
-    },
+    loadVisualState: visualState({ ...load, state, sceneProfile: loadSceneProfile(load) }),
+  };
+}
+
+function visualState(load) {
+  const state = load.state?.id ? load.state : loadState(load.score, load).definition;
+  const profile = load.sceneProfile || loadSceneProfile(load);
+  return {
+    modelVersion: LOAD_VISUAL_MODEL_VERSION,
+    state: state.id,
+    label: state.label,
+    score: load.score,
+    constrained: load.constrained,
+    ...profile,
   };
 }

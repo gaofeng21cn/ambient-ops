@@ -147,6 +147,8 @@ function dashboard() {
     ...buildDashboard({
       machines: store.machines,
       machineHistory: store.machineHistory,
+      machineNetworkHistory: store.machineNetworkHistory,
+      fleetHistory: store.fleetHistory,
       network: store.network,
       history: store.networkHistory,
       demo: config.demo,
@@ -196,6 +198,10 @@ updateSources();
 
 const machinePruneTimer = setInterval(pruneStaleMachines, Math.min(30_000, config.staleAfterSeconds * 1000));
 machinePruneTimer.unref();
+
+const fleetHistoryTimer = setInterval(scheduleFleetHistorySample, 10_000);
+fleetHistoryTimer.unref();
+scheduleFleetHistorySample();
 
 async function syncHomeAssistant() {
   await haBridge.sync(dashboard());
@@ -421,6 +427,7 @@ async function shutdown(signal) {
   console.log(`Received ${signal}, shutting down`);
   clearInterval(sourceTimer);
   clearInterval(machinePruneTimer);
+  clearInterval(fleetHistoryTimer);
   clearInterval(haTimer);
   server.close();
   try {
@@ -428,6 +435,20 @@ async function shutdown(signal) {
   } finally {
     process.exit(0);
   }
+}
+
+async function recordFleetHistory() {
+  const current = dashboard();
+  await store.recordFleetHistory({
+    at: current.generatedAt,
+    tps: current.fleet.oneMinuteTps,
+  });
+}
+
+function scheduleFleetHistorySample() {
+  recordFleetHistory().catch((error) => {
+    console.error("Failed to record fleet history", error);
+  });
 }
 
 async function pruneStaleMachines() {
