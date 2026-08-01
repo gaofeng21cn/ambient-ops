@@ -7,6 +7,8 @@ PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/packages/ContainerManager
 export PATH
 
 PROGRAM=ambient-ops-deploy
+PRODUCT_NAME="OPL Fleet Cockpit"
+SERVICE_NAME="OPL Fleet Telemetry Gateway"
 IMAGE_REPOSITORY=ghcr.io/gaofeng21cn/ambient-ops
 PROJECT_NAME=ambient-ops
 MANAGED_DIR=/volume1/.ambient-ops-deploy
@@ -22,6 +24,7 @@ FLOCK_BIN=/usr/bin/flock
 STAT_BIN=/usr/bin/stat
 READLINK_BIN=/usr/bin/readlink
 SHA256_BIN=/usr/bin/sha256sum
+PROC_STAT_FILE=/proc/stat
 
 TEST_ROOT=${AMBIENT_OPS_DEPLOY_TEST_ROOT:-}
 if [ -n "$TEST_ROOT" ]; then
@@ -42,6 +45,7 @@ if [ -n "$TEST_ROOT" ]; then
   STAT_BIN=
   READLINK_BIN=
   SHA256_BIN=$TEST_ROOT/bin/sha256sum
+  PROC_STAT_FILE=$TEST_ROOT/proc-stat
 fi
 
 log() {
@@ -57,6 +61,7 @@ usage() {
   cat <<'EOF'
 Usage:
   ambient-ops-deploy --check
+  ambient-ops-deploy status
   ambient-ops-deploy deploy <version> <sha256:index-digest>
 
 Example:
@@ -153,6 +158,18 @@ current_image() {
   count=$(awk -F= '$1 == "AMBIENT_OPS_IMAGE" { count += 1 } END { print count + 0 }' "$ENV_FILE")
   [ "$count" -eq 1 ] || fail ".env must contain exactly one AMBIENT_OPS_IMAGE entry"
   awk -F= '$1 == "AMBIENT_OPS_IMAGE" { sub(/^[^=]*=/, ""); print; exit }' "$ENV_FILE"
+}
+
+current_state_value() {
+  key=$1
+  [ -f "$STATE_DIR/current" ] || return 0
+  awk -F= -v key="$key" '
+    $1 == key {
+      sub(/^[^=]*=/, "")
+      print
+      exit
+    }
+  ' "$STATE_DIR/current"
 }
 
 write_image_to_env() {
@@ -306,6 +323,171 @@ check_installation() {
   log "installation check passed"
 }
 
+installation_status() {
+  require_tools
+  check_secure_layout
+
+  configured_image=$(current_image)
+  case "$configured_image" in
+    "$IMAGE_REPOSITORY":*@sha256:*) ;;
+    *) fail "managed image must be a versioned $IMAGE_REPOSITORY tag pinned by digest" ;;
+  esac
+  configured_version=${configured_image#"$IMAGE_REPOSITORY":}
+  configured_version=${configured_version%@*}
+  configured_digest=${configured_image##*@}
+  printf '%s\n' "$configured_version" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z][0-9A-Za-z.-]*)?$' >/dev/null ||
+    fail "managed image version is invalid"
+  printf '%s\n' "$configured_digest" | grep -E '^sha256:[0-9a-f]{64}$' >/dev/null ||
+    fail "managed image digest is invalid"
+  validate_compose "$configured_image"
+
+  container_id=$(compose ps -q ambient-ops)
+  [ -n "$container_id" ] || fail "managed container is not present"
+
+  container_configured_image=$(docker_command inspect --format '{{.Config.Image}}' "$container_id")
+  runtime_image_id=$(docker_command inspect --format '{{.Image}}' "$container_id")
+  container_name=$(docker_command inspect --format '{{.Name}}' "$container_id" | sed 's#^/##')
+  container_status=$(docker_command inspect --format '{{.State.Status}}' "$container_id")
+  container_running=$(docker_command inspect --format '{{.State.Running}}' "$container_id")
+  container_started_at=$(docker_command inspect --format '{{.State.StartedAt}}' "$container_id")
+  restart_policy=$(docker_command inspect --format '{{.HostConfig.RestartPolicy.Name}}' "$container_id")
+  data_mount=$(
+    docker_command inspect --format '{{json .Mounts}}' "$container_id" |
+      "$JQ_BIN" -c '
+        [
+          .[]
+          | select(.Destination == "/data")
+          | {
+              type: .Type,
+              name: (.Name // null),
+              destination: .Destination,
+              readOnly: (.RW | not)
+            }
+        ]
+        | if length == 1 then .[0] else null end
+      '
+  )
+  repo_digests=$(
+    docker_command image inspect --format '{{json .RepoDigests}}' "$runtime_image_id" |
+      "$JQ_BIN" -c 'if type == "array" then sort else [] end'
+  )
+
+  health=$(
+    curl_local -fsS --max-time 4 http://127.0.0.1:8787/healthz |
+      "$JQ_BIN" -c '{ok, mode, network, codex, machines}'
+  )
+  public_status=$(
+    curl_local -fsS --max-time 4 http://127.0.0.1:8787/api/v1/status |
+      "$JQ_BIN" -c '{schemaVersion, serverVersion, demo, machineCount: (.machines | length)}'
+  )
+
+  host_boot_epoch=$(awk '$1 == "btime" { print $2; exit }' "$PROC_STAT_FILE")
+  printf '%s\n' "$host_boot_epoch" | grep -E '^[0-9]+$' >/dev/null ||
+    fail "host boot time is unavailable"
+  deployed_at=$(current_state_value deployed_at)
+
+  # shellcheck disable=SC2016
+  status_json=$(
+    "$JQ_BIN" -n \
+      --arg schema "opl_fleet_cockpit_gateway_status.v1" \
+      --arg product "$PRODUCT_NAME" \
+      --arg service "$SERVICE_NAME" \
+      --arg compatibilityId "$PROJECT_NAME" \
+      --arg configuredImage "$configured_image" \
+      --arg configuredVersion "$configured_version" \
+      --arg configuredDigest "$configured_digest" \
+      --arg containerConfiguredImage "$container_configured_image" \
+      --arg runtimeImageId "$runtime_image_id" \
+      --arg containerId "$container_id" \
+      --arg containerName "$container_name" \
+      --arg containerStatus "$container_status" \
+      --arg containerRunning "$container_running" \
+      --arg containerStartedAt "$container_started_at" \
+      --arg restartPolicy "$restart_policy" \
+      --arg deployedAt "$deployed_at" \
+      --argjson hostBootEpoch "$host_boot_epoch" \
+      --argjson dataMount "$data_mount" \
+      --argjson repoDigests "$repo_digests" \
+      --argjson health "$health" \
+      --argjson publicStatus "$public_status" '
+        def iso_epoch:
+          if . == "" then null
+          else (sub("\\.[0-9]+Z$"; "Z") | try fromdateiso8601 catch null)
+          end;
+        ($configuredDigest as $digest
+          | ("ghcr.io/gaofeng21cn/ambient-ops@" + $digest)) as $expectedRepoDigest
+        | ($repoDigests | index($expectedRepoDigest) != null) as $digestVerified
+        | ($containerStartedAt | iso_epoch) as $containerStartedEpoch
+        | ($deployedAt | iso_epoch) as $deployedEpoch
+        | (
+            if $deployedEpoch == null or $containerStartedEpoch == null then
+              {verified: false, reason: "deployment_or_start_time_unavailable"}
+            elif $deployedEpoch > $hostBootEpoch then
+              {verified: false, reason: "current_release_deployed_after_host_boot"}
+            elif $containerStartedEpoch >= $hostBootEpoch then
+              {verified: true, reason: "current_release_survived_latest_host_boot"}
+            else
+              {verified: false, reason: "container_start_precedes_host_boot"}
+            end
+          ) as $rebootRecovery
+        | (
+            $containerConfiguredImage == $configuredImage
+              and $digestVerified
+              and $containerStatus == "running"
+              and $containerRunning == "true"
+              and $restartPolicy == "unless-stopped"
+              and $dataMount.type == "volume"
+              and $dataMount.name == "ambient-ops_ambient_ops_data"
+              and $dataMount.destination == "/data"
+              and $dataMount.readOnly == false
+              and $health.ok == true
+              and $health.mode == "live"
+              and $health.network == "live"
+              and $health.codex == "live"
+              and $publicStatus.schemaVersion == 1
+              and $publicStatus.serverVersion == $configuredVersion
+              and $publicStatus.demo == false
+              and $publicStatus.machineCount >= 1
+          ) as $ok
+        | {
+            schema: $schema,
+            product: $product,
+            service: $service,
+            compatibilityId: $compatibilityId,
+            ok: $ok,
+            image: {
+              configured: $configuredImage,
+              version: $configuredVersion,
+              indexDigest: $configuredDigest,
+              containerConfigured: $containerConfiguredImage,
+              runtimeImageId: $runtimeImageId,
+              repoDigests: $repoDigests,
+              digestVerified: $digestVerified
+            },
+            container: {
+              id: $containerId,
+              name: $containerName,
+              status: $containerStatus,
+              running: ($containerRunning == "true"),
+              restartPolicy: $restartPolicy,
+              startedAt: $containerStartedAt,
+              dataMount: $dataMount
+            },
+            health: $health,
+            publicStatus: $publicStatus,
+            host: {
+              bootEpoch: $hostBootEpoch,
+              deployedAt: (if $deployedAt == "" then null else $deployedAt end),
+              rebootRecovery: $rebootRecovery
+            }
+          }
+      '
+  )
+
+  printf '%s\n' "$status_json"
+  printf '%s\n' "$status_json" | "$JQ_BIN" -e '.ok == true' >/dev/null
+}
+
 deploy_release() {
   version=$1
   expected_digest=$2
@@ -376,6 +558,13 @@ case ${1:-} in
       exit 64
     }
     check_installation
+    ;;
+  status)
+    [ "$#" -eq 1 ] || {
+      usage >&2
+      exit 64
+    }
+    installation_status
     ;;
   deploy)
     [ "$#" -eq 3 ] || {

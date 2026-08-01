@@ -24,6 +24,10 @@ grep -F -x "EXPECTED_COMPOSE_SHA256=$compose_checksum" "$INSTALLER" >/dev/null
 
 mkdir -p "$TEST_ROOT/managed/secrets" "$TEST_ROOT/managed/state" "$TEST_ROOT/bin"
 cp "$REPO_ROOT/compose.yaml" "$TEST_ROOT/managed/compose.yaml"
+cat > "$TEST_ROOT/proc-stat" <<'EOF'
+cpu 1 2 3 4
+btime 1785500000
+EOF
 cat > "$TEST_ROOT/managed/.env" <<'EOF'
 AMBIENT_OPS_IMAGE=ghcr.io/gaofeng21cn/ambient-ops:0.1.25
 DEMO_MODE=false
@@ -56,17 +60,54 @@ case "$command_name" in
     printf '%s\n' "$2" > "$root/pulled-image"
     ;;
   image)
+    format=
+    previous=
     image_ref=
-    for argument in "$@"; do image_ref=$argument; done
-    digest=${image_ref##*@}
-    printf 'ghcr.io/gaofeng21cn/ambient-ops@%s\n' "$digest"
+    for argument in "$@"; do
+      if [ "$previous" = --format ]; then format=$argument; fi
+      previous=$argument
+      image_ref=$argument
+    done
+    image=$(awk -F= '$1 == "AMBIENT_OPS_IMAGE" { sub(/^[^=]*=/, ""); print; exit }' "$root/managed/.env")
+    case "$format" in
+      *'json .RepoDigests'*)
+        digest=${image##*@}
+        printf '["ghcr.io/gaofeng21cn/ambient-ops@%s"]\n' "$digest"
+        ;;
+      *)
+        digest=${image_ref##*@}
+        printf 'ghcr.io/gaofeng21cn/ambient-ops@%s\n' "$digest"
+        ;;
+    esac
+    ;;
+  inspect)
+    format=
+    previous=
+    for argument in "$@"; do
+      if [ "$previous" = --format ]; then format=$argument; fi
+      previous=$argument
+    done
+    image=$(awk -F= '$1 == "AMBIENT_OPS_IMAGE" { sub(/^[^=]*=/, ""); print; exit }' "$root/managed/.env")
+    case "$format" in
+      '{{.Config.Image}}') printf '%s\n' "$image" ;;
+      '{{.Image}}') printf '%s\n' 'sha256:runtime-image-id' ;;
+      '{{.Name}}') printf '%s\n' '/ambient-ops-ambient-ops-1' ;;
+      '{{.State.Status}}') printf '%s\n' 'running' ;;
+      '{{.State.Running}}') printf '%s\n' 'true' ;;
+      '{{.State.StartedAt}}') printf '%s\n' '2026-08-01T06:00:00.123456789Z' ;;
+      '{{.HostConfig.RestartPolicy.Name}}') printf '%s\n' 'unless-stopped' ;;
+      '{{json .Mounts}}')
+        printf '%s\n' '[{"Type":"volume","Name":"ambient-ops_ambient_ops_data","Source":"/private/docker/path","Destination":"/data","RW":true}]'
+        ;;
+      *) exit 96 ;;
+    esac
     ;;
   compose)
     action=
     format=
     for argument in "$@"; do
       case "$argument" in
-        config|pull|up) action=$argument ;;
+        config|pull|up|ps) action=$argument ;;
         json) format=json ;;
       esac
     done
@@ -75,6 +116,8 @@ case "$command_name" in
       cat <<JSON
 {"services":{"ambient-ops":{"image":"$image","network_mode":"host","restart":"unless-stopped","read_only":true,"ports":null,"build":null,"environment":{"DEMO_MODE":"false","DISCOVERY_ENABLED":"true"},"volumes":[{"type":"bind","source":"$root/managed/secrets","target":"/run/secrets","read_only":true}]}}}
 JSON
+    elif [ "$action" = ps ]; then
+      printf '%s\n' 'container-id'
     elif [ "$action" = up ]; then
       if [ -f "$root/fail-up-once" ]; then
         rm -f "$root/fail-up-once"
@@ -133,6 +176,43 @@ if "$DEPLOYER" deploy 0.1.27 sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
   exit 1
 fi
 cmp "$TEST_ROOT/success.env" "$TEST_ROOT/managed/.env"
+
+cat > "$TEST_ROOT/managed/state/current" <<EOF
+version=0.1.26
+digest=$DIGEST
+image=ghcr.io/gaofeng21cn/ambient-ops:0.1.26@$DIGEST
+deployed_at=2026-07-01T00:00:00Z
+EOF
+status=$($DEPLOYER status)
+printf '%s\n' "$status" | jq -e \
+  --arg digest "$DIGEST" '
+    .schema == "opl_fleet_cockpit_gateway_status.v1"
+      and .product == "OPL Fleet Cockpit"
+      and .service == "OPL Fleet Telemetry Gateway"
+      and .compatibilityId == "ambient-ops"
+      and .ok == true
+      and .image.indexDigest == $digest
+      and .image.digestVerified == true
+      and .container.id == "container-id"
+      and .container.restartPolicy == "unless-stopped"
+      and .container.dataMount.name == "ambient-ops_ambient_ops_data"
+      and .host.rebootRecovery.verified == true
+  ' >/dev/null
+
+if printf '%s\n' "$status" | grep -F '/private/docker/path' >/dev/null; then
+  printf '%s\n' "deployment status leaked the host volume path" >&2
+  exit 1
+fi
+
+sed 's/^deployed_at=.*/deployed_at=2026-08-01T05:50:00Z/' \
+  "$TEST_ROOT/managed/state/current" > "$TEST_ROOT/managed/state/current.new"
+mv "$TEST_ROOT/managed/state/current.new" "$TEST_ROOT/managed/state/current"
+post_boot_status=$($DEPLOYER status)
+printf '%s\n' "$post_boot_status" | jq -e '
+  .ok == true
+    and .host.rebootRecovery.verified == false
+    and .host.rebootRecovery.reason == "current_release_deployed_after_host_boot"
+' >/dev/null
 
 if "$DEPLOYER" deploy latest "$DIGEST"; then
   printf '%s\n' "expected invalid version rejection" >&2

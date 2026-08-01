@@ -1,7 +1,11 @@
 # Synology Deployment
 
-Ambient Ops runs as one Linux container. The NAS owns aggregation, persistence,
-LAN discovery, and the web app; display clients only discover and open it.
+OPL Fleet Cockpit runs as one compatibility-preserving `ambient-ops` Linux
+container. The container is the OPL Fleet Telemetry Gateway: the NAS owns
+aggregation, persistence, LAN discovery, and the web app; display clients only
+discover and open it. The repository, Compose project, container service, mDNS
+type, and upgrade command keep their existing `ambient-ops` identities during
+the product-name migration.
 
 Use [`production-migration-checklist.md`](production-migration-checklist.md) for
 an existing Mac-to-NAS cutover. This page describes the target installation.
@@ -244,7 +248,22 @@ Then verify from the ordinary SSH account:
 
 ```bash
 sudo -n /usr/local/sbin/ambient-ops-deploy --check
+sudo -n /usr/local/sbin/ambient-ops-deploy status | jq .
 ```
+
+`status` is a read-only deployment attestation. It returns a sanitized
+`opl_fleet_cockpit_gateway_status.v1` document containing the configured index
+digest, runtime image ID and repository digests, container state, restart
+policy, `/data` named volume, public health summary, host boot time, and reboot
+recovery evidence. It never returns environment variables, secret values,
+volume source paths, machine details, or raw logs. The output uses the OPL Fleet
+Cockpit and Telemetry Gateway product names while retaining
+`compatibilityId=ambient-ops`.
+
+Reboot recovery is true only when the current release was already deployed
+before the latest host boot and the current container started after that boot.
+A healthy release deployed after the latest boot remains explicitly unverified
+until a later owner-approved reboot; the status command never initiates one.
 
 Ordinary upgrades then need no DSM browser session and no password. Supply both
 the semantic version and the reviewed multi-architecture OCI index digest:
@@ -270,6 +289,36 @@ It never calls `docker compose down` and has no path that accepts `-v`.
 Arbitrary Docker commands remain password-protected. A release that changes the
 Compose structure requires reviewing and rerunning the one-time installer; an
 ordinary image-only release does not.
+
+### Optional host backup readback
+
+Hyper Backup belongs to NAS operations, not to the Telemetry Gateway deployment
+contract. Install the separate restricted command only when an operator wants
+passwordless, read-only host evidence:
+
+```text
+opl-nas-audit
+install-nas-audit-command.sh
+```
+
+Review and stage both files together, then run the installer once as root:
+
+```bash
+sudo /bin/sh ./install-nas-audit-command.sh
+```
+
+Subsequent readback is non-interactive:
+
+```bash
+sudo -n /usr/local/sbin/opl-nas-audit status | jq .
+```
+
+The command calls only the read-only Hyper Backup task APIs and returns task
+counts, result counts, the latest recorded success time, and the NAS boot time.
+It omits task names, users, destinations, paths, log messages, and credentials.
+No configured task or no successful run is reported as
+`attentionRequired=true` with a null success time; it is not rewritten into a
+successful backup and does not trigger, configure, suspend, or delete a task.
 
 ### Manual path
 
