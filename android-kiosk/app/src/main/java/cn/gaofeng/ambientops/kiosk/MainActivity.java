@@ -76,7 +76,7 @@ public final class MainActivity extends Activity {
         if (preferred != null) {
             loadSource(preferred);
         } else {
-            showDiscoveryState("正在查找 Ambient Ops 与 Codex TPS");
+            showDiscoveryState("正在查找 Fleet Gateway 与 Fleet Agent");
             startDiscovery();
         }
     };
@@ -211,7 +211,7 @@ public final class MainActivity extends Activity {
         if (currentSource != null) {
             loadSource(currentSource);
         } else {
-            showDiscoveryState("正在查找 Ambient Ops 与 Codex TPS");
+            showDiscoveryState("正在查找 Fleet Gateway 与 Fleet Agent");
         }
         startDiscovery();
         registerNetworkRetry();
@@ -525,7 +525,7 @@ public final class MainActivity extends Activity {
         if (id == null) {
             id = kind.preferenceValue + ":" + instanceId;
         }
-        String name = preferences.getString(PREF_SOURCE_NAME, "Ambient Ops");
+        String name = preferences.getString(PREF_SOURCE_NAME, "OPL Fleet Telemetry Gateway");
         return new DisplaySource(id, instanceId, name, endpoint, kind);
     }
 
@@ -558,7 +558,9 @@ public final class MainActivity extends Activity {
         return new DisplaySource(
             kind.preferenceValue + ":" + instanceId,
             instanceId,
-            kind == DisplaySource.Kind.DIRECT ? "Manual Codex TPS" : "Manual Gateway",
+            kind == DisplaySource.Kind.DIRECT
+                ? "Manual OPL Fleet Agent"
+                : "Manual OPL Fleet Telemetry Gateway",
             endpoint,
             kind
         );
@@ -587,7 +589,7 @@ public final class MainActivity extends Activity {
                 + "main{text-align:center}strong{font-size:30px;font-weight:500}"
                 + "p{font-size:16px;color:#9aa5ae}</style><main><strong>"
                 + escapeHtml(message)
-                + "</strong><p>Gateway · Direct Codex TPS</p></main>";
+                + "</strong><p>OPL Fleet Telemetry Gateway · OPL Fleet Agent</p></main>";
         webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
     }
 

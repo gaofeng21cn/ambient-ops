@@ -2,10 +2,10 @@
   <strong>English</strong> | <a href="./README.zh-CN.md">中文</a>
 </p>
 
-<h1 align="center">Ambient Ops</h1>
+<h1 align="center">OPL Fleet Cockpit · Ambient Ops</h1>
 
-<p align="center"><strong>A quiet, always-on, self-hosted view of operational state across your local network</strong></p>
-<p align="center">Codex TPS aggregates · Router telemetry · Browser, Android, and native iOS displays</p>
+<p align="center"><strong>A quiet, always-on, self-hosted cockpit for OPL Fleet telemetry</strong></p>
+<p align="center">OPL Fleet Agents · Telemetry Gateway · Browser, Android, and native iOS displays</p>
 
 <p align="center">
   <a href="https://github.com/gaofeng21cn/ambient-ops/releases/latest"><img src="https://img.shields.io/github/v/release/gaofeng21cn/ambient-ops" alt="Latest release"></a>
@@ -72,16 +72,22 @@
   </tr>
 </table>
 
-> Ambient Ops is designed for a trusted local network, not as an internet-facing monitoring service. Display, status, and device-approval pages have no browser login by default. Add HTTPS and access control or use a private VPN before crossing an untrusted network.
+> OPL Fleet Cockpit is designed for a trusted local network, not as an internet-facing monitoring service. Display, status, and device-approval pages have no browser login by default. Add HTTPS and access control or use a private VPN before crossing an untrusted network.
 
 ## For Users
 
 ### What it is
 
-Ambient Ops is a self-hosted status aggregator for a local network. It combines
+OPL Fleet Cockpit · Ambient Ops is a self-hosted status aggregator for a local network. It combines
 aggregate Codex activity from multiple computers with optional live WAN counters
 from a compatible router, then presents the normalized state through browser and
 dedicated Android displays.
+
+The container is OPL Fleet Telemetry Gateway and Codex TPS is presented as
+OPL Fleet Agent · Codex TPS. These are telemetry-only roles: registry, policy,
+admission, leases, and dispatch remain with OPL Flow, the private Instance, and
+OPL Fleet Controller. Existing repository, image, package, discovery, and update
+identities remain compatible with `ambient-ops` and `codex-tps`.
 
 It is intentionally narrower than a general observability platform. It helps when
 you want to:
@@ -93,7 +99,7 @@ you want to:
 
 ### How Codex TPS fits
 
-[Codex TPS](https://github.com/gaofeng21cn/codex-tps) runs on each macOS or Windows
+[OPL Fleet Agent · Codex TPS](https://github.com/gaofeng21cn/codex-tps) runs on each macOS or Windows
 computer and reads usage events already written by the local Codex client. It sends
 only machine identity, platform, collection time, aggregate `1m` and `5m` token
 counters, active-session count, and optional pet state.
@@ -108,10 +114,10 @@ are signed. Shared bearer tokens remain only for legacy and headless agents.
 ### Architecture
 
 ```text
-Codex TPS on each computer -- authenticated aggregate snapshots --+
+OPL Fleet Agent on each computer -- authenticated aggregates ------+
                                                                   |
-SNMPv3 router -------------- standard IF-MIB counters ------------+--> Ambient Ops
-                                                                  |    container
+SNMPv3 router -------------- standard IF-MIB counters ------------+--> OPL Fleet
+                                                                  |    Telemetry Gateway
 /data ---------------------- state and short history -------------+       |
                                                                          +--> browsers
                                                                   +--> Android kiosk (Fleet)

@@ -341,10 +341,16 @@ const server = createServer(async (request, response) => {
       if (!authorizedAgentRequest(request, pushMatch[1], url.pathname, body.raw)) {
         return await json(response, 401, { error: "Unauthorized" });
       }
-      const snapshot = bindPairedIdentity(
-        normalizeSnapshot(pushMatch[1], body.value),
-        pairingStore.pairedIdentity(pushMatch[1]),
-      );
+      let snapshot;
+      try {
+        snapshot = bindPairedIdentity(
+          normalizeSnapshot(pushMatch[1], body.value),
+          pairingStore.pairedIdentity(pushMatch[1]),
+        );
+      } catch (error) {
+        if (error instanceof TypeError) throw httpError(400, error.message);
+        throw error;
+      }
       await store.setMachine(snapshot);
       return await json(response, 202, {
         accepted: true,

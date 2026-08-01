@@ -452,6 +452,6 @@ final class AmbientOpsTests: XCTestCase {
         XCTAssertEqual(direct.overallStatus, "live")
         XCTAssertTrue(direct.capabilities.supportsNetwork)
         XCTAssertTrue(store.availableDisplayModes.contains(.network))
-        XCTAssertEqual(store.providerLabel, "DIRECT · Studio")
+        XCTAssertEqual(store.providerLabel, "AGENT · Studio")
     }
 }

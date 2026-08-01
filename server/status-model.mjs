@@ -1,10 +1,50 @@
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const PET_STATES = new Set(["idle", "running", "waiting", "review", "failed"]);
+const OPL_FLEET_SCHEMA = "opl_fleet_agent_telemetry.v1";
+const OPL_FLEET_PRODUCT = "OPL Fleet Agent · Codex TPS";
+const OPL_FLEET_AUTHORITY = "node_agent";
+const OPL_FLEET_MODES = new Set(["local", "direct", "fleet"]);
+const OPL_FLEET_CAPABILITIES = new Set([
+  "node_local_observation",
+  "node_local_doctor",
+  "node_local_execution_constraints",
+  "sanitized_execution_receipts",
+  "local_codex_telemetry",
+  "host_dashboard",
+]);
+const OPL_FLEET_FIELDS = new Set([
+  "schema",
+  "product",
+  "stableNodeID",
+  "agentVersion",
+  "modes",
+  "capabilities",
+  "authority",
+]);
+const SNAPSHOT_V3_FIELDS = new Set([
+  "schemaVersion",
+  "machineName",
+  "platform",
+  "generatedAt",
+  "status",
+  "error",
+  "oneMinute",
+  "fiveMinutes",
+  "activeSessions",
+  "cpuPercent",
+  "memoryPercent",
+  "network",
+  "pet",
+  "oplFleet",
+]);
 
 export function normalizeSnapshot(machineId, payload, receivedAt = new Date()) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new TypeError("Snapshot payload must be an object");
   }
+  const oplFleet = payload.oplFleet === undefined
+    ? null
+    : normalizeOplFleet(machineId, payload);
   const candidateGeneratedAt = new Date(payload.generatedAt || receivedAt);
   const futureLimit = receivedAt.valueOf() + 5 * 60 * 1000;
   const safeGeneratedAt = Number.isNaN(candidateGeneratedAt.valueOf()) || candidateGeneratedAt.valueOf() > futureLimit
@@ -28,7 +68,73 @@ export function normalizeSnapshot(machineId, payload, receivedAt = new Date()) {
     memoryPercent: optionalPercent(payload.memoryPercent),
     network: normalizeHostNetwork(payload.network, safeGeneratedAt),
     pet: normalizePet(payload.pet, safeGeneratedAt),
+    oplFleet,
   };
+}
+
+function normalizeOplFleet(machineId, payload) {
+  if (payload.schemaVersion !== 3) {
+    throw new TypeError("oplFleet snapshots must use schemaVersion 3");
+  }
+  assertKnownFields(payload, SNAPSHOT_V3_FIELDS, "Snapshot payload");
+  const envelope = payload.oplFleet;
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) {
+    throw new TypeError("oplFleet must be an object");
+  }
+  assertKnownFields(envelope, OPL_FLEET_FIELDS, "oplFleet");
+  if (envelope.schema !== OPL_FLEET_SCHEMA) {
+    throw new TypeError("Unsupported oplFleet schema");
+  }
+  if (envelope.product !== OPL_FLEET_PRODUCT) {
+    throw new TypeError("Unsupported oplFleet product");
+  }
+  if (envelope.stableNodeID !== machineId) {
+    throw new TypeError("oplFleet stableNodeID must match the machine ID");
+  }
+  if (envelope.authority !== OPL_FLEET_AUTHORITY) {
+    throw new TypeError("Unsupported oplFleet authority");
+  }
+  const agentVersion = String(envelope.agentVersion || "");
+  if (agentVersion.length > 32 || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(agentVersion)) {
+    throw new TypeError("oplFleet agentVersion must be a semantic version");
+  }
+  return {
+    schema: OPL_FLEET_SCHEMA,
+    product: OPL_FLEET_PRODUCT,
+    stableNodeID: machineId,
+    agentVersion,
+    modes: normalizeKnownList(envelope.modes, OPL_FLEET_MODES, "oplFleet modes"),
+    capabilities: normalizeKnownList(
+      envelope.capabilities,
+      OPL_FLEET_CAPABILITIES,
+      "oplFleet capabilities",
+    ),
+    authority: OPL_FLEET_AUTHORITY,
+  };
+}
+
+function assertKnownFields(value, allowed, label) {
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length) {
+    throw new TypeError(`${label} contains unknown fields: ${unknown.join(", ")}`);
+  }
+}
+
+function normalizeKnownList(value, allowed, label) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new TypeError(`${label} must be a non-empty array`);
+  }
+  const normalized = [];
+  for (const item of value) {
+    if (typeof item !== "string" || !allowed.has(item)) {
+      throw new TypeError(`${label} contains an unsupported value`);
+    }
+    if (normalized.includes(item)) {
+      throw new TypeError(`${label} must not contain duplicates`);
+    }
+    normalized.push(item);
+  }
+  return normalized;
 }
 
 export function bindPairedIdentity(snapshot, identity) {

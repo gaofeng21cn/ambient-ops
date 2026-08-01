@@ -61,6 +61,9 @@ import { shouldReduceKioskMotion } from "./kiosk-motion.mjs";
 
 const VIEWS = ["overview", "network", "machines", "load", "pet"];
 const VIEW_LABELS = { overview: "Overview", network: "Network", machines: "Machines", load: "Load", pet: "Pet" };
+const FLEET_COCKPIT_NAME = "OPL Fleet Cockpit";
+const FLEET_GATEWAY_NAME = "OPL Fleet Telemetry Gateway";
+const FLEET_AGENT_NAME = "OPL Fleet Agent · Codex TPS";
 const CONNECTION_STALE_GRACE_MS = 5_000;
 const DISPLAY_CONNECTION = displayConnectionConfiguration();
 const PET_STATE_LABELS = {
@@ -71,7 +74,8 @@ const PET_STATE_LABELS = {
   review: "REVIEWING",
 };
 const EMPTY_STATUS = {
-  site: { name: "Ambient Ops", timeZone: "Asia/Shanghai" },
+  productName: "OPL Fleet Cockpit · Ambient Ops",
+  site: { name: FLEET_COCKPIT_NAME, timeZone: "Asia/Shanghai" },
   generatedAt: new Date().toISOString(),
   demo: false,
   overallStatus: "error",
@@ -309,7 +313,7 @@ function Dashboard({ status, connection, displayConnection }) {
 
   return (
     <div className="app-shell" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-      <Header status={status} connection={connection} view={view} displayScope={displayScope} onDisplayScope={setDisplayScope} />
+      <Header status={status} connection={connection} displayScope={displayScope} onDisplayScope={setDisplayScope} />
       <main className="view-stage">
         {view === "overview" ? <Overview status={status} network={scopedNetwork} codex={scopedCodex} displayScope={displayScope} selected={selectedMachine} onMachine={goToMachine} onAllMachines={() => setView("machines")} /> : null}
         {view === "network" ? <NetworkView network={scopedNetwork} displayScope={displayScope} /> : null}
@@ -356,21 +360,22 @@ function initialView(displayConnection = DISPLAY_CONNECTION) {
   return VIEWS.includes(route) ? route : "overview";
 }
 
-function Header({ status, connection, view, displayScope, onDisplayScope }) {
+function Header({ status, connection, displayScope, onDisplayScope }) {
   const now = useClock();
+  const direct = status.provider?.scope === "machine";
   return (
     <header className="top-header">
       <div className="header-identity">
-        <h1>{VIEW_LABELS[view] || "Overview"}</h1>
+        <h1>Fleet Cockpit</h1>
         <ScopeSwitch value={displayScope} onChange={onDisplayScope} />
-        <span className="header-site-name">{status.site?.name || "Ambient Ops"}</span>
+        <span className="header-site-name">{status.site?.name || FLEET_COCKPIT_NAME}</span>
       </div>
       <div className="header-status">
         {status.demo ? <span className="mode-label">DEMO</span> : null}
         <StatusLabel status={connection === "live" ? status.overallStatus : "stale"} />
         <span className="divider" />
         <span className="source-label">
-          {status.provider?.scope === "machine" ? "Direct Codex TPS" : "Gateway & Codex Agents"}
+          {status.provider?.productName || (direct ? FLEET_AGENT_NAME : FLEET_GATEWAY_NAME)}
         </span>
         <FullscreenButton />
       </div>
@@ -1196,7 +1201,7 @@ function Overview({ status, network, codex, displayScope, selected, onMachine, o
           </div>
         </Panel>
         <div className="right-column">
-          <Panel className="codex-panel" title={displayScope === "fleet" ? "Fleet Codex" : selected?.machineName || "Host Codex"} icon={Bot} action={<StatusLabel status={codex.status} />}>
+          <Panel className="codex-panel" title={displayScope === "fleet" ? "Fleet Agents" : selected?.machineName || "Host Agent"} icon={Bot} action={<StatusLabel status={codex.status} />}>
             <CodexSummary codex={codex} />
             <Sparkline values={codex.tpsHistory?.map((sample) => sample.tps) || []} color="green" compact />
           </Panel>
@@ -1216,7 +1221,7 @@ function DeviceOverview({ network, codex, displayScope }) {
       <div className="device-primary-metrics">
         <DeviceMetric label="Download" value={formatMetric(network.downloadMbps)} unit="Mbps" accent="download" />
         <DeviceMetric label="Upload" value={formatMetric(network.uploadMbps)} unit="Mbps" accent="upload" />
-        <DeviceMetric label={displayScope === "fleet" ? "Fleet Codex" : "Host Codex"} value={formatTps(codex.oneMinuteTps)} unit="TPS" accent="codex" />
+        <DeviceMetric label={displayScope === "fleet" ? "Fleet Agents" : "Host Agent"} value={formatTps(codex.oneMinuteTps)} unit="TPS" accent="codex" />
       </div>
       <section className="device-airview">
         <AirViewChart points={network.history} allowSampleData={network.source === "demo"} emptyLabel={displayScope === "fleet" ? "Waiting for WAN samples" : "Waiting for host samples"} />
@@ -2052,7 +2057,7 @@ function EinkDisplay({ status, connection }) {
   const now = useClock(30_000);
   return (
     <main className="eink-display">
-      <header><div><h1>{(status.site?.name || "Ambient Ops").toUpperCase()}</h1><time>{formatTime(now, status.site?.timeZone)}</time></div><StatusLabel status={connection === "live" ? status.overallStatus : "stale"} /></header>
+      <header><div><h1>OPL FLEET COCKPIT</h1><time>{formatTime(now, status.site?.timeZone)}</time></div><StatusLabel status={connection === "live" ? status.overallStatus : "stale"} /></header>
       <section className="eink-network">
         <h2>INTERNET</h2>
         <Metric label="DOWNLOAD" value={formatMetric(status.network.downloadMbps)} unit="Mbps" />

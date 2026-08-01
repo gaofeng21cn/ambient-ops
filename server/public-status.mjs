@@ -8,6 +8,8 @@ import {
 
 export const PUBLIC_STATUS_SCHEMA_VERSION = 1;
 export const PUBLIC_STATUS_PATH = "/api/v1/status";
+export const FLEET_COCKPIT_PRODUCT = "OPL Fleet Cockpit · Ambient Ops";
+export const FLEET_GATEWAY_PRODUCT = "OPL Fleet Telemetry Gateway";
 
 export function buildPublicStatus(dashboard, {
   instanceId,
@@ -16,6 +18,7 @@ export function buildPublicStatus(dashboard, {
   const providerId = String(instanceId || "");
   return {
     schemaVersion: PUBLIC_STATUS_SCHEMA_VERSION,
+    productName: FLEET_COCKPIT_PRODUCT,
     serverVersion: String(serverVersion || "unknown"),
     instanceId: providerId,
     generatedAt: dashboard.generatedAt,
@@ -27,6 +30,7 @@ export function buildPublicStatus(dashboard, {
       scope: "fleet",
       id: providerId,
       name: dashboard.site.name,
+      productName: FLEET_GATEWAY_PRODUCT,
     },
     capabilities: {
       loadVisualState: true,

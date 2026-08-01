@@ -31,6 +31,15 @@ test("projects the dashboard into a versioned mobile contract", () => {
       fiveMinutes: { tps: 42000 },
       activeSessions: 10,
       cpuPercent: 97,
+      oplFleet: {
+        schema: "opl_fleet_agent_telemetry.v1",
+        product: "OPL Fleet Agent · Codex TPS",
+        stableNodeID: "studio",
+        agentVersion: "0.2.27",
+        modes: ["local", "direct", "fleet"],
+        capabilities: ["local_codex_telemetry", "host_dashboard"],
+        authority: "node_agent",
+      },
       tpsHistory: [{ at: "2026-07-30T23:59:55.000Z", tps: 58000 }],
     }],
   }, {
@@ -40,6 +49,7 @@ test("projects the dashboard into a versioned mobile contract", () => {
 
   assert.equal(PUBLIC_STATUS_PATH, "/api/v1/status");
   assert.equal(status.schemaVersion, PUBLIC_STATUS_SCHEMA_VERSION);
+  assert.equal(status.productName, "OPL Fleet Cockpit · Ambient Ops");
   assert.equal(status.serverVersion, "1.2.3");
   assert.equal(status.instanceId, "home-ops");
   assert.deepEqual(status.provider, {
@@ -47,6 +57,7 @@ test("projects the dashboard into a versioned mobile contract", () => {
     scope: "fleet",
     id: "home-ops",
     name: "Home",
+    productName: "OPL Fleet Telemetry Gateway",
   });
   assert.equal(status.capabilities.network, true);
   assert.equal(status.capabilities.loadVisualState, true);
@@ -58,6 +69,8 @@ test("projects the dashboard into a versioned mobile contract", () => {
   assert.equal(status.capabilities.liveActivityPush, false);
   assert.equal(status.machines[0].loadVisualState.modelVersion, 1);
   assert.equal(status.machines[0].loadVisualState.state, "constrained");
+  assert.equal(status.machines[0].oplFleet.product, "OPL Fleet Agent · Codex TPS");
+  assert.equal(status.machines[0].oplFleet.authority, "node_agent");
   assert.ok(status.machines[0].loadVisualState.taskDensity > 0.8);
   assert.deepEqual(status.machines[0].tpsHistory, [
     { at: "2026-07-30T23:59:55.000Z", tps: 58000 },

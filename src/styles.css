@@ -944,7 +944,7 @@ button { font: inherit; letter-spacing: 0; }
     white-space: nowrap;
     font-size: 14px;
     font-weight: 760;
-    letter-spacing: .02em;
+    letter-spacing: 0;
   }
   .scope-switch { margin-left: 0; flex: 0 0 auto; }
   .scope-switch button { min-width: 54px; height: 26px; padding: 0 8px; font-size: 10px; }
@@ -1924,7 +1924,7 @@ button { font: inherit; letter-spacing: 0; }
 /* HTC 5G Hub: 1280x720 physical / 640x360 CSS landscape kiosk. */
 @media (min-width: 580px) and (max-width: 720px) and (min-height: 320px) and (max-height: 400px) and (orientation: landscape) {
   .top-header { grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 8px; }
-  .top-header h1 { max-width: 88px; }
+  .top-header h1 { max-width: 100px; flex: 0 0 auto; }
   .scope-switch button { min-width: 43px; height: 23px; padding: 0 5px; font-size: 8px; }
   .load-view {
     height: 100%;

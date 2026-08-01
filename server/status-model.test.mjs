@@ -18,6 +18,129 @@ test("normalizes a machine snapshot without retaining unknown content", () => {
   }, new Date("2026-07-25T00:00:01.000Z"));
   assert.equal(snapshot.oneMinute.tps, 12.5);
   assert.equal(snapshot.prompt, undefined);
+  assert.equal(snapshot.oplFleet, null);
+});
+
+test("normalizes the strict OPL Fleet Agent telemetry envelope", () => {
+  const snapshot = normalizeSnapshot("primary-mac", {
+    schemaVersion: 3,
+    machineName: "Primary Mac",
+    platform: "macOS",
+    generatedAt: "2026-08-01T00:00:00.000Z",
+    oneMinute: { tps: 12.5 },
+    oplFleet: {
+      schema: "opl_fleet_agent_telemetry.v1",
+      product: "OPL Fleet Agent · Codex TPS",
+      stableNodeID: "primary-mac",
+      agentVersion: "0.2.27",
+      modes: ["local", "direct", "fleet"],
+      capabilities: [
+        "node_local_observation",
+        "node_local_doctor",
+        "node_local_execution_constraints",
+        "sanitized_execution_receipts",
+        "local_codex_telemetry",
+        "host_dashboard",
+      ],
+      authority: "node_agent",
+    },
+  }, new Date("2026-08-01T00:00:01.000Z"));
+
+  assert.deepEqual(snapshot.oplFleet, {
+    schema: "opl_fleet_agent_telemetry.v1",
+    product: "OPL Fleet Agent · Codex TPS",
+    stableNodeID: "primary-mac",
+    agentVersion: "0.2.27",
+    modes: ["local", "direct", "fleet"],
+    capabilities: [
+      "node_local_observation",
+      "node_local_doctor",
+      "node_local_execution_constraints",
+      "sanitized_execution_receipts",
+      "local_codex_telemetry",
+      "host_dashboard",
+    ],
+    authority: "node_agent",
+  });
+});
+
+test("rejects invalid OPL Fleet Agent identity, authority, and unknown fields", () => {
+  const valid = {
+    schemaVersion: 3,
+    oplFleet: {
+      schema: "opl_fleet_agent_telemetry.v1",
+      product: "OPL Fleet Agent · Codex TPS",
+      stableNodeID: "primary-mac",
+      agentVersion: "0.2.27",
+      modes: ["local", "direct", "fleet"],
+      capabilities: ["local_codex_telemetry", "host_dashboard"],
+      authority: "node_agent",
+    },
+  };
+
+  assert.throws(
+    () => normalizeSnapshot("other-mac", valid),
+    /stableNodeID must match/,
+  );
+  assert.throws(
+    () => normalizeSnapshot("primary-mac", {
+      ...valid,
+      oplFleet: { ...valid.oplFleet, authority: "controller" },
+    }),
+    /authority/,
+  );
+  assert.throws(
+    () => normalizeSnapshot("primary-mac", { ...valid, prompt: "must reject" }),
+    /unknown fields: prompt/,
+  );
+  assert.throws(
+    () => normalizeSnapshot("primary-mac", {
+      ...valid,
+      oplFleet: { ...valid.oplFleet, dispatch: true },
+    }),
+    /unknown fields: dispatch/,
+  );
+});
+
+test("rejects unsupported OPL Fleet Agent versions, modes, and capabilities", () => {
+  const envelope = {
+    schema: "opl_fleet_agent_telemetry.v1",
+    product: "OPL Fleet Agent · Codex TPS",
+    stableNodeID: "primary-mac",
+    agentVersion: "0.2.27",
+    modes: ["local", "direct", "fleet"],
+    capabilities: ["local_codex_telemetry"],
+    authority: "node_agent",
+  };
+
+  assert.throws(
+    () => normalizeSnapshot("primary-mac", {
+      schemaVersion: 2,
+      oplFleet: envelope,
+    }),
+    /schemaVersion 3/,
+  );
+  assert.throws(
+    () => normalizeSnapshot("primary-mac", {
+      schemaVersion: 3,
+      oplFleet: { ...envelope, agentVersion: "latest" },
+    }),
+    /semantic version/,
+  );
+  assert.throws(
+    () => normalizeSnapshot("primary-mac", {
+      schemaVersion: 3,
+      oplFleet: { ...envelope, modes: ["dispatch"] },
+    }),
+    /modes contains an unsupported value/,
+  );
+  assert.throws(
+    () => normalizeSnapshot("primary-mac", {
+      schemaVersion: 3,
+      oplFleet: { ...envelope, capabilities: ["fleet_dispatch"] },
+    }),
+    /capabilities contains an unsupported value/,
+  );
 });
 
 test("binds a paired machine name over an untrusted snapshot name", () => {

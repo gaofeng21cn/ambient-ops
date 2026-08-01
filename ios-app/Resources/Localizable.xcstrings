@@ -671,12 +671,12 @@
         }
       }
     },
-    "The app reads your self-hosted Ambient Ops status. It does not need Codex credentials or router credentials." : {
+    "Fleet Cockpit reads your self-hosted Gateway status. It does not need Codex credentials or router credentials." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "App 只读取你自托管的 Ambient Ops 状态，不需要 Codex 凭据或路由器凭据。"
+            "value" : "Fleet Cockpit 只读取你自托管的 Gateway 状态，不需要 Codex 凭据或路由器凭据。"
           }
         }
       }
@@ -751,12 +751,12 @@
         }
       }
     },
-    "Gateway and Codex TPS" : {
+    "Fleet Gateway and Fleet Agent" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gateway 与 Codex TPS"
+            "value" : "Fleet Gateway 与 Fleet Agent"
           }
         }
       }

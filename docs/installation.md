@@ -1,4 +1,4 @@
-# Ambient Ops Installation Guide
+# OPL Fleet Cockpit Installation Guide
 
 [简体中文](installation.zh-CN.md) | **English**
 
@@ -6,6 +6,11 @@ This is the ordinary-user path for a Linux Docker host or Synology NAS. It
 uses one non-secret `.env` file, private files under `secrets/`, the public
 multi-platform image, and the signed Android APK. The NAS never builds the
 application from source.
+
+The user-facing product is `OPL Fleet Cockpit · Ambient Ops`; its container is
+`OPL Fleet Telemetry Gateway`. Repository, image, Compose project, paths,
+environment variables, and `_ambient-ops._tcp.local` keep their existing
+`ambient-ops` compatibility identities.
 
 ## What you need
 

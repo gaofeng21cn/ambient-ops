@@ -2,10 +2,10 @@
   <a href="./README.md">English</a> | <strong>中文</strong>
 </p>
 
-<h1 align="center">Ambient Ops</h1>
+<h1 align="center">OPL Fleet Cockpit · Ambient Ops</h1>
 
-<p align="center"><strong>把分散在局域网里的运行状态，汇总成一块安静、常亮、可自托管的信息屏</strong></p>
-<p align="center">Codex TPS 汇总指标 · 路由器网络状态 · 浏览器、Android 常驻屏与原生 iOS 客户端</p>
+<p align="center"><strong>把 OPL Fleet 遥测汇总成一块安静、常亮、可自托管的驾驶舱</strong></p>
+<p align="center">OPL Fleet Agent · Telemetry Gateway · 浏览器、Android 常驻屏与原生 iOS 客户端</p>
 
 <p align="center">
   <a href="https://github.com/gaofeng21cn/ambient-ops/releases/latest"><img src="https://img.shields.io/github/v/release/gaofeng21cn/ambient-ops" alt="最新版本"></a>
@@ -72,14 +72,19 @@
   </tr>
 </table>
 
-> Ambient Ops 面向可信局域网，不是公网监控平台。显示页、状态接口和设备批准页默认没有浏览器登录；如需跨越不可信网络，必须增加 HTTPS、访问控制或私有 VPN。
+> OPL Fleet Cockpit 面向可信局域网，不是公网监控平台。显示页、状态接口和设备批准页默认没有浏览器登录；如需跨越不可信网络，必须增加 HTTPS、访问控制或私有 VPN。
 
 ## 给用户
 
 ### 这是什么
 
-Ambient Ops 是一个自托管的局域网状态聚合器。它把多台电脑上的 Codex 使用情况、
+OPL Fleet Cockpit · Ambient Ops 是一个自托管的局域网状态聚合器。它把多台电脑上的 Codex 使用情况、
 兼容路由器的实时广域网计数器和设备在线状态，整理成一套适合常亮显示的界面。
+
+其中容器承担 `OPL Fleet Telemetry Gateway`，Codex TPS 作为
+`OPL Fleet Agent · Codex TPS`。两者都只拥有遥测职责；registry、policy、admission、
+lease 与 dispatch 仍由 OPL Flow、私有 Instance 和 `OPL Fleet Controller` 负责。
+仓库、镜像、包名、发现服务和更新通道继续兼容既有 `ambient-ops` 与 `codex-tps` 身份。
 
 它解决的不是“再做一个复杂监控平台”，而是下面这个更具体的问题：
 
@@ -90,7 +95,7 @@ Ambient Ops 是一个自托管的局域网状态聚合器。它把多台电脑�
 
 ### 与 Codex TPS 如何协同
 
-[Codex TPS](https://github.com/gaofeng21cn/codex-tps) 运行在每台 macOS 或 Windows
+[OPL Fleet Agent · Codex TPS](https://github.com/gaofeng21cn/codex-tps) 运行在每台 macOS 或 Windows
 电脑上，读取本机 Codex 已经写入的用量事件。它只向 Ambient Ops 发送机器名、平台、
 采集时间、最近 `1 分钟 / 5 分钟` 的汇总 Token 计数、活跃会话数和可选宠物状态。
 
@@ -103,9 +108,9 @@ Ambient Ops 是一个自托管的局域网状态聚合器。它把多台电脑�
 ### 工作方式
 
 ```text
-各电脑上的 Codex TPS -- 经过认证的汇总快照 ----+
+各电脑上的 OPL Fleet Agent -- 认证汇总快照 -----+
                                                |
-SNMPv3 路由器 -------- 标准 IF-MIB 计数器 ------+--> Ambient Ops 容器
+SNMPv3 路由器 -------- 标准 IF-MIB 计数器 ------+--> OPL Fleet Telemetry Gateway
                                                |      |
 /data ---------------- 状态与短期历史 ---------+      +--> 浏览器
                                                       +--> Android 常驻屏

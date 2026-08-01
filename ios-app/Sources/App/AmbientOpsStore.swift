@@ -167,7 +167,7 @@ final class AmbientOpsStore {
     }
 
     var providerLabel: String {
-        isDemoMode ? "DEMO · FLEET" : "\(isFleet ? "FLEET" : "DIRECT") · \(status.effectiveProvider.name)"
+        isDemoMode ? "DEMO · FLEET COCKPIT" : "\(isFleet ? "GATEWAY" : "AGENT") · \(status.effectiveProvider.name)"
     }
 
     var availableDisplayModes: [DisplayMode] {

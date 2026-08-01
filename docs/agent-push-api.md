@@ -1,7 +1,8 @@
-# Agent Push API
+# OPL Fleet Agent Push API
 
-Machines push aggregate metrics to the server. The server never requests local
-session files and ignores fields outside the allowlist below.
+`OPL Fleet Agent · Codex TPS` pushes aggregate metrics to the compatibility
+`ambient-ops` endpoint owned by `OPL Fleet Telemetry Gateway`. The Gateway never
+requests local session files and retains only the allowlist below.
 
 ## Request
 
@@ -28,7 +29,7 @@ exact JSON bytes. The server rejects stale timestamps and repeated nonces.
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "machineName": "Primary Laptop",
   "platform": "macOS",
   "generatedAt": "2026-07-25T12:00:00.000Z",
@@ -50,6 +51,22 @@ exact JSON bytes. The server rejects stale timestamps and repeated nonces.
     "requests": 19
   },
   "activeSessions": 2,
+  "oplFleet": {
+    "schema": "opl_fleet_agent_telemetry.v1",
+    "product": "OPL Fleet Agent · Codex TPS",
+    "stableNodeID": "primary-laptop",
+    "agentVersion": "0.2.27",
+    "modes": ["local", "direct", "fleet"],
+    "capabilities": [
+      "node_local_observation",
+      "node_local_doctor",
+      "node_local_execution_constraints",
+      "sanitized_execution_receipts",
+      "local_codex_telemetry",
+      "host_dashboard"
+    ],
+    "authority": "node_agent"
+  },
   "pet": {
     "id": "ledger-owl",
     "displayName": "Ledger Owl",
@@ -60,6 +77,20 @@ exact JSON bytes. The server rejects stale timestamps and repeated nonces.
   }
 }
 ```
+
+`oplFleet` is optional so existing agents remain compatible. When present, the
+Gateway requires snapshot `schemaVersion` 3, exact product/schema/authority
+values, a `stableNodeID` matching the URL `machineId`, a bounded semantic agent
+version, known modes and capabilities, and no unknown envelope or top-level
+fields. Legacy snapshots without `oplFleet` keep their existing behavior and
+unknown top-level fields are ignored during the migration window. In both paths,
+only the normalized allowlist is persisted or projected.
+
+The envelope is descriptive telemetry, not a control grant. The Agent may
+observe and constrain its own node and report sanitized receipts. The Gateway
+may receive, aggregate, retain, and project that telemetry. Registry, policy,
+admission, lease, and dispatch remain outside both components and belong to OPL
+Flow, the private Instance, and `OPL Fleet Controller`.
 
 `machineId` is a stable, non-secret identifier containing only letters,
 numbers, dots, underscores, and hyphens. It should not be regenerated on every
@@ -91,7 +122,7 @@ total TPS = inputTokens / windowSeconds + outputTokens / windowSeconds
 Do not add `cachedInputTokens` or `reasoningOutputTokens` again. They are
 breakdowns, not extra usage.
 
-Agents may also include optional host telemetry for the Ambient Ops Load view:
+Agents may also include optional host telemetry for the Fleet Cockpit Load view:
 
 ```json
 {
@@ -197,4 +228,5 @@ Agents must not send prompts, responses, session identifiers, repository paths,
 or other conversation content. The only accepted file content is the validated
 pet `spritesheet.webp` whose hash is declared by the pet manifest. The server
 stores only its explicit normalized snapshot allowlist and that content-addressed
-image even if extra JSON fields are submitted.
+image. New `oplFleet` snapshots reject unknown top-level or envelope fields;
+legacy snapshots continue to discard unknown fields.

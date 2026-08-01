@@ -1,10 +1,14 @@
-# Ambient Ops 安装教程
+# OPL Fleet Cockpit 安装教程
 
 **简体中文** | [English](installation.md)
 
 这是 Linux Docker 主机或群晖 NAS 的普通用户路径。部署只使用一份不含密码的
 `.env`、`secrets/` 下的私密文件、公开的多架构镜像和正式签名 Android APK。
 NAS 不在本地构建应用源码。
+
+用户可见产品名为 `OPL Fleet Cockpit · Ambient Ops`，其中的容器承担
+`OPL Fleet Telemetry Gateway`。仓库、镜像、Compose project、路径、环境变量和
+`_ambient-ops._tcp.local` 继续使用既有 `ambient-ops` 兼容身份。
 
 ## 准备条件
 

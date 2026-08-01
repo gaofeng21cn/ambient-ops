@@ -87,12 +87,13 @@ struct SettingsView: View {
                     LabeledContent("Conversation content", value: "Never collected")
                     LabeledContent("Session identifiers", value: "Never collected")
                     LabeledContent("Metrics", value: "Aggregate only")
-                    Text("The app reads your self-hosted Ambient Ops status. It does not need Codex credentials or router credentials.")
+                    Text("Fleet Cockpit reads your self-hosted Gateway status. It does not need Codex credentials or router credentials.")
                         .font(.footnote)
                         .foregroundStyle(AmbientTheme.muted)
                 }
 
                 Section("About") {
+                    LabeledContent("Product", value: "OPL Fleet Cockpit · Ambient Ops")
                     LabeledContent("Source", value: store.providerLabel)
                     LabeledContent("Status schema", value: "v\(store.status.schemaVersion)")
                     LabeledContent("Server", value: store.status.serverVersion)
@@ -193,13 +194,16 @@ struct SettingsView: View {
         }
         switch store.connectionState {
         case .live, .stale:
-            return store.providerLabel
+            return store.status.effectiveProvider.productName
+                ?? (store.isFleet
+                    ? "OPL Fleet Telemetry Gateway"
+                    : "OPL Fleet Agent · Codex TPS")
         case .loading where store.isDiscovering:
-            return String(localized: "Gateway and Codex TPS")
+            return String(localized: "Fleet Gateway and Fleet Agent")
         case let .error(message):
             return message
         default:
-            return String(localized: "Gateway and Codex TPS")
+            return String(localized: "Fleet Gateway and Fleet Agent")
         }
     }
 

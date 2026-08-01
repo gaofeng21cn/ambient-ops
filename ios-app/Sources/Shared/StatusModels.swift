@@ -2,6 +2,7 @@ import Foundation
 
 struct AmbientStatus: Codable, Hashable, Sendable {
     let schemaVersion: Int
+    var productName: String? = nil
     let serverVersion: String
     let instanceId: String
     let generatedAt: String
@@ -96,6 +97,7 @@ struct StatusProvider: Codable, Hashable, Sendable {
     let scope: String
     let id: String
     let name: String
+    var productName: String? = nil
 
     var isFleet: Bool { scope == "fleet" }
 }
@@ -180,9 +182,20 @@ struct MachineStatus: Codable, Hashable, Sendable, Identifiable {
     let ageSeconds: Double?
     let cachePercent: Double
     let loadVisualState: LoadVisualState
+    var oplFleet: OPLFleetAgentStatus? = nil
 
     var id: String { machineId }
     var generatedDate: Date? { AmbientISO8601.date(from: generatedAt) }
+}
+
+struct OPLFleetAgentStatus: Codable, Hashable, Sendable {
+    let schema: String
+    let product: String
+    let stableNodeID: String
+    let agentVersion: String
+    let modes: [String]
+    let capabilities: [String]
+    let authority: String
 }
 
 struct MachineTPSHistoryPoint: Codable, Hashable, Sendable, Identifiable {

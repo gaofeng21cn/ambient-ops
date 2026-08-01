@@ -1,12 +1,12 @@
-# Security and Privacy
+# OPL Fleet Cockpit Security and Privacy
 
-Ambient Ops is designed for a trusted LAN. It collects operational aggregates,
-not conversation content, and separates collector credentials from display
-clients.
+OPL Fleet Cockpit · Ambient Ops is designed for a trusted LAN. Its compatibility
+container acts as OPL Fleet Telemetry Gateway: it collects operational aggregates,
+not conversation content, and separates collector credentials from display clients.
 
 ## Trust boundary
 
-- Codex TPS reads local Codex token records on each host and sends only the
+- OPL Fleet Agent · Codex TPS reads local Codex token records on each host and sends only the
   allowlisted aggregate snapshot documented in
   [`agent-push-api.md`](agent-push-api.md).
 - The server reads UniFi through SNMPv3 `authPriv` or an optional read-only
@@ -15,6 +15,12 @@ clients.
   agent token, SNMP credential, UniFi key, or Home Assistant token.
 - Home Assistant is an optional downstream write target, never an authority for
   collection or display.
+
+The Cockpit and Gateway are telemetry surfaces only. They do not own Fleet
+registry, policy, admission, leases, work dispatch, or execution control. An
+`oplFleet` envelope with `authority=node_agent` describes the sending node; it
+does not promote the Agent or Gateway into OPL Fleet Controller. Unknown fields
+in this versioned envelope are rejected before persistence.
 
 The display, status, and one-time device approval pages intentionally have no
 browser login. Bind them only to the trusted LAN or a private VPN. Approve a
@@ -83,7 +89,7 @@ non-secret discovery identity.
 
 ## Single-instance rule
 
-Exactly one canonical Ambient Ops instance should publish
+Exactly one canonical OPL Fleet Telemetry Gateway should publish the compatibility
 `_ambient-ops._tcp.local` and accept agent snapshots for a site. Parallel Mac
 and NAS owners can split clients, duplicate machine state, and make rollback
 ambiguous. Stage candidates with discovery disabled, stop the old owner before
