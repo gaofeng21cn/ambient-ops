@@ -12,7 +12,7 @@ INSTALL_PATH=/usr/local/sbin/opl-nas-audit
 SUDOERS_PATH=/etc/sudoers.d/opl-nas-audit
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 AUDITOR_SOURCE=$SCRIPT_DIR/opl-nas-audit
-EXPECTED_NAS_AUDIT_SHA256=3388000acc86ce14fa6f831403217d5b40fe07945ad1b0ed0eb7908329081269
+EXPECTED_NAS_AUDIT_SHA256=cf0d9981cb8ba3c6ce4d0c544ac838f1af0f4d0fd209990f2f352888152c7136
 
 fail() {
   printf '%s\n' "$PROGRAM: $*" >&2

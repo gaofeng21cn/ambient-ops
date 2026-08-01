@@ -50,9 +50,9 @@ webapi() {
     env -i \
       PATH="$PATH" \
       OPL_NAS_AUDIT_TEST_ROOT="$TEST_ROOT" \
-      "$SYNO_WEBAPI_BIN" "$@"
+      "$SYNO_WEBAPI_BIN" "$@" 2>/dev/null
   else
-    env -i PATH="$PATH" HOME=/root "$SYNO_WEBAPI_BIN" "$@"
+    env -i PATH="$PATH" HOME=/root "$SYNO_WEBAPI_BIN" "$@" 2>/dev/null
   fi
 }
 
@@ -70,14 +70,16 @@ nas_status() {
   require_executable "$JQ_BIN"
   require_executable "$SYNO_WEBAPI_BIN"
 
-  task_list=$(
+  if ! task_list=$(
     webapi --exec \
       api=SYNO.Backup.Task \
       version=1 \
       method=list \
       sort_by=name \
       'additional=["last_bkp_time","last_bkp_result"]'
-  )
+  ); then
+    fail "Hyper Backup task list is unavailable"
+  fi
   printf '%s\n' "$task_list" | "$JQ_BIN" -e '.success == true' >/dev/null ||
     fail "Hyper Backup task list is unavailable"
 
@@ -95,7 +97,9 @@ nas_status() {
 
   task_summaries=
   for task_id in $task_ids; do
-    status=$(task_status "$task_id")
+    if ! status=$(task_status "$task_id"); then
+      fail "Hyper Backup task status is unavailable"
+    fi
     printf '%s\n' "$status" | "$JQ_BIN" -e '.success == true' >/dev/null ||
       fail "Hyper Backup task status is unavailable"
     safe_summary=$(

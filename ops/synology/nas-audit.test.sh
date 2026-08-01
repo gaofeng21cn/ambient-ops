@@ -30,6 +30,8 @@ cat > "$TEST_ROOT/bin/synowebapi" <<'EOF'
 set -eu
 root=${OPL_NAS_AUDIT_TEST_ROOT:?}
 [ -z "${DSM_SESSION_TOKEN:-}" ] || exit 98
+printf '%s\n' 'synowebapi diagnostic name=private-task-a target=private-target-a' >&2
+[ ! -f "$root/hard-fail-webapi" ] || exit 96
 [ ! -f "$root/fail-webapi" ] || {
   printf '%s\n' '{"success":false,"error":{"code":1}}'
   exit 0
@@ -71,7 +73,12 @@ OPL_NAS_AUDIT_TEST_JQ=$(command -v jq)
 export OPL_NAS_AUDIT_TEST_NOW_EPOCH=1785600000
 export DSM_SESSION_TOKEN=untrusted-session-token
 
-output=$($AUDITOR status)
+stderr_file=$TEST_ROOT/auditor.stderr
+output=$($AUDITOR status 2>"$stderr_file")
+[ ! -s "$stderr_file" ] || {
+  printf '%s\n' "NAS audit leaked WebAPI diagnostics" >&2
+  exit 1
+}
 printf '%s\n' "$output" | jq -e '
   .schema == "opl_nas_audit.v1"
     and .scope == "synology-host"
@@ -102,6 +109,18 @@ printf '%s\n' "$empty_output" | jq -e '
     and .hyperBackup.status == "not_configured"
 ' >/dev/null
 rm -f "$TEST_ROOT/no-tasks"
+
+touch "$TEST_ROOT/hard-fail-webapi"
+hard_failure=
+if hard_failure=$($AUDITOR status 2>&1); then
+  printf '%s\n' "expected hard Hyper Backup API failure" >&2
+  exit 1
+fi
+[ "$hard_failure" = "opl-nas-audit: Hyper Backup task list is unavailable" ] || {
+  printf '%s\n' "NAS audit did not sanitize a hard WebAPI failure" >&2
+  exit 1
+}
+rm -f "$TEST_ROOT/hard-fail-webapi"
 
 touch "$TEST_ROOT/fail-webapi"
 if $AUDITOR status >/dev/null 2>&1; then
