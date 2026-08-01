@@ -202,9 +202,12 @@ final class AmbientOpsTests: XCTestCase {
         }
     }
 
-    func testServerHistoryReplacesShortLocalHistoryAndReportsItsRealWindow() {
+    func testServerHistoryMergesWithLocalCoverageAndReportsItsRealWindow() {
         let start = Date(timeIntervalSince1970: 1_800_000_000)
-        let local = [LoadHistoryPoint(at: start.addingTimeInterval(-30), tps: 999)]
+        let local = [
+            LoadHistoryPoint(at: start.addingTimeInterval(-1_200), tps: 999),
+            LoadHistoryPoint(at: start.addingTimeInterval(-900), tps: 999),
+        ]
         let server = [
             MachineTPSHistoryPoint(at: AmbientISO8601.string(from: start.addingTimeInterval(-1_800)), tps: 12_000),
             MachineTPSHistoryPoint(at: AmbientISO8601.string(from: start.addingTimeInterval(-900)), tps: 24_000),
@@ -218,8 +221,21 @@ final class AmbientOpsTests: XCTestCase {
             tps: 36_000
         )
 
-        XCTAssertEqual(merged.map(\.tps), [12_000, 24_000, 36_000])
+        XCTAssertEqual(merged.map(\.tps), [12_000, 999, 24_000, 36_000])
         XCTAssertEqual(LoadHistorySeries.coveredMinutes(merged), 30)
+    }
+
+    func testTrendDomainMakesHighLoadVariationVisibleWithoutAddingSamples() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let points = [46_212.0, 59_717.0, 51_628.0].enumerated().map { index, tps in
+            LoadHistoryPoint(at: now.addingTimeInterval(Double(index) * 5), tps: tps)
+        }
+        let domain = LoadHistorySeries.trendDomain(points)
+
+        XCTAssertGreaterThan(domain.lowerBound, 0)
+        XCTAssertLessThan(domain.lowerBound, 46_212)
+        XCTAssertGreaterThan(domain.upperBound, 59_717)
+        XCTAssertGreaterThan(13_505 / (domain.upperBound - domain.lowerBound), 0.7)
     }
 
     func testLocalHistoryReportsPartialWindowWhileCollecting() {

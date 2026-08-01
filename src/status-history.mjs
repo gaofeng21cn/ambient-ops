@@ -29,6 +29,27 @@ export function appendHistorySample(history, sample, options = {}) {
   return [...retained, normalized].slice(-1_000);
 }
 
+export function mergeHistorySamples(existing, incoming, options = {}) {
+  const retentionMs = positive(options.retentionMs, STATUS_HISTORY_RETENTION_MS);
+  const byTimestamp = new Map();
+  for (const entry of [...(existing || []), ...(incoming || [])]) {
+    const at = new Date(entry?.at).valueOf();
+    if (!Number.isFinite(at)) continue;
+    byTimestamp.set(at, {
+      at: new Date(at).toISOString(),
+      tps: Math.max(0, Number(entry?.tps) || 0),
+    });
+  }
+  const merged = [...byTimestamp.entries()].sort(([left], [right]) => left - right);
+  const latestAt = merged.at(-1)?.[0];
+  if (!Number.isFinite(latestAt)) return [];
+  const cutoff = latestAt - retentionMs;
+  return merged
+    .filter(([at]) => at >= cutoff && at <= latestAt)
+    .map(([, entry]) => entry)
+    .slice(-1_000);
+}
+
 export function historyValuesInWindow(history, windowMs, nowMs = Date.now()) {
   const duration = positive(windowMs, LOAD_TREND_WINDOW_MS);
   const cutoff = nowMs - duration;
@@ -38,6 +59,36 @@ export function historyValuesInWindow(history, windowMs, nowMs = Date.now()) {
       return Number.isFinite(at) && at >= cutoff && at <= nowMs;
     })
     .map((entry) => Math.max(0, Number(entry?.tps) || 0));
+}
+
+export function historyCoverageMinutes(history, maximumMinutes = 30) {
+  const timestamps = (Array.isArray(history) ? history : [])
+    .map((entry) => new Date(entry?.at).valueOf())
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right);
+  if (timestamps.length < 2 || timestamps.at(-1) <= timestamps[0]) return 0;
+  return Math.min(
+    maximumMinutes,
+    Math.max(1, Math.ceil((timestamps.at(-1) - timestamps[0]) / 60_000)),
+  );
+}
+
+export function loadTrendDomain(values) {
+  const data = (Array.isArray(values) ? values : [])
+    .map((value) => Math.max(0, Number(value) || 0));
+  const maximum = Math.max(...data, 0);
+  if (maximum <= 0) return [0, 1];
+  const minimum = Math.min(...data);
+  if (minimum <= maximum * 0.15) return [0, maximum / 0.92];
+
+  const observedSpan = maximum - minimum;
+  const span = Math.max(observedSpan, maximum * 0.12, 1);
+  const padding = span * 0.12;
+  const center = (minimum + maximum) / 2;
+  return [
+    Math.max(0, center - span / 2 - padding),
+    center + span / 2 + padding,
+  ];
 }
 
 function positive(value, fallback) {

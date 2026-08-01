@@ -47,8 +47,11 @@ import {
 } from "./status-connection.mjs";
 import {
   appendHistorySample,
+  historyCoverageMinutes,
   historyValuesInWindow,
   LOAD_TREND_WINDOW_MS,
+  loadTrendDomain,
+  mergeHistorySamples,
 } from "./status-history.mjs";
 import {
   loadParticlePhase,
@@ -362,6 +365,7 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
   const state = load.state;
   const shortTrendValues = historyValuesInWindow(selected.tpsHistory, 5 * 60 * 1_000);
   const loadTrendValues = historyValuesInWindow(selected.tpsHistory, LOAD_TREND_WINDOW_MS);
+  const loadTrendMinutes = historyCoverageMinutes(selected.tpsHistory);
   const loadTrendAverage = loadTrendValues.length
     ? loadTrendValues.reduce((total, value) => total + value, 0) / loadTrendValues.length
     : Number(selected.fiveMinutes.tps || 0);
@@ -405,9 +409,9 @@ function LoadView({ machines, selected, followMode, onFollowMode, onSelect }) {
           <LoadStat label="CACHE" value={`${selected.cachePercent || 0}%`} />
         </div>
         <div className="load-side-trend">
-          <div><span>30 MIN TREND</span><small>{formatTps(loadTrendAverage)} TPS AVG</small></div>
-          <Sparkline values={loadTrendValues} color="green" />
-          <div className="load-side-axis"><span>-30m</span><span>-20m</span><span>-10m</span><span>now</span></div>
+          <div><span>{loadTrendMinutes >= 30 ? "30 MIN TREND" : loadTrendMinutes > 0 ? `${loadTrendMinutes} MIN TREND` : "LIVE TREND"}</span><small>{formatTps(loadTrendAverage)} TPS AVG</small></div>
+          <Sparkline values={loadTrendValues} color="green" focusRange />
+          <div className="load-side-axis">{loadTrendAxis(loadTrendMinutes).map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>
         </div>
         <div className="load-side-host">
           <span className={`load-host-freshness ${selected.status}`}><i /> HOST · {hostFreshness(selected)}</span>
@@ -1330,10 +1334,12 @@ function TrafficChart({ points = [], detailed = false, allowSampleData = false }
   );
 }
 
-function Sparkline({ values, color, mini = false, compact = false }) {
+function Sparkline({ values, color, mini = false, compact = false, focusRange = false }) {
   const data = values.length > 1 ? values : [0, 0];
-  const max = Math.max(...data, 1);
-  const points = linePoints(data, max, 200, 50);
+  const [minimum, maximum] = focusRange
+    ? loadTrendDomain(data)
+    : [0, Math.max(...data, 1)];
+  const points = linePoints(data, maximum, 200, 50, minimum);
   return (
     <svg className={`sparkline ${mini ? "mini" : ""} ${compact ? "compact" : ""}`} viewBox="0 0 200 50" preserveAspectRatio="none" aria-hidden="true">
       <polyline className={color} points={points} />
@@ -1341,12 +1347,25 @@ function Sparkline({ values, color, mini = false, compact = false }) {
   );
 }
 
-function linePoints(values, max, width = 1000, height = 300) {
+function linePoints(values, max, width = 1000, height = 300, min = 0) {
+  const span = Math.max(1, max - min);
   return values.map((value, index) => {
     const x = values.length === 1 ? 0 : index * width / (values.length - 1);
-    const y = height - Math.min(height, Math.max(0, value / max * height * 0.92));
+    const ratio = min > 0 ? (value - min) / span : value / max * 0.92;
+    const y = height - Math.min(height, Math.max(0, ratio * height));
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
+}
+
+function loadTrendAxis(minutes) {
+  if (minutes <= 0) return ["now"];
+  if (minutes < 3) return [`-${minutes}m`, "now"];
+  return [
+    `-${minutes}m`,
+    `-${Math.max(1, Math.round(minutes * 2 / 3))}m`,
+    `-${Math.max(1, Math.round(minutes / 3))}m`,
+    "now",
+  ];
 }
 
 function trafficData(points, allowSampleData) {
@@ -1503,9 +1522,7 @@ function mergeStatusHistory(previous, next) {
   const machines = (next.machines || []).map((machine) => {
     const prior = previousMachines.get(machine.machineId);
     const sample = { at: machine.generatedAt, tps: Number(machine.oneMinute?.tps || 0) };
-    const sourceHistory = Array.isArray(machine.tpsHistory)
-      ? machine.tpsHistory
-      : prior?.tpsHistory;
+    const sourceHistory = mergeHistorySamples(prior?.tpsHistory, machine.tpsHistory);
     return { ...machine, tpsHistory: appendHistorySample(sourceHistory, sample) };
   });
   const codexHistory = appendHistorySample(previous?.codex?.tpsHistory, {

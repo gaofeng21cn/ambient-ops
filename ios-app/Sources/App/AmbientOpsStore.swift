@@ -59,8 +59,14 @@ enum LoadHistorySeries {
             guard let at = point.atDate else { return nil }
             return LoadHistoryPoint(at: at, tps: max(0, point.tps))
         }
-        var points = serverPoints.isEmpty ? existing : serverPoints
-        points.sort { $0.at < $1.at }
+        var pointsByDate: [Date: LoadHistoryPoint] = [:]
+        for point in existing {
+            pointsByDate[point.at] = LoadHistoryPoint(at: point.at, tps: max(0, point.tps))
+        }
+        for point in serverPoints {
+            pointsByDate[point.at] = point
+        }
+        var points = pointsByDate.values.sorted { $0.at < $1.at }
 
         if let last = points.last {
             let elapsed = sampleAt.timeIntervalSince(last.at)
@@ -84,6 +90,20 @@ enum LoadHistorySeries {
     static func coveredMinutes(_ points: [LoadHistoryPoint]) -> Int {
         guard let first = points.first?.at, let last = points.last?.at, last > first else { return 0 }
         return min(30, max(1, Int(ceil(last.timeIntervalSince(first) / 60))))
+    }
+
+    static func trendDomain(_ points: [LoadHistoryPoint]) -> ClosedRange<Double> {
+        let values = points.map { max(0, $0.tps) }
+        let maximum = values.max() ?? 0
+        guard maximum > 0 else { return 0...1 }
+        let minimum = values.min() ?? 0
+        guard minimum > maximum * 0.15 else { return 0...(maximum / 0.92) }
+
+        let observedSpan = maximum - minimum
+        let span = max(observedSpan, maximum * 0.12, 1)
+        let padding = span * 0.12
+        let center = (minimum + maximum) / 2
+        return max(0, center - span / 2 - padding)...(center + span / 2 + padding)
     }
 }
 

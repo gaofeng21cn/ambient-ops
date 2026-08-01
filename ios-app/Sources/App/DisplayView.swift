@@ -278,7 +278,7 @@ private struct LoadDisplay: View {
                 .foregroundStyle(AmbientTheme.green)
                 .lineStyle(StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
             }
-            .chartYScale(domain: 0...trendScale)
+            .chartYScale(domain: LoadHistorySeries.trendDomain(history))
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .frame(height: largeCanvas ? 80 : landscape ? 58 : 46)
@@ -310,10 +310,6 @@ private struct LoadDisplay: View {
 
     private var trendStartLabel: String {
         coveredMinutes > 0 ? "-\(coveredMinutes)M" : "NOW"
-    }
-
-    private var trendScale: Double {
-        max(1, history.map(\.tps).max() ?? 1) / 0.92
     }
 
     private var loadScale: some View {
