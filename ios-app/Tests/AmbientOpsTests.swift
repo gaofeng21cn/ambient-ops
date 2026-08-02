@@ -76,6 +76,8 @@ final class AmbientOpsTests: XCTestCase {
         XCTAssertTrue(bundle.localizations.contains("zh-Hans"))
         XCTAssertEqual(bundle.infoDictionary?["CFBundleDisplayName"] as? String, "OPL Cockpit")
         XCTAssertEqual(bundle.bundleIdentifier, "cn.gaofeng.ambientops")
+        XCTAssertEqual(bundle.infoDictionary?["CFBundleShortVersionString"] as? String, "1.0.0")
+        XCTAssertEqual(bundle.infoDictionary?["CFBundleVersion"] as? String, "10")
 
         let urlTypes = try XCTUnwrap(bundle.infoDictionary?["CFBundleURLTypes"] as? [[String: Any]])
         let urlSchemes = try XCTUnwrap(urlTypes.first?["CFBundleURLSchemes"] as? [String])

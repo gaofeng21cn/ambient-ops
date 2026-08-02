@@ -32,8 +32,8 @@ Choose a persistent directory. On Synology, a typical location is
 `/volume1/docker/ambient-ops`.
 
 ```bash
-git clone https://github.com/gaofeng21cn/ambient-ops.git
-cd ambient-ops
+git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git
+cd opl-fleet-cockpit
 git rev-parse HEAD
 ./scripts/ambient-ops.sh init
 ```
@@ -180,7 +180,7 @@ readiness is intentionally not an acceptance condition.
 ## 5. Connect every Codex TPS computer
 
 Install Codex TPS `v0.2.11` or later on macOS, or `v0.2.9` or later on Windows, from its
-[Releases page](https://github.com/gaofeng21cn/codex-tps/releases). Each
+[Releases page](https://github.com/gaofeng21cn/opl-fleet-agent/releases). Each
 computer keeps its own raw Codex sessions and sends only aggregate snapshots.
 
 Enable Ambient Ops and Auto-discover. The desktop app creates a per-device
@@ -200,7 +200,7 @@ live state repeatedly.
 ## 6. Install the Android kiosk
 
 Download these assets from
-[Ambient Ops v0.1.22](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.22):
+[Ambient Ops v0.1.22](https://github.com/gaofeng21cn/opl-fleet-cockpit/releases/tag/v0.1.22):
 
 - `Ambient-Ops-Kiosk-1.2.7.apk`
 - `Ambient-Ops-Kiosk-1.2.7.apk.sha256`

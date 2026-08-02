@@ -8,7 +8,7 @@
 <p align="center">OPL Fleet Agents · Telemetry Gateway · Browser, Android, and native iOS displays</p>
 
 <p align="center">
-  <a href="https://github.com/gaofeng21cn/ambient-ops/releases/latest"><img src="https://img.shields.io/github/v/release/gaofeng21cn/ambient-ops" alt="Latest release"></a>
+  <a href="https://github.com/gaofeng21cn/opl-fleet-cockpit/releases/latest"><img src="https://img.shields.io/github/v/release/gaofeng21cn/opl-fleet-cockpit" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/deployment-Docker-blue.svg" alt="Docker deployment">
 </p>
@@ -99,7 +99,7 @@ you want to:
 
 ### How Codex TPS fits
 
-[OPL Fleet Agent · Codex TPS](https://github.com/gaofeng21cn/codex-tps) runs on each macOS or Windows
+[OPL Fleet Agent · Codex TPS](https://github.com/gaofeng21cn/opl-fleet-agent) runs on each macOS or Windows
 computer and reads usage events already written by the local Codex client. It sends
 only machine identity, platform, collection time, aggregate `1m` and `5m` token
 counters, active-session count, and optional pet state.
@@ -148,8 +148,8 @@ needs no Gateway and still receives only aggregate machine status.
 Requirements: Docker Engine, Docker Compose v2, `curl`, and `openssl`.
 
 ```bash
-git clone https://github.com/gaofeng21cn/ambient-ops.git
-cd ambient-ops
+git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git
+cd opl-fleet-cockpit
 ./scripts/ambient-ops.sh init
 ```
 
@@ -163,7 +163,7 @@ DISPLAY_TIME_ZONE=Asia/Shanghai
 
 The template pins a reviewed release image. Change `AMBIENT_OPS_IMAGE` only when
 deliberately moving to a newer reviewed
-[release](https://github.com/gaofeng21cn/ambient-ops/releases/latest); never use `latest`.
+[release](https://github.com/gaofeng21cn/opl-fleet-cockpit/releases/latest); never use `latest`.
 
 If router telemetry is needed from the beginning, select the profile during
 initialization:
@@ -246,7 +246,7 @@ HTTP 200 response, or running container is not complete acceptance.
 For a new installation:
 
 ```bash
-git clone https://github.com/gaofeng21cn/ambient-ops.git <target>
+git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git <target>
 cd <target>
 git rev-parse HEAD
 ./scripts/ambient-ops.sh init --profile <codex-only|snmpv3|unifi-api>

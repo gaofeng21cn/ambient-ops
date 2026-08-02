@@ -1,14 +1,14 @@
 # App Store Submission Draft
 
-This is submission metadata for the native Ambient Ops iOS client. Creating an
-App Store Connect record, uploading an archive, choosing territories, and releasing
-the app remain explicit distribution actions.
+This is submission metadata for the native OPL Fleet Cockpit iOS and iPadOS
+client. Build 9 remains TestFlight history with the old home-screen name. Build
+10 is the first submission candidate carrying the `OPL Cockpit` display name.
 
 ## Identity
 
-- App name: `Ambient Ops`
+- App name: `OPL Fleet Cockpit`
 - Bundle ID: `cn.gaofeng.ambientops`
-- SKU suggestion: `ambient-ops-ios-1`
+- SKU: `ambient-ops-ios-1` (preserved)
 - Primary category: `Utilities`
 - Secondary category: `Developer Tools`
 - Age rating: `4+`
@@ -18,7 +18,7 @@ the app remain explicit distribution actions.
 
 Subtitle:
 
-> Your self-hosted Codex load display
+> Your self-hosted fleet display
 
 Promotional text:
 
@@ -27,8 +27,8 @@ Promotional text:
 
 Description:
 
-> Ambient Ops is the native iPhone companion for your self-hosted Ambient Ops
-> server.
+> OPL Fleet Cockpit is the native iPhone and iPad companion for your self-hosted
+> Ambient Ops telemetry gateway.
 >
 > See the operational state that matters at a glance:
 >
@@ -40,15 +40,15 @@ Description:
 > • Lock Screen Widgets, Live Activities, Dynamic Island, and StandBy
 >
 > The built-in Demo Mode is fully functional and needs no account or server.
-> When you connect your own server, Ambient Ops discovers it on your local network
-> or uses the address you enter.
+> When you connect your own gateway, OPL Fleet Cockpit discovers it on your local
+> network or uses the address you enter.
 >
 > Privacy is part of the architecture. Prompts, responses, session identifiers,
 > tool content, repository paths, and credentials are not part of the status
 > contract. The app does not use advertising or third-party analytics.
 >
-> Ambient Ops is designed for trusted local networks. Remote access should use
-> HTTPS with access control or a private VPN.
+> OPL Fleet Cockpit is designed for trusted local networks. Remote access should
+> use HTTPS with access control or a private VPN.
 
 Keywords:
 
@@ -56,17 +56,17 @@ Keywords:
 
 ## Public URLs
 
-- Support URL: `https://github.com/gaofeng21cn/ambient-ops/blob/main/docs/ios-support.md`
-- Privacy policy URL: `https://github.com/gaofeng21cn/ambient-ops/blob/main/docs/privacy-policy.md`
-- Marketing URL: `https://github.com/gaofeng21cn/ambient-ops`
+- Support URL: `https://github.com/gaofeng21cn/opl-fleet-cockpit/blob/main/docs/ios-support.md`
+- Privacy policy URL: `https://github.com/gaofeng21cn/opl-fleet-cockpit/blob/main/docs/privacy-policy.md`
+- Marketing URL: `https://github.com/gaofeng21cn/opl-fleet-cockpit`
 
 These URLs become valid only after the corresponding files are on the public
 canonical branch.
 
 ## App Review notes
 
-> Ambient Ops opens in a complete Demo Mode. No account, server, credentials, or
-> local-network permission is needed for review.
+> OPL Fleet Cockpit opens in a complete Demo Mode. No account, server,
+> credentials, or local-network permission is needed for review.
 >
 > Review path:
 >
@@ -93,9 +93,10 @@ or developer-operated service.
 
 ## Remaining submission inputs
 
-- final App Store screenshots captured from the signed Release candidate;
-- an App Store Connect app record;
-- signed archive validation and upload;
+- confirm the existing App Store Connect app record and build 9 processing state;
+- final iPhone and iPad screenshots captured from signed build 10;
+- signed build 10 archive validation and upload;
+- TestFlight processing and Automatic Testers assignment;
 - export-compliance answers;
 - territory choice, including whether mainland China distribution will be enabled;
 - version release mode and review submission approval.

@@ -8,7 +8,7 @@
 <p align="center">OPL Fleet Agent · Telemetry Gateway · 浏览器、Android 常驻屏与原生 iOS 客户端</p>
 
 <p align="center">
-  <a href="https://github.com/gaofeng21cn/ambient-ops/releases/latest"><img src="https://img.shields.io/github/v/release/gaofeng21cn/ambient-ops" alt="最新版本"></a>
+  <a href="https://github.com/gaofeng21cn/opl-fleet-cockpit/releases/latest"><img src="https://img.shields.io/github/v/release/gaofeng21cn/opl-fleet-cockpit" alt="最新版本"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT 许可证"></a>
   <img src="https://img.shields.io/badge/deployment-Docker-blue.svg" alt="Docker 部署">
 </p>
@@ -95,7 +95,7 @@ lease 与 dispatch 仍由 OPL Flow、私有 Instance 和 `OPL Fleet Controller` 
 
 ### 与 Codex TPS 如何协同
 
-[OPL Fleet Agent · Codex TPS](https://github.com/gaofeng21cn/codex-tps) 运行在每台 macOS 或 Windows
+[OPL Fleet Agent · Codex TPS](https://github.com/gaofeng21cn/opl-fleet-agent) 运行在每台 macOS 或 Windows
 电脑上，读取本机 Codex 已经写入的用量事件。它只向 Ambient Ops 发送机器名、平台、
 采集时间、最近 `1 分钟 / 5 分钟` 的汇总 Token 计数、活跃会话数和可选宠物状态。
 
@@ -137,8 +137,8 @@ SNMPv3 路由器 -------- 标准 IF-MIB 计数器 ------+--> OPL Fleet Telemetry
 需要 Docker Engine、Docker Compose v2、`curl` 和 `openssl`。
 
 ```bash
-git clone https://github.com/gaofeng21cn/ambient-ops.git
-cd ambient-ops
+git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git
+cd opl-fleet-cockpit
 ./scripts/ambient-ops.sh init
 ```
 
@@ -150,7 +150,7 @@ DISPLAY_TIME_ZONE=Asia/Shanghai
 ```
 
 模板默认固定到经过审查的发布镜像；如需升级，才把 `AMBIENT_OPS_IMAGE` 改为
-[最新发布版本](https://github.com/gaofeng21cn/ambient-ops/releases/latest)对应的版本化标签，
+[最新发布版本](https://github.com/gaofeng21cn/opl-fleet-cockpit/releases/latest)对应的版本化标签，
 不要使用 `latest`。
 
 如果一开始就需要路由器遥测，请在初始化时选择配置模式：
@@ -228,7 +228,7 @@ secrets/ 和 ambient_ops_data，禁止执行 docker compose down -v。
 全新安装：
 
 ```bash
-git clone https://github.com/gaofeng21cn/ambient-ops.git <target>
+git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git <target>
 cd <target>
 git rev-parse HEAD
 ./scripts/ambient-ops.sh init --profile <codex-only|snmpv3|unifi-api>

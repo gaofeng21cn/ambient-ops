@@ -1,10 +1,10 @@
-# Ambient Ops Privacy Policy
+# OPL Fleet Cockpit Privacy Policy
 
 Last updated: July 31, 2026
 
-Ambient Ops is a self-hosted operational display. The iOS app does not require an
-Ambient Ops cloud account and does not send analytics, advertising identifiers,
-conversation content, or usage data to the developer.
+OPL Fleet Cockpit is a self-hosted operational display. The iOS and iPadOS app
+does not require an Ambient Ops cloud account and does not send analytics,
+advertising identifiers, conversation content, or usage data to the developer.
 
 ## Data the app reads
 
@@ -48,5 +48,5 @@ self-hosted Ambient Ops server remains under the server operator's control.
 
 ## Contact
 
-Privacy and support requests can be filed through the public Ambient Ops repository:
-https://github.com/gaofeng21cn/ambient-ops/issues
+Privacy and support requests can be filed through the public OPL Fleet Cockpit repository:
+https://github.com/gaofeng21cn/opl-fleet-cockpit/issues

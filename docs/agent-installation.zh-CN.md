@@ -84,7 +84,7 @@ Agent 应先确认：
 全新安装：
 
 ```bash
-git clone https://github.com/gaofeng21cn/ambient-ops.git <target>
+git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git <target>
 cd <target>
 git rev-parse HEAD
 ./scripts/ambient-ops.sh init --profile <codex-only|snmpv3|unifi-api>

@@ -28,8 +28,8 @@ GitHub Token。
 选择一个长期保留的目录。群晖常用路径是 `/volume1/docker/ambient-ops`。
 
 ```bash
-git clone https://github.com/gaofeng21cn/ambient-ops.git
-cd ambient-ops
+git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git
+cd opl-fleet-cockpit
 git rev-parse HEAD
 ./scripts/ambient-ops.sh init
 ```
@@ -167,7 +167,7 @@ curl -fsS http://<server-ip>:8787/api/status
 
 ## 5. 连接每台 Codex TPS 电脑
 
-从 [Codex TPS Releases](https://github.com/gaofeng21cn/codex-tps/releases)
+从 [Codex TPS Releases](https://github.com/gaofeng21cn/opl-fleet-agent/releases)
 在 macOS 安装 `v0.2.11` 或更高版本，在 Windows 安装 `v0.2.9` 或更高版本。
 各电脑的 Codex 原始 session 始终保留在本机，只向 Ambient Ops 发送汇总快照。
 
@@ -184,7 +184,7 @@ macOS 私钥保存在登录 Keychain，Windows 私钥保存为当前用户 DPAPI
 
 ## 6. 安装 Android Kiosk
 
-从 [Ambient Ops v0.1.22](https://github.com/gaofeng21cn/ambient-ops/releases/tag/v0.1.22)
+从 [Ambient Ops v0.1.22](https://github.com/gaofeng21cn/opl-fleet-cockpit/releases/tag/v0.1.22)
 下载：
 
 - `Ambient-Ops-Kiosk-1.2.7.apk`

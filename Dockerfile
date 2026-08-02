@@ -16,7 +16,7 @@ LABEL org.opencontainers.image.title="Ambient Ops" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.source="https://github.com/gaofeng21cn/ambient-ops"
+      org.opencontainers.image.source="https://github.com/gaofeng21cn/opl-fleet-cockpit"
 ENV NODE_ENV=production PORT=8787 DATA_DIR=/data
 WORKDIR /app
 COPY package*.json ./
