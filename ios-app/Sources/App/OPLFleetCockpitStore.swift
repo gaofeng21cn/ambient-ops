@@ -96,12 +96,12 @@ enum LoadHistorySeries {
 
 @MainActor
 @Observable
-final class AmbientOpsStore {
+final class OPLFleetCockpitStore {
     private enum Keys {
-        static let demoMode = "ambient-ops.demo-mode"
-        static let serverURL = "ambient-ops.server-url"
-        static let selectedMachineID = "ambient-ops.selected-machine"
-        static let selectedSourceID = "ambient-ops.selected-source"
+        static let demoMode = "opl-fleet-cockpit.demo-mode"
+        static let serverURL = "opl-fleet-cockpit.server-url"
+        static let selectedMachineID = "opl-fleet-cockpit.selected-machine"
+        static let selectedSourceID = "opl-fleet-cockpit.selected-source"
     }
 
     var status: AmbientStatus
@@ -114,7 +114,7 @@ final class AmbientOpsStore {
     var loadHistory: [String: [LoadHistoryPoint]] = [:]
     var networkHistory: [NetworkHistoryPoint] = []
 
-    private let client = AmbientOpsClient()
+    private let client = OPLFleetCockpitClient()
     private let defaults: UserDefaults
     private let discovery: DiscoveryService
     private var refreshTask: Task<Void, Never>?
@@ -237,7 +237,7 @@ final class AmbientOpsStore {
         useLiveMode()
         beginDiscovery()
 
-        guard AmbientOpsClient.normalizedServerURL(serverAddress) != nil else { return }
+        guard OPLFleetCockpitClient.normalizedServerURL(serverAddress) != nil else { return }
         startupReconnectTask = Task { [weak self] in
             await self?.reconnectSavedSourceWhileDiscovering()
         }
@@ -245,8 +245,8 @@ final class AmbientOpsStore {
 
     func connect() async {
         useLiveMode()
-        guard let serverURL = AmbientOpsClient.normalizedServerURL(serverAddress) else {
-            connectionState = .error(AmbientOpsClientError.invalidServerURL.localizedDescription)
+        guard let serverURL = OPLFleetCockpitClient.normalizedServerURL(serverAddress) else {
+            connectionState = .error(OPLFleetCockpitClientError.invalidServerURL.localizedDescription)
             return
         }
         connectionState = .loading
@@ -261,7 +261,7 @@ final class AmbientOpsStore {
 
     func refresh() async {
         guard !isDemoMode,
-              let serverURL = AmbientOpsClient.normalizedServerURL(serverAddress) else {
+              let serverURL = OPLFleetCockpitClient.normalizedServerURL(serverAddress) else {
             return
         }
         do {
@@ -303,7 +303,7 @@ final class AmbientOpsStore {
         if !isActive {
             refreshTask?.cancel()
         } else if !isDemoMode,
-                  let serverURL = AmbientOpsClient.normalizedServerURL(serverAddress) {
+                  let serverURL = OPLFleetCockpitClient.normalizedServerURL(serverAddress) {
             scheduleRefresh(serverURL)
         } else if !isDemoMode, !isDiscovering {
             startDiscovery()
@@ -379,7 +379,7 @@ final class AmbientOpsStore {
     }
 
     private func reconnectSavedSourceWhileDiscovering() async {
-        guard let serverURL = AmbientOpsClient.normalizedServerURL(serverAddress) else { return }
+        guard let serverURL = OPLFleetCockpitClient.normalizedServerURL(serverAddress) else { return }
         do {
             try Task.checkCancellation()
             try await fetch(serverURL)

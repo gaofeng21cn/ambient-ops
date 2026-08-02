@@ -71,12 +71,12 @@
         }
       }
     },
-    "Ambient Ops returned HTTP %lld." : {
+    "The Gateway returned HTTP %lld." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ambient Ops 返回了 HTTP %lld。"
+            "value" : "Gateway 返回了 HTTP %lld。"
           }
         }
       }
@@ -161,12 +161,12 @@
         }
       }
     },
-    "CPU telemetry is not reported by this host. Ambient Ops keeps it unknown instead of treating it as zero." : {
+    "CPU telemetry is not reported by this host. OPL Fleet Cockpit keeps it unknown instead of treating it as zero." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此主机未上报 CPU 遥测。Ambient Ops 会将其保留为未知，而不是按 0 处理。"
+            "value" : "此主机未上报 CPU 遥测。OPL Fleet Cockpit 会将其保留为未知，而不是按 0 处理。"
           }
         }
       }
@@ -261,12 +261,12 @@
         }
       }
     },
-    "Enter a valid Ambient Ops server address." : {
+    "Enter a valid Gateway address." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请输入有效的 Ambient Ops 服务器地址。"
+            "value" : "请输入有效的 Gateway 地址。"
           }
         }
       }
@@ -701,12 +701,12 @@
         }
       }
     },
-    "Ambient Ops uses Bonjour only to find your self-hosted server on this Wi-Fi network. It does not scan devices or send local data to a cloud service." : {
+    "OPL Fleet Cockpit uses Bonjour only to find your self-hosted server on this Wi-Fi network. It does not scan devices or send local data to a cloud service." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ambient Ops 只使用 Bonjour 查找此 Wi-Fi 网络中的自托管服务器，不会扫描设备，也不会把本地数据发送到云服务。"
+            "value" : "OPL Fleet Cockpit 只使用 Bonjour 查找此 Wi-Fi 网络中的自托管服务器，不会扫描设备，也不会把本地数据发送到云服务。"
           }
         }
       }

@@ -22,10 +22,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>cn.gaofeng.ambientops</string>
+			<string>cn.gaofeng.oplfleetcockpit</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>ambientops</string>
+				<string>oplfleetcockpit</string>
 			</array>
 		</dict>
 	</array>
@@ -44,7 +44,7 @@
 		<string>_codex-tps._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Ambient Ops discovers and reads status from your self-hosted server on this local network.</string>
+	<string>OPL Fleet Cockpit discovers and reads aggregate status from your self-hosted OPL Fleet Telemetry Gateway on this local network.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>

@@ -1,2 +1,2 @@
 "CFBundleDisplayName" = "OPL Cockpit";
-"NSLocalNetworkUsageDescription" = "Ambient Ops 会在此局域网中发现 Codex TPS 或你自托管的 Gateway，并读取聚合状态。";
+"NSLocalNetworkUsageDescription" = "OPL Fleet Cockpit 会在此局域网中发现 OPL Fleet Agent 或你自托管的 Gateway，并读取聚合状态。";

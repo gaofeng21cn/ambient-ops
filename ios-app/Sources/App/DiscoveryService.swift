@@ -67,6 +67,7 @@ final class DiscoveryService: NSObject,
         running = true
         servers.removeAll()
         onChange?([])
+        // The deployed Gateway still advertises this compatibility service type.
         gatewayBrowser.searchForServices(ofType: "_ambient-ops._tcp.", inDomain: "local.")
         directBrowser.searchForServices(ofType: "_codex-tps._tcp.", inDomain: "local.")
     }

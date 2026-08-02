@@ -48,7 +48,7 @@ struct AmbientStatus: Codable, Hashable, Sendable {
             instanceId: "",
             generatedAt: AmbientISO8601.string(from: now),
             demo: false,
-            site: SiteStatus(name: "Ambient Ops", timeZone: TimeZone.current.identifier),
+            site: SiteStatus(name: "OPL Fleet Cockpit", timeZone: TimeZone.current.identifier),
             overallStatus: "error",
             provider: nil,
             capabilities: ServerCapabilities(

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MachinesView: View {
-    @Bindable var store: AmbientOpsStore
+    @Bindable var store: OPLFleetCockpitStore
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var largeCanvas: Bool { horizontalSizeClass == .regular }
@@ -274,7 +274,7 @@ private struct MachineDetailView: View {
 
                 if machine.cpuPercent == nil {
                     Label(
-                        "CPU telemetry is not reported by this host. Ambient Ops keeps it unknown instead of treating it as zero.",
+                        "CPU telemetry is not reported by this host. OPL Fleet Cockpit keeps it unknown instead of treating it as zero.",
                         systemImage: "info.circle"
                     )
                     .font(largeCanvas ? .body : .footnote)

@@ -1,2 +1,2 @@
 "CFBundleDisplayName" = "OPL Cockpit";
-"NSLocalNetworkUsageDescription" = "Ambient Ops discovers and reads aggregate status from Codex TPS or your self-hosted Gateway on this local network.";
+"NSLocalNetworkUsageDescription" = "OPL Fleet Cockpit discovers and reads aggregate status from OPL Fleet Agent or your self-hosted Gateway on this local network.";
