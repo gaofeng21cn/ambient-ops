@@ -70,6 +70,9 @@ targets:
         PRODUCT_NAME: AmbientOps
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: false
+      configs:
+        Release:
+          CODE_SIGN_IDENTITY: Apple Distribution
   AmbientOpsWidgets:
     type: app-extension
     platform: iOS
@@ -99,6 +102,9 @@ targets:
         PRODUCT_NAME: Ambient Ops Widgets
         SKIP_INSTALL: true
         APPLICATION_EXTENSION_API_ONLY: true
+      configs:
+        Release:
+          CODE_SIGN_IDENTITY: Apple Distribution
   AmbientOpsTests:
     type: bundle.unit-test
     platform: iOS
