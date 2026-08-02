@@ -74,6 +74,12 @@ final class AmbientOpsTests: XCTestCase {
 
         XCTAssertEqual(bundle.developmentLocalization, "en")
         XCTAssertTrue(bundle.localizations.contains("zh-Hans"))
+        XCTAssertEqual(bundle.infoDictionary?["CFBundleDisplayName"] as? String, "OPL Cockpit")
+        XCTAssertEqual(bundle.bundleIdentifier, "cn.gaofeng.ambientops")
+
+        let urlTypes = try XCTUnwrap(bundle.infoDictionary?["CFBundleURLTypes"] as? [[String: Any]])
+        let urlSchemes = try XCTUnwrap(urlTypes.first?["CFBundleURLSchemes"] as? [String])
+        XCTAssertEqual(urlSchemes, ["ambientops"])
 
         let englishInfoPath = try XCTUnwrap(
             bundle.path(
@@ -104,6 +110,8 @@ final class AmbientOpsTests: XCTestCase {
             ) as? [String: String]
         )
 
+        XCTAssertEqual(englishInfo["CFBundleDisplayName"], "OPL Cockpit")
+        XCTAssertEqual(chineseInfo["CFBundleDisplayName"], "OPL Cockpit")
         XCTAssertTrue(
             try XCTUnwrap(englishInfo["NSLocalNetworkUsageDescription"])
                 .contains("Codex TPS")
