@@ -115,6 +115,27 @@ export function fleetLoadPresentation(fleet) {
   };
 }
 
+export function fleetMachineLaneVisual(machine) {
+  const tps = Math.max(0, Number(machine?.oneMinute?.tps ?? machine?.tps) || 0);
+  const sessions = Math.max(0, Number(machine?.activeSessions ?? machine?.sessions) || 0);
+  const cpu = finiteOrNull(machine?.cpuPercent ?? machine?.cpu);
+  const hasWork = tps > 0 || sessions > 0;
+  const tpsIntensity = clamp(Math.sqrt(tps / 60_000), 0, 1);
+  const sessionIntensity = clamp(sessions / 8, 0, 1);
+  const intensity = hasWork ? clamp(tpsIntensity * 0.75 + sessionIntensity * 0.25, 0, 1) : 0;
+
+  return {
+    tps,
+    sessions,
+    cpu,
+    intensity,
+    laneCount: hasWork ? Math.max(1, Math.min(4, Math.ceil(sessions || 1))) : 0,
+    packetCount: hasWork ? Math.max(3, Math.min(18, Math.round(3 + tpsIntensity * 15))) : 0,
+    travelMs: hasWork ? clamp(3_200 - tpsIntensity * 2_400, 800, 3_200) : 4_800,
+    pressure: cpu !== null && cpu >= 90 ? "critical" : cpu !== null && cpu >= 82 ? "high" : "normal",
+  };
+}
+
 export function normalizedLoadVisualState(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const definition = LOAD_STATE_BY_ID.get(value.state);

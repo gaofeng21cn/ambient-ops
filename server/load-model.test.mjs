@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   LOAD_VISUAL_MODEL_VERSION,
+  fleetMachineLaneVisual,
   loadFlowChannels,
   fleetLoadPresentation,
   loadParticlePhase,
@@ -227,4 +228,56 @@ test("normalizes fleet activity by live capacity while preserving exact aggregat
   assert.equal(load.sessions, 12);
   assert.ok(load.score > 0 && load.score < 1);
   assert.notEqual(load.state.id, "constrained");
+});
+
+test("gives each fleet machine independent speed, density, and session lanes", () => {
+  const light = fleetMachineLaneVisual({
+    oneMinute: { tps: 600 },
+    activeSessions: 1,
+    cpuPercent: 35,
+  });
+  const heavy = fleetMachineLaneVisual({
+    oneMinute: { tps: 54_000 },
+    activeSessions: 4,
+    cpuPercent: 35,
+  });
+
+  assert.ok(heavy.intensity > light.intensity);
+  assert.ok(heavy.travelMs < light.travelMs);
+  assert.ok(heavy.packetCount > light.packetCount);
+  assert.equal(light.laneCount, 1);
+  assert.equal(heavy.laneCount, 4);
+});
+
+test("uses CPU only for pressure treatment, not machine busy intensity", () => {
+  const normal = fleetMachineLaneVisual({
+    oneMinute: { tps: 12_000 },
+    activeSessions: 2,
+    cpuPercent: 40,
+  });
+  const pressured = fleetMachineLaneVisual({
+    oneMinute: { tps: 12_000 },
+    activeSessions: 2,
+    cpuPercent: 94,
+  });
+
+  assert.equal(normal.intensity, pressured.intensity);
+  assert.equal(normal.travelMs, pressured.travelMs);
+  assert.equal(normal.packetCount, pressured.packetCount);
+  assert.equal(normal.laneCount, pressured.laneCount);
+  assert.equal(normal.pressure, "normal");
+  assert.equal(pressured.pressure, "critical");
+});
+
+test("keeps idle machines still while preserving their measured CPU state", () => {
+  const idle = fleetMachineLaneVisual({
+    oneMinute: { tps: 0 },
+    activeSessions: 0,
+    cpuPercent: 85,
+  });
+
+  assert.equal(idle.intensity, 0);
+  assert.equal(idle.laneCount, 0);
+  assert.equal(idle.packetCount, 0);
+  assert.equal(idle.pressure, "high");
 });

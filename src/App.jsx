@@ -53,6 +53,7 @@ import {
   mergeHistorySamples,
 } from "./status-history.mjs";
 import {
+  fleetMachineLaneVisual,
   fleetLoadPresentation,
   loadParticlePhase,
   machineLoadPresentation,
@@ -570,8 +571,12 @@ function FleetPulseField({ state, machines, fleet, load }) {
   visualRef.current = visual;
   useFleetPulseMotion(canvasRef, visualRef, reduceMotion);
 
+  const nodeSummary = visualNodes
+    .map((node) => `${node.name}: ${formatTps(node.tps)} TPS, ${node.sessions} sessions`)
+    .join("; ");
+
   return (
-    <div className={`load-pixel-field fleet-pulse-field load-pixel-${state.id}`} role="img" aria-label={`${state.label} fleet activity animation across ${fleet.machineCount || machines.length} nodes`}>
+    <div className={`load-pixel-field fleet-pulse-field load-pixel-${state.id}`} role="img" aria-label={`${state.label} fleet activity across ${fleet.machineCount || machines.length} nodes. ${nodeSummary}`}>
       <canvas ref={canvasRef} className="load-pixel-canvas" aria-hidden="true" />
     </div>
   );
@@ -582,19 +587,22 @@ function fleetVisualNodes(machines) {
     const statusRank = { live: 0, stale: 1, error: 2 };
     const statusDifference = (statusRank[left.status] ?? 3) - (statusRank[right.status] ?? 3);
     if (statusDifference) return statusDifference;
-    return Number(right.oneMinute?.tps || 0) - Number(left.oneMinute?.tps || 0);
+    return String(left.machineName || left.machineId || "").localeCompare(String(right.machineName || right.machineId || ""));
   });
   if (ordered.length <= 6) return ordered.map(fleetNodeFromMachine);
   const groups = Array.from({ length: 6 }, () => []);
   ordered.forEach((machine, index) => groups[index % groups.length].push(machine));
-  return groups.map((group, index) => ({
-    id: `group-${index}`,
-    name: `${group.length} nodes`,
-    status: group.some((machine) => machine.status === "live") ? "live" : group.some((machine) => machine.status === "stale") ? "stale" : "error",
-    tps: group.reduce((total, machine) => total + Number(machine.oneMinute?.tps || 0), 0),
-    sessions: group.reduce((total, machine) => total + Number(machine.activeSessions || 0), 0),
-    cpu: averageReported(group.map((machine) => machine.cpuPercent)),
-  }));
+  return groups.map((group, index) => {
+    const tps = group.reduce((total, machine) => total + Number(machine.oneMinute?.tps || 0), 0);
+    const sessions = group.reduce((total, machine) => total + Number(machine.activeSessions || 0), 0);
+    const cpu = averageReported(group.map((machine) => machine.cpuPercent));
+    return {
+      id: `group-${index}`,
+      name: `${group.length} nodes`,
+      status: group.some((machine) => machine.status === "live") ? "live" : group.some((machine) => machine.status === "stale") ? "stale" : "error",
+      ...fleetMachineLaneVisual({ tps, sessions, cpu }),
+    };
+  });
 }
 
 function fleetNodeFromMachine(machine) {
@@ -602,9 +610,7 @@ function fleetNodeFromMachine(machine) {
     id: machine.machineId,
     name: machine.machineName,
     status: machine.status,
-    tps: Number(machine.oneMinute?.tps || 0),
-    sessions: Number(machine.activeSessions || 0),
-    cpu: finiteMetric(machine.cpuPercent),
+    ...fleetMachineLaneVisual(machine),
   };
 }
 
@@ -674,6 +680,11 @@ function paintFleetPulseCanvas(context, width, height, elapsed, visual, workstat
   const pixel = Math.max(2, Math.round(Math.min(width, height) / 85));
   drawWorkstationGrid(context, width, height, pixel, clampVisual(visual.activity));
   const nodes = visual.nodes.length ? visual.nodes : [{ id: "standby", status: "error", tps: 0, sessions: 0, cpu: null }];
+  if (nodes.length <= 3) {
+    drawFleetMachineRows(context, width, height, elapsed, nodes, workstation, pixel);
+    context.globalAlpha = 1;
+    return;
+  }
   const positions = fleetNodePositions(nodes.length, width, height);
   const links = fleetNodeLinks(nodes.length);
   const tempo = Math.max(.25, Number(visual.tempo) || .25);
@@ -686,12 +697,140 @@ function paintFleetPulseCanvas(context, width, height, elapsed, visual, workstat
     drawFleetLink(context, from, to, elapsed, tempo, density, active, pixel, fromIndex * 13 + toIndex);
   }
   positions.forEach((position, index) => {
-    drawFleetNodeFlow(context, position, nodes[index], elapsed, tempo, density, pixel, index, width);
+    drawFleetNodeFlow(context, position, nodes[index], elapsed, pixel, index, width);
   });
   positions.forEach((position, index) => {
     drawFleetNode(context, position, nodes[index], elapsed, workstation, pixel, index);
   });
   context.globalAlpha = 1;
+}
+
+function drawFleetMachineRows(context, width, height, elapsed, nodes, workstation, pixel) {
+  const rowHeight = height / Math.max(1, nodes.length);
+  nodes.forEach((node, index) => {
+    const top = index * rowHeight;
+    const centerY = top + rowHeight / 2;
+    if (index > 0) {
+      context.fillStyle = "rgba(103, 125, 138, .22)";
+      context.fillRect(0, Math.round(top), width, 1);
+    }
+    drawFleetMachineRow(context, width, rowHeight, centerY, elapsed, node, workstation, pixel, index);
+  });
+}
+
+function drawFleetMachineRow(context, width, rowHeight, centerY, elapsed, node, workstation, pixel, index) {
+  const active = nodeWorking(node);
+  const intensity = clampVisual(node.intensity);
+  const color = fleetNodeColor(node, active);
+  const textOpacity = node.status === "live" ? 1 : .46;
+  const labelWidth = Math.max(72, Math.min(118, width * .24));
+  const textX = Math.max(6, pixel * 2);
+  const nameSize = Math.max(7, Math.min(11, rowHeight * .17));
+  const nameWidth = Math.max(40, labelWidth - textX * 1.4);
+  const spriteSize = Math.max(24, Math.min(54, rowHeight * .5));
+  const nodeX = labelWidth + spriteSize * .55;
+  const laneStart = nodeX + spriteSize * .58;
+  const laneEnd = Math.max(laneStart + 12, width - Math.max(7, pixel * 3));
+
+  context.save();
+  context.globalAlpha = node.status === "live" ? .012 + intensity * .07 : .012;
+  context.fillStyle = color;
+  context.fillRect(0, centerY - rowHeight / 2 + 1, width, Math.max(1, rowHeight - 1));
+  context.globalAlpha = textOpacity;
+  context.font = `700 ${nameSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  context.textBaseline = "middle";
+  context.fillStyle = node.status === "live" ? "#dce6ec" : "#8e99a3";
+  context.fillText(fitCanvasLabel(context, node.name || "Unknown", nameWidth), textX, centerY);
+
+  const pulse = .5 + .5 * Math.sin(elapsed / Math.max(220, 920 - intensity * 520) + index * 1.4);
+  context.globalAlpha = node.status === "live" ? .08 + pulse * (.08 + intensity * .16) : .03;
+  context.fillStyle = color;
+  context.fillRect(nodeX - spriteSize * .58, centerY - spriteSize * .48, spriteSize * 1.16, spriteSize * .96);
+  context.globalAlpha = node.status === "live" ? .9 : .3;
+  if (workstation) {
+    context.imageSmoothingEnabled = false;
+    context.drawImage(workstation, Math.round(nodeX - spriteSize / 2), Math.round(centerY - spriteSize / 2), spriteSize, spriteSize);
+  } else {
+    drawFleetFallbackNode(context, { x: nodeX, y: centerY }, spriteSize, color, pixel);
+  }
+  context.globalAlpha = node.status === "live" ? .55 + pulse * .32 : .28;
+  context.strokeStyle = color;
+  context.strokeRect(
+    Math.round(nodeX - spriteSize * .48),
+    Math.round(centerY - spriteSize * .46),
+    Math.round(spriteSize * .96),
+    Math.round(spriteSize * .9),
+  );
+  if (active) {
+    const haloPhase = loadParticlePhase(elapsed, Math.max(520, node.travelMs * .72), index * .19);
+    const haloSize = spriteSize * (.78 + haloPhase * (.18 + intensity * .34));
+    context.globalAlpha = (1 - haloPhase) * (.14 + intensity * .38);
+    context.strokeStyle = color;
+    context.lineWidth = Math.max(1, pixel);
+    context.strokeRect(
+      Math.round(nodeX - haloSize / 2),
+      Math.round(centerY - haloSize * .46),
+      Math.round(haloSize),
+      Math.round(haloSize * .92),
+    );
+  }
+
+  if (active && node.laneCount > 0) {
+    const laneGap = Math.max(pixel * 1.7, Math.min(7, rowHeight * .1));
+    const packetsPerLane = Math.max(2, Math.min(10, Math.ceil(node.packetCount * .58)));
+    for (let lane = 0; lane < node.laneCount; lane += 1) {
+      const laneY = centerY + (lane - (node.laneCount - 1) / 2) * laneGap;
+      context.globalAlpha = .12 + intensity * .42;
+      context.strokeStyle = lane % 2 === 0 ? "#38bdf8" : color;
+      context.lineWidth = Math.max(1, pixel / 2);
+      context.beginPath();
+      context.moveTo(laneStart, laneY);
+      context.lineTo(laneEnd, laneY);
+      context.stroke();
+      for (let packet = 0; packet < packetsPerLane; packet += 1) {
+        const phase = loadParticlePhase(
+          elapsed,
+          node.travelMs * (1 + lane * .08),
+          packet / packetsPerLane + lane * .17 + index * .11,
+        );
+        const x = laneStart + (laneEnd - laneStart) * phase;
+        const packetColor = packet % 3 === 0 ? "#38bdf8" : color;
+        const trailWidth = pixel * (1 + intensity * (packet % 4 === 0 ? 7 : 4));
+        context.globalAlpha = .08 + intensity * .22;
+        context.fillStyle = packetColor;
+        context.fillRect(Math.round(x - trailWidth), Math.round(laneY - pixel / 2), trailWidth, Math.max(1, pixel));
+        context.globalAlpha = .36 + intensity * .48 + Math.sin(Math.PI * phase) * .16;
+        context.fillStyle = packetColor;
+        const packetWidth = Math.max(2, pixel * (packet % 4 === 0 ? 3 : 2));
+        context.fillRect(Math.round(x), Math.round(laneY - pixel / 2), packetWidth, Math.max(1, pixel));
+      }
+    }
+  } else {
+    context.globalAlpha = .2;
+    context.strokeStyle = "#59636d";
+    context.setLineDash([pixel * 2, pixel * 2]);
+    context.beginPath();
+    context.moveTo(laneStart, centerY);
+    context.lineTo(laneEnd, centerY);
+    context.stroke();
+    context.setLineDash([]);
+  }
+  context.restore();
+}
+
+function fitCanvasLabel(context, value, maxWidth) {
+  const label = String(value || "");
+  if (context.measureText(label).width <= maxWidth) return label;
+  let end = label.length;
+  while (end > 1 && context.measureText(`${label.slice(0, end)}...`).width > maxWidth) end -= 1;
+  return `${label.slice(0, end)}...`;
+}
+
+function fleetNodeColor(node, active) {
+  if (node.pressure === "critical") return "#ef6a62";
+  if (node.pressure === "high") return "#f59e0b";
+  if (active) return "#25d06f";
+  return node.status === "stale" ? "#8e99a3" : "#59636d";
 }
 
 function fleetNodePositions(count, width, height) {
@@ -761,17 +900,17 @@ function drawFleetLink(context, from, to, elapsed, tempo, density, active, pixel
   context.restore();
 }
 
-function drawFleetNodeFlow(context, position, node, elapsed, tempo, density, pixel, index, width) {
+function drawFleetNodeFlow(context, position, node, elapsed, pixel, index, width) {
   if (!nodeWorking(node)) return;
-  const intensity = clampVisual(Math.sqrt(Math.max(0, node.tps) / 60_000) * .75 + Math.min(1, node.sessions / 8) * .25);
+  const intensity = clampVisual(node.intensity);
   const spriteSize = position.size || 54;
   const laneY = position.y + spriteSize * .37;
   const left = Math.max(pixel * 3, position.x - spriteSize * (.72 + intensity * .18));
   const right = Math.min(width - pixel * 3, position.x + spriteSize * (.72 + intensity * .18));
   const nodeLeft = position.x - spriteSize * .35;
   const nodeRight = position.x + spriteSize * .35;
-  const duration = Math.max(420, 1_650 / Math.max(.4, tempo));
-  const packetCount = Math.max(2, Math.round(2 + density * 4 + intensity * 2));
+  const duration = Math.max(420, Number(node.travelMs) || 3_200);
+  const packetCount = Math.max(2, Math.min(10, Math.round(2 + node.packetCount * .45)));
   const pressureColor = node.cpu !== null && node.cpu >= 82 ? "#f59e0b" : "#39d891";
 
   context.save();
@@ -817,8 +956,8 @@ function drawFleetNode(context, position, node, elapsed, workstation, pixel, ind
   const active = nodeWorking(node);
   const pressured = node.cpu !== null && node.cpu >= 82;
   const constrained = active && node.cpu !== null && node.cpu >= 90;
-  const color = constrained ? "#ef6a62" : pressured ? "#f59e0b" : active ? "#25d06f" : node.status === "stale" ? "#8e99a3" : "#59636d";
-  const intensity = clampVisual(Math.sqrt(Math.max(0, node.tps) / 60_000) * .75 + Math.min(1, node.sessions / 8) * .25);
+  const color = constrained ? "#ef6a62" : pressured ? "#f59e0b" : fleetNodeColor(node, active);
+  const intensity = clampVisual(node.intensity);
   const pulse = .5 + .5 * Math.sin(elapsed / Math.max(210, 900 - intensity * 470) + index * 1.7);
   const spriteSize = position.size || 54;
   context.save();
