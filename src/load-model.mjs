@@ -115,7 +115,7 @@ export function fleetLoadPresentation(fleet) {
   };
 }
 
-export function fleetMachineLaneVisual(machine) {
+export function fleetMachineVisual(machine) {
   const tps = Math.max(0, Number(machine?.oneMinute?.tps ?? machine?.tps) || 0);
   const sessions = Math.max(0, Number(machine?.activeSessions ?? machine?.sessions) || 0);
   const cpu = finiteOrNull(machine?.cpuPercent ?? machine?.cpu);
@@ -129,7 +129,8 @@ export function fleetMachineLaneVisual(machine) {
     sessions,
     cpu,
     intensity,
-    laneCount: hasWork ? Math.max(1, Math.min(4, Math.ceil(sessions || 1))) : 0,
+    loadClass: !hasWork ? "idle" : intensity < 0.24 ? "light" : intensity < 0.62 ? "active" : "heavy",
+    trackCount: hasWork ? Math.max(1, Math.min(4, Math.ceil(sessions || 1))) : 0,
     packetCount: hasWork ? Math.max(3, Math.min(18, Math.round(3 + tpsIntensity * 15))) : 0,
     travelMs: hasWork ? clamp(3_200 - tpsIntensity * 2_400, 800, 3_200) : 4_800,
     pressure: cpu !== null && cpu >= 90 ? "critical" : cpu !== null && cpu >= 82 ? "high" : "normal",

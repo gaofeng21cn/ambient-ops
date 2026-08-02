@@ -53,7 +53,7 @@ import {
   mergeHistorySamples,
 } from "./status-history.mjs";
 import {
-  fleetMachineLaneVisual,
+  fleetMachineVisual,
   fleetLoadPresentation,
   loadParticlePhase,
   machineLoadPresentation,
@@ -600,7 +600,7 @@ function fleetVisualNodes(machines) {
       id: `group-${index}`,
       name: `${group.length} nodes`,
       status: group.some((machine) => machine.status === "live") ? "live" : group.some((machine) => machine.status === "stale") ? "stale" : "error",
-      ...fleetMachineLaneVisual({ tps, sessions, cpu }),
+      ...fleetMachineVisual({ tps, sessions, cpu }),
     };
   });
 }
@@ -610,7 +610,7 @@ function fleetNodeFromMachine(machine) {
     id: machine.machineId,
     name: machine.machineName,
     status: machine.status,
-    ...fleetMachineLaneVisual(machine),
+    ...fleetMachineVisual(machine),
   };
 }
 
@@ -680,21 +680,22 @@ function paintFleetPulseCanvas(context, width, height, elapsed, visual, workstat
   const pixel = Math.max(2, Math.round(Math.min(width, height) / 85));
   drawWorkstationGrid(context, width, height, pixel, clampVisual(visual.activity));
   const nodes = visual.nodes.length ? visual.nodes : [{ id: "standby", status: "error", tps: 0, sessions: 0, cpu: null }];
-  if (nodes.length <= 3) {
-    drawFleetMachineRows(context, width, height, elapsed, nodes, workstation, pixel);
-    context.globalAlpha = 1;
-    return;
-  }
   const positions = fleetNodePositions(nodes.length, width, height);
   const links = fleetNodeLinks(nodes.length);
-  const tempo = Math.max(.25, Number(visual.tempo) || .25);
-  const density = clampVisual(visual.taskDensity);
 
   for (const [fromIndex, toIndex] of links) {
     const from = positions[fromIndex];
     const to = positions[toIndex];
-    const active = nodeWorking(nodes[fromIndex]) || nodeWorking(nodes[toIndex]);
-    drawFleetLink(context, from, to, elapsed, tempo, density, active, pixel, fromIndex * 13 + toIndex);
+    drawFleetLink(
+      context,
+      from,
+      to,
+      nodes[fromIndex],
+      nodes[toIndex],
+      elapsed,
+      pixel,
+      fromIndex * 13 + toIndex,
+    );
   }
   positions.forEach((position, index) => {
     drawFleetNodeFlow(context, position, nodes[index], elapsed, pixel, index, width);
@@ -703,119 +704,6 @@ function paintFleetPulseCanvas(context, width, height, elapsed, visual, workstat
     drawFleetNode(context, position, nodes[index], elapsed, workstation, pixel, index);
   });
   context.globalAlpha = 1;
-}
-
-function drawFleetMachineRows(context, width, height, elapsed, nodes, workstation, pixel) {
-  const rowHeight = height / Math.max(1, nodes.length);
-  nodes.forEach((node, index) => {
-    const top = index * rowHeight;
-    const centerY = top + rowHeight / 2;
-    if (index > 0) {
-      context.fillStyle = "rgba(103, 125, 138, .22)";
-      context.fillRect(0, Math.round(top), width, 1);
-    }
-    drawFleetMachineRow(context, width, rowHeight, centerY, elapsed, node, workstation, pixel, index);
-  });
-}
-
-function drawFleetMachineRow(context, width, rowHeight, centerY, elapsed, node, workstation, pixel, index) {
-  const active = nodeWorking(node);
-  const intensity = clampVisual(node.intensity);
-  const color = fleetNodeColor(node, active);
-  const textOpacity = node.status === "live" ? 1 : .46;
-  const labelWidth = Math.max(72, Math.min(118, width * .24));
-  const textX = Math.max(6, pixel * 2);
-  const nameSize = Math.max(7, Math.min(11, rowHeight * .17));
-  const nameWidth = Math.max(40, labelWidth - textX * 1.4);
-  const spriteSize = Math.max(24, Math.min(54, rowHeight * .5));
-  const nodeX = labelWidth + spriteSize * .55;
-  const laneStart = nodeX + spriteSize * .58;
-  const laneEnd = Math.max(laneStart + 12, width - Math.max(7, pixel * 3));
-
-  context.save();
-  context.globalAlpha = node.status === "live" ? .012 + intensity * .07 : .012;
-  context.fillStyle = color;
-  context.fillRect(0, centerY - rowHeight / 2 + 1, width, Math.max(1, rowHeight - 1));
-  context.globalAlpha = textOpacity;
-  context.font = `700 ${nameSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-  context.textBaseline = "middle";
-  context.fillStyle = node.status === "live" ? "#dce6ec" : "#8e99a3";
-  context.fillText(fitCanvasLabel(context, node.name || "Unknown", nameWidth), textX, centerY);
-
-  const pulse = .5 + .5 * Math.sin(elapsed / Math.max(220, 920 - intensity * 520) + index * 1.4);
-  context.globalAlpha = node.status === "live" ? .08 + pulse * (.08 + intensity * .16) : .03;
-  context.fillStyle = color;
-  context.fillRect(nodeX - spriteSize * .58, centerY - spriteSize * .48, spriteSize * 1.16, spriteSize * .96);
-  context.globalAlpha = node.status === "live" ? .9 : .3;
-  if (workstation) {
-    context.imageSmoothingEnabled = false;
-    context.drawImage(workstation, Math.round(nodeX - spriteSize / 2), Math.round(centerY - spriteSize / 2), spriteSize, spriteSize);
-  } else {
-    drawFleetFallbackNode(context, { x: nodeX, y: centerY }, spriteSize, color, pixel);
-  }
-  context.globalAlpha = node.status === "live" ? .55 + pulse * .32 : .28;
-  context.strokeStyle = color;
-  context.strokeRect(
-    Math.round(nodeX - spriteSize * .48),
-    Math.round(centerY - spriteSize * .46),
-    Math.round(spriteSize * .96),
-    Math.round(spriteSize * .9),
-  );
-  if (active) {
-    const haloPhase = loadParticlePhase(elapsed, Math.max(520, node.travelMs * .72), index * .19);
-    const haloSize = spriteSize * (.78 + haloPhase * (.18 + intensity * .34));
-    context.globalAlpha = (1 - haloPhase) * (.14 + intensity * .38);
-    context.strokeStyle = color;
-    context.lineWidth = Math.max(1, pixel);
-    context.strokeRect(
-      Math.round(nodeX - haloSize / 2),
-      Math.round(centerY - haloSize * .46),
-      Math.round(haloSize),
-      Math.round(haloSize * .92),
-    );
-  }
-
-  if (active && node.laneCount > 0) {
-    const laneGap = Math.max(pixel * 1.7, Math.min(7, rowHeight * .1));
-    const packetsPerLane = Math.max(2, Math.min(10, Math.ceil(node.packetCount * .58)));
-    for (let lane = 0; lane < node.laneCount; lane += 1) {
-      const laneY = centerY + (lane - (node.laneCount - 1) / 2) * laneGap;
-      context.globalAlpha = .12 + intensity * .42;
-      context.strokeStyle = lane % 2 === 0 ? "#38bdf8" : color;
-      context.lineWidth = Math.max(1, pixel / 2);
-      context.beginPath();
-      context.moveTo(laneStart, laneY);
-      context.lineTo(laneEnd, laneY);
-      context.stroke();
-      for (let packet = 0; packet < packetsPerLane; packet += 1) {
-        const phase = loadParticlePhase(
-          elapsed,
-          node.travelMs * (1 + lane * .08),
-          packet / packetsPerLane + lane * .17 + index * .11,
-        );
-        const x = laneStart + (laneEnd - laneStart) * phase;
-        const packetColor = packet % 3 === 0 ? "#38bdf8" : color;
-        const trailWidth = pixel * (1 + intensity * (packet % 4 === 0 ? 7 : 4));
-        context.globalAlpha = .08 + intensity * .22;
-        context.fillStyle = packetColor;
-        context.fillRect(Math.round(x - trailWidth), Math.round(laneY - pixel / 2), trailWidth, Math.max(1, pixel));
-        context.globalAlpha = .36 + intensity * .48 + Math.sin(Math.PI * phase) * .16;
-        context.fillStyle = packetColor;
-        const packetWidth = Math.max(2, pixel * (packet % 4 === 0 ? 3 : 2));
-        context.fillRect(Math.round(x), Math.round(laneY - pixel / 2), packetWidth, Math.max(1, pixel));
-      }
-    }
-  } else {
-    context.globalAlpha = .2;
-    context.strokeStyle = "#59636d";
-    context.setLineDash([pixel * 2, pixel * 2]);
-    context.beginPath();
-    context.moveTo(laneStart, centerY);
-    context.lineTo(laneEnd, centerY);
-    context.stroke();
-    context.setLineDash([]);
-  }
-  context.restore();
 }
 
 function fitCanvasLabel(context, value, maxWidth) {
@@ -829,8 +717,20 @@ function fitCanvasLabel(context, value, maxWidth) {
 function fleetNodeColor(node, active) {
   if (node.pressure === "critical") return "#ef6a62";
   if (node.pressure === "high") return "#f59e0b";
-  if (active) return "#25d06f";
+  if (node.loadClass === "heavy") return "#f7c45c";
+  if (node.loadClass === "active") return "#39d891";
+  if (node.loadClass === "light") return "#38bdf8";
+  if (active) return "#39d891";
   return node.status === "stale" ? "#8e99a3" : "#59636d";
+}
+
+function fleetNodeSecondaryColor(node, active) {
+  if (node.pressure === "critical") return "#ffbd58";
+  if (node.pressure === "high") return "#ef6a62";
+  if (node.loadClass === "heavy") return "#ff8f70";
+  if (node.loadClass === "active") return "#38bdf8";
+  if (node.loadClass === "light") return "#8bd7ff";
+  return active ? "#39d891" : "#59636d";
 }
 
 function fleetNodePositions(count, width, height) {
@@ -852,6 +752,7 @@ function fleetNodePositions(count, width, height) {
       x: width * (.12 + (column + .5) * .76 / Math.max(1, rowCount)),
       y: row === 0 ? top : bottom,
       size,
+      labelWidth: width * .66 / Math.max(1, rowCount),
     };
   });
 }
@@ -869,16 +770,28 @@ function fleetNodeLinks(count) {
   return links;
 }
 
-function drawFleetLink(context, from, to, elapsed, tempo, density, active, pixel, seed) {
+function drawFleetLink(context, from, to, fromNode, toNode, elapsed, pixel, seed) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const distance = Math.hypot(dx, dy);
   if (distance < 1) return;
   const start = { x: from.x + dx * .14, y: from.y + dy * .14 };
   const end = { x: to.x - dx * .14, y: to.y - dy * .14 };
+  const fromActive = nodeWorking(fromNode);
+  const toActive = nodeWorking(toNode);
+  const active = fromActive || toActive;
+  const intensity = Math.max(clampVisual(fromNode.intensity), clampVisual(toNode.intensity));
+  const duration = Math.max(520, (Number(fromNode.travelMs) + Number(toNode.travelMs)) / 2 || 2_600);
+  const packetCount = Math.max(0, Math.min(14, Math.round((Number(fromNode.packetCount) + Number(toNode.packetCount)) * .3)));
+  const fromColor = fleetNodeColor(fromNode, fromActive);
+  const toColor = fleetNodeColor(toNode, toActive);
   context.save();
-  context.strokeStyle = active ? "rgba(57, 216, 145, .5)" : "rgba(91, 105, 116, .18)";
-  context.lineWidth = active ? Math.max(2, pixel) : 1;
+  const gradient = context.createLinearGradient(start.x, start.y, end.x, end.y);
+  gradient.addColorStop(0, fromColor);
+  gradient.addColorStop(1, toColor);
+  context.strokeStyle = active ? gradient : "rgba(91, 105, 116, .18)";
+  context.globalAlpha = active ? .22 + intensity * .34 : 1;
+  context.lineWidth = active ? Math.max(1, pixel * (.65 + intensity * .65)) : 1;
   context.setLineDash([pixel * 3, pixel * 2]);
   context.beginPath();
   context.moveTo(start.x, start.y);
@@ -886,14 +799,15 @@ function drawFleetLink(context, from, to, elapsed, tempo, density, active, pixel
   context.stroke();
   context.setLineDash([]);
   if (active) {
-    const packetCount = Math.max(3, Math.round(4 + density * 8));
     for (let index = 0; index < packetCount; index += 1) {
-      const phase = loadParticlePhase(elapsed, Math.max(520, 2_600 / tempo), index / packetCount + seed * .071);
+      const phase = loadParticlePhase(elapsed, duration * (1 + (index % 3) * .09), index / packetCount + seed * .071);
       const x = start.x + (end.x - start.x) * phase;
       const y = start.y + (end.y - start.y) * phase;
-      context.globalAlpha = .35 + .65 * Math.sin(Math.PI * phase);
-      context.fillStyle = index % 3 === 0 ? "#38bdf8" : "#39d891";
-      const packetSize = pixel * (index % 4 === 0 ? 3 : 2);
+      context.globalAlpha = (.28 + intensity * .64) * Math.sin(Math.PI * phase);
+      context.fillStyle = index % 2 === 0 ? fromColor : toColor;
+      const packetSize = pixel * (index % 4 === 0 ? 2.5 : 1.5);
+      const tail = Math.max(pixel, Math.round(pixel * (1 + intensity * 4)));
+      context.fillRect(Math.round(x - tail), Math.round(y - pixel / 2), tail, pixel);
       context.fillRect(Math.round(x), Math.round(y - pixel / 2), packetSize, pixel * 2);
     }
   }
@@ -904,66 +818,77 @@ function drawFleetNodeFlow(context, position, node, elapsed, pixel, index, width
   if (!nodeWorking(node)) return;
   const intensity = clampVisual(node.intensity);
   const spriteSize = position.size || 54;
-  const laneY = position.y + spriteSize * .37;
+  const baseY = position.y + spriteSize * .37;
   const left = Math.max(pixel * 3, position.x - spriteSize * (.72 + intensity * .18));
   const right = Math.min(width - pixel * 3, position.x + spriteSize * (.72 + intensity * .18));
   const nodeLeft = position.x - spriteSize * .35;
   const nodeRight = position.x + spriteSize * .35;
   const duration = Math.max(420, Number(node.travelMs) || 3_200);
-  const packetCount = Math.max(2, Math.min(10, Math.round(2 + node.packetCount * .45)));
-  const pressureColor = node.cpu !== null && node.cpu >= 82 ? "#f59e0b" : "#39d891";
+  const trackCount = Math.max(1, Math.min(4, Number(node.trackCount) || 1));
+  const packetsPerTrack = Math.max(1, Math.min(7, Math.ceil(node.packetCount / trackCount)));
+  const primaryColor = fleetNodeColor(node, true);
+  const secondaryColor = fleetNodeSecondaryColor(node, true);
 
   context.save();
-  context.lineWidth = Math.max(1, pixel);
-  context.strokeStyle = "rgba(56, 189, 248, .34)";
-  context.beginPath();
-  context.moveTo(left, laneY);
-  context.lineTo(nodeLeft, laneY);
-  context.stroke();
-  context.strokeStyle = node.cpu !== null && node.cpu >= 82 ? "rgba(245, 158, 11, .42)" : "rgba(57, 216, 145, .42)";
-  context.beginPath();
-  context.moveTo(nodeRight, laneY);
-  context.lineTo(right, laneY);
-  context.stroke();
+  for (let track = 0; track < trackCount; track += 1) {
+    const trackY = baseY + (track - (trackCount - 1) / 2) * Math.max(pixel * 1.5, spriteSize * .055);
+    context.globalAlpha = .1 + intensity * .34;
+    context.lineWidth = Math.max(1, pixel * .6);
+    context.strokeStyle = track % 2 === 0 ? secondaryColor : primaryColor;
+    context.beginPath();
+    context.moveTo(left, trackY);
+    context.lineTo(nodeLeft, trackY);
+    context.moveTo(nodeRight, trackY);
+    context.lineTo(right, trackY);
+    context.stroke();
 
-  for (let packet = 0; packet < packetCount; packet += 1) {
-    const phase = loadParticlePhase(elapsed, duration, packet / packetCount + index * .19);
-    const inboundX = left + (nodeLeft - left) * phase;
-    const outboundX = nodeRight + (right - nodeRight) * phase;
-    const packetHeight = pixel * (packet % 3 === 0 ? 3 : 2);
-    context.globalAlpha = .45 + .55 * Math.sin(Math.PI * phase);
-    context.fillStyle = "#38bdf8";
-    context.fillRect(Math.round(inboundX), Math.round(laneY - packetHeight / 2), pixel * 3, packetHeight);
-    context.fillStyle = pressureColor;
-    context.fillRect(Math.round(outboundX), Math.round(laneY - packetHeight / 2), pixel * 3, packetHeight);
+    for (let packet = 0; packet < packetsPerTrack; packet += 1) {
+      const phase = loadParticlePhase(elapsed, duration * (1 + track * .08), packet / packetsPerTrack + track * .17 + index * .19);
+      const inboundX = left + (nodeLeft - left) * phase;
+      const outboundX = nodeRight + (right - nodeRight) * phase;
+      const packetHeight = Math.max(1, pixel * (packet % 3 === 0 ? 2 : 1));
+      const tail = Math.max(pixel, Math.round(pixel * (1 + intensity * (packet % 3 === 0 ? 5 : 3))));
+      context.globalAlpha = .08 + intensity * .23;
+      context.fillStyle = secondaryColor;
+      context.fillRect(Math.round(inboundX - tail), Math.round(trackY - packetHeight / 2), tail, packetHeight);
+      context.fillStyle = primaryColor;
+      context.fillRect(Math.round(outboundX - tail), Math.round(trackY - packetHeight / 2), tail, packetHeight);
+      context.globalAlpha = .35 + intensity * .55 + Math.sin(Math.PI * phase) * .1;
+      context.fillStyle = secondaryColor;
+      context.fillRect(Math.round(inboundX), Math.round(trackY - packetHeight / 2), pixel * 2, packetHeight);
+      context.fillStyle = primaryColor;
+      context.fillRect(Math.round(outboundX), Math.round(trackY - packetHeight / 2), pixel * 2, packetHeight);
+    }
   }
 
-  const pulsePhase = loadParticlePhase(elapsed, Math.max(700, duration * 1.15), index * .37);
-  const pulseSize = spriteSize * (.56 + pulsePhase * .38);
-  context.globalAlpha = (1 - pulsePhase) * (.25 + intensity * .28);
-  context.strokeStyle = pressureColor;
-  context.lineWidth = Math.max(1, pixel);
-  context.strokeRect(
-    Math.round(position.x - pulseSize / 2),
-    Math.round(position.y - pulseSize * .47),
-    Math.round(pulseSize),
-    Math.round(pulseSize * .94),
-  );
+  const haloCount = Math.max(1, Math.min(3, Math.ceil(trackCount / 2)));
+  for (let halo = 0; halo < haloCount; halo += 1) {
+    const pulsePhase = loadParticlePhase(elapsed, Math.max(520, duration * .9), index * .37 + halo / haloCount);
+    const pulseSize = spriteSize * (.56 + pulsePhase * (.34 + intensity * .25));
+    context.globalAlpha = (1 - pulsePhase) * (.1 + intensity * .32);
+    context.strokeStyle = halo % 2 === 0 ? primaryColor : secondaryColor;
+    context.lineWidth = Math.max(1, pixel * .65);
+    context.strokeRect(
+      Math.round(position.x - pulseSize / 2),
+      Math.round(position.y - pulseSize * .47),
+      Math.round(pulseSize),
+      Math.round(pulseSize * .94),
+    );
+  }
   context.restore();
 }
 
 function drawFleetNode(context, position, node, elapsed, workstation, pixel, index) {
   const active = nodeWorking(node);
-  const pressured = node.cpu !== null && node.cpu >= 82;
-  const constrained = active && node.cpu !== null && node.cpu >= 90;
-  const color = constrained ? "#ef6a62" : pressured ? "#f59e0b" : fleetNodeColor(node, active);
+  const color = fleetNodeColor(node, active);
+  const secondaryColor = fleetNodeSecondaryColor(node, active);
   const intensity = clampVisual(node.intensity);
   const pulse = .5 + .5 * Math.sin(elapsed / Math.max(210, 900 - intensity * 470) + index * 1.7);
   const spriteSize = position.size || 54;
   context.save();
   context.globalAlpha = node.status === "live" ? .96 : .34;
   context.fillStyle = color;
-  context.globalAlpha *= active ? .09 + pulse * .12 : .035;
+  context.globalAlpha *= active ? .06 + intensity * .13 + pulse * (.05 + intensity * .08) : .035;
   context.fillRect(position.x - spriteSize * .58, position.y - spriteSize * .52, spriteSize * 1.16, spriteSize * .96);
   context.globalAlpha = node.status === "live" ? .92 : .32;
   if (workstation) {
@@ -988,18 +913,20 @@ function drawFleetNode(context, position, node, elapsed, workstation, pixel, ind
   if (active) {
     const scanPhase = loadParticlePhase(elapsed, Math.max(340, 1_050 - intensity * 430), index * .23);
     context.globalAlpha = .42 + pulse * .4;
-    context.fillStyle = constrained ? "#ef6a62" : pressured ? "#f59e0b" : "#39d891";
+    context.fillStyle = color;
     context.fillRect(
       Math.round(position.x - spriteSize * .19),
       Math.round(position.y - spriteSize * .25 + spriteSize * .18 * scanPhase),
       Math.round(spriteSize * .34),
       Math.max(1, pixel),
     );
-    for (let block = 0; block < 4; block += 1) {
+    const blockCount = Math.max(2, Math.min(7, Math.round(2 + intensity * 5)));
+    for (let block = 0; block < blockCount; block += 1) {
       const blockPhase = loadParticlePhase(elapsed, Math.max(420, 1_420 - intensity * 520), block * .21 + index * .13);
       context.globalAlpha = .26 + blockPhase * .58;
+      context.fillStyle = block % 3 === 0 ? secondaryColor : color;
       context.fillRect(
-        Math.round(position.x - spriteSize * .18 + block * pixel * 2.4),
+        Math.round(position.x - spriteSize * .18 + block * pixel * 1.65),
         Math.round(position.y + spriteSize * .2),
         pixel * 2,
         pixel,
@@ -1008,6 +935,14 @@ function drawFleetNode(context, position, node, elapsed, workstation, pixel, ind
     context.globalAlpha = .45 + pulse * .5;
     context.fillRect(Math.round(position.x - spriteSize * .2), Math.round(position.y - spriteSize * .13), pixel * 2, pixel);
   }
+  const labelY = position.y + spriteSize * .63;
+  const labelWidth = Math.max(44, Number(position.labelWidth) || spriteSize * 1.4);
+  context.globalAlpha = node.status === "live" ? .62 + intensity * .26 : .34;
+  context.fillStyle = color;
+  context.font = `700 ${Math.max(7, Math.min(10, spriteSize * .12))}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(fitCanvasLabel(context, node.name || "Unknown", labelWidth), position.x, labelY);
   context.restore();
 }
 
