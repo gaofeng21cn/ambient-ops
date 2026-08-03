@@ -13,7 +13,7 @@ struct AmbientStatus: Codable, Hashable, Sendable {
     let capabilities: ServerCapabilities
     let network: NetworkStatus
     let codex: CodexStatus
-    let fleet: FleetStatus?
+    var fleet: FleetStatus? = nil
     let machines: [MachineStatus]
 
     var generatedDate: Date? {
@@ -88,7 +88,6 @@ struct AmbientStatus: Codable, Hashable, Sendable {
                 liveMachineCount: 0,
                 staleMachineCount: 0
             ),
-            fleet: nil,
             machines: []
         )
     }
