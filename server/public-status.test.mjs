@@ -33,7 +33,7 @@ test("projects the dashboard into a versioned mobile contract", () => {
       cpuPercent: 97,
       oplFleet: {
         schema: "opl_fleet_agent_telemetry.v1",
-        product: "OPL Fleet Agent · Codex TPS",
+        product: "OPL Fleet Agent",
         stableNodeID: "studio",
         agentVersion: "0.2.27",
         modes: ["local", "direct", "fleet"],
@@ -69,7 +69,7 @@ test("projects the dashboard into a versioned mobile contract", () => {
   assert.equal(status.capabilities.liveActivityPush, false);
   assert.equal(status.machines[0].loadVisualState.modelVersion, 1);
   assert.equal(status.machines[0].loadVisualState.state, "constrained");
-  assert.equal(status.machines[0].oplFleet.product, "OPL Fleet Agent · Codex TPS");
+  assert.equal(status.machines[0].oplFleet.product, "OPL Fleet Agent");
   assert.equal(status.machines[0].oplFleet.authority, "node_agent");
   assert.ok(status.machines[0].loadVisualState.taskDensity > 0.8);
   assert.deepEqual(status.machines[0].tpsHistory, [

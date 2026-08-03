@@ -21,7 +21,7 @@ test("normalizes a machine snapshot without retaining unknown content", () => {
   assert.equal(snapshot.oplFleet, null);
 });
 
-test("normalizes the strict OPL Fleet Agent telemetry envelope", () => {
+test("normalizes the current OPL Fleet Agent telemetry envelope", () => {
   const snapshot = normalizeSnapshot("primary-mac", {
     schemaVersion: 3,
     machineName: "Primary Mac",
@@ -30,7 +30,7 @@ test("normalizes the strict OPL Fleet Agent telemetry envelope", () => {
     oneMinute: { tps: 12.5 },
     oplFleet: {
       schema: "opl_fleet_agent_telemetry.v1",
-      product: "OPL Fleet Agent · Codex TPS",
+      product: "OPL Fleet Agent",
       stableNodeID: "primary-mac",
       agentVersion: "0.2.27",
       modes: ["local", "direct", "fleet"],
@@ -48,7 +48,7 @@ test("normalizes the strict OPL Fleet Agent telemetry envelope", () => {
 
   assert.deepEqual(snapshot.oplFleet, {
     schema: "opl_fleet_agent_telemetry.v1",
-    product: "OPL Fleet Agent · Codex TPS",
+    product: "OPL Fleet Agent",
     stableNodeID: "primary-mac",
     agentVersion: "0.2.27",
     modes: ["local", "direct", "fleet"],
@@ -62,6 +62,23 @@ test("normalizes the strict OPL Fleet Agent telemetry envelope", () => {
     ],
     authority: "node_agent",
   });
+});
+
+test("accepts the legacy Codex TPS wire identity as OPL Fleet Agent", () => {
+  const snapshot = normalizeSnapshot("legacy-mac", {
+    schemaVersion: 3,
+    oplFleet: {
+      schema: "opl_fleet_agent_telemetry.v1",
+      product: "OPL Fleet Agent · Codex TPS",
+      stableNodeID: "legacy-mac",
+      agentVersion: "0.2.29",
+      modes: ["local", "direct", "fleet"],
+      capabilities: ["local_codex_telemetry", "host_dashboard"],
+      authority: "node_agent",
+    },
+  });
+
+  assert.equal(snapshot.oplFleet.product, "OPL Fleet Agent");
 });
 
 test("rejects invalid OPL Fleet Agent identity, authority, and unknown fields", () => {
@@ -99,6 +116,13 @@ test("rejects invalid OPL Fleet Agent identity, authority, and unknown fields", 
       oplFleet: { ...valid.oplFleet, dispatch: true },
     }),
     /unknown fields: dispatch/,
+  );
+  assert.throws(
+    () => normalizeSnapshot("primary-mac", {
+      ...valid,
+      oplFleet: { ...valid.oplFleet, product: "Unknown Fleet Agent" },
+    }),
+    /product/,
   );
 });
 

@@ -1,7 +1,11 @@
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const PET_STATES = new Set(["idle", "running", "waiting", "review", "failed"]);
 const OPL_FLEET_SCHEMA = "opl_fleet_agent_telemetry.v1";
-const OPL_FLEET_PRODUCT = "OPL Fleet Agent · Codex TPS";
+const OPL_FLEET_PRODUCT = "OPL Fleet Agent";
+const OPL_FLEET_PRODUCTS = new Set([
+  OPL_FLEET_PRODUCT,
+  "OPL Fleet Agent · Codex TPS",
+]);
 const OPL_FLEET_AUTHORITY = "node_agent";
 const OPL_FLEET_MODES = new Set(["local", "direct", "fleet"]);
 const OPL_FLEET_CAPABILITIES = new Set([
@@ -85,7 +89,7 @@ function normalizeOplFleet(machineId, payload) {
   if (envelope.schema !== OPL_FLEET_SCHEMA) {
     throw new TypeError("Unsupported oplFleet schema");
   }
-  if (envelope.product !== OPL_FLEET_PRODUCT) {
+  if (!OPL_FLEET_PRODUCTS.has(envelope.product)) {
     throw new TypeError("Unsupported oplFleet product");
   }
   if (envelope.stableNodeID !== machineId) {
