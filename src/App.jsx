@@ -276,6 +276,14 @@ function Dashboard({ status, connection, displayConnection }) {
   }, [machineFollowMode, selectedMachineId]);
 
   useEffect(() => {
+    if (machineFollowMode !== "fixed" || !selectedMachineId || selectedMachine) return;
+    const fallback = selectDisplayMachine(status.machines, null, "auto");
+    if (!fallback) return;
+    setSelectedMachineId(fallback.machineId);
+    setMachineFollowMode("auto");
+  }, [machineFollowMode, selectedMachine, selectedMachineId, status.machines]);
+
+  useEffect(() => {
     localStorage.setItem("ambient-ops-display-scope", displayScope);
   }, [displayScope]);
 
