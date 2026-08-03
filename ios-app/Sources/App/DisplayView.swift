@@ -2,7 +2,7 @@ import Charts
 import SwiftUI
 
 struct DisplayView: View {
-    @Bindable var store: AmbientOpsStore
+    @Bindable var store: OPLFleetCockpitStore
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var largeCanvas: Bool { horizontalSizeClass == .regular }
@@ -38,7 +38,7 @@ struct DisplayView: View {
                         if let machine = store.selectedMachine {
                             PetDisplay(
                                 machine: machine,
-                                serverURL: AmbientOpsClient.normalizedServerURL(store.serverAddress),
+                                serverURL: OPLFleetCockpitClient.normalizedServerURL(store.serverAddress),
                                 landscape: landscape
                             )
                         } else {

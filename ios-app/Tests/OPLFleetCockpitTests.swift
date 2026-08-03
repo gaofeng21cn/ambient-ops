@@ -1,7 +1,7 @@
 import XCTest
-@testable import AmbientOps
+@testable import OPLFleetCockpit
 
-final class AmbientOpsTests: XCTestCase {
+final class OPLFleetCockpitTests: XCTestCase {
     func testTPSFormattingMatchesTheWebDisplay() {
         XCTAssertEqual(MetricFormat.tps(56_840), "56,840")
         XCTAssertEqual(MetricFormat.tps(2_329.4), "2,329")
@@ -70,18 +70,19 @@ final class AmbientOpsTests: XCTestCase {
     }
 
     func testAppIncludesEnglishAndSimplifiedChineseLocalizations() throws {
-        let bundle = Bundle(for: AmbientOpsStore.self)
+        let bundle = Bundle(for: OPLFleetCockpitStore.self)
 
         XCTAssertEqual(bundle.developmentLocalization, "en")
         XCTAssertTrue(bundle.localizations.contains("zh-Hans"))
         XCTAssertEqual(bundle.infoDictionary?["CFBundleDisplayName"] as? String, "OPL Cockpit")
-        XCTAssertEqual(bundle.bundleIdentifier, "cn.gaofeng.ambientops")
+        XCTAssertEqual(bundle.bundleIdentifier, "cn.gaofeng.oplfleetcockpit")
         XCTAssertEqual(bundle.infoDictionary?["CFBundleShortVersionString"] as? String, "1.0.0")
-        XCTAssertEqual(bundle.infoDictionary?["CFBundleVersion"] as? String, "10")
+        XCTAssertEqual(bundle.infoDictionary?["CFBundleVersion"] as? String, "1")
+        XCTAssertEqual(SharedSnapshotStore.appGroup, "group.cn.gaofeng.oplfleetcockpit")
 
         let urlTypes = try XCTUnwrap(bundle.infoDictionary?["CFBundleURLTypes"] as? [[String: Any]])
         let urlSchemes = try XCTUnwrap(urlTypes.first?["CFBundleURLSchemes"] as? [String])
-        XCTAssertEqual(urlSchemes, ["ambientops"])
+        XCTAssertEqual(urlSchemes, ["oplfleetcockpit"])
 
         let englishInfoPath = try XCTUnwrap(
             bundle.path(
@@ -116,11 +117,11 @@ final class AmbientOpsTests: XCTestCase {
         XCTAssertEqual(chineseInfo["CFBundleDisplayName"], "OPL Cockpit")
         XCTAssertTrue(
             try XCTUnwrap(englishInfo["NSLocalNetworkUsageDescription"])
-                .contains("Codex TPS")
+                .contains("OPL Fleet Agent")
         )
         XCTAssertTrue(
             try XCTUnwrap(chineseInfo["NSLocalNetworkUsageDescription"])
-                .contains("Codex TPS")
+                .contains("OPL Fleet Agent")
         )
 
         let chineseStringsPath = try XCTUnwrap(
@@ -167,9 +168,14 @@ final class AmbientOpsTests: XCTestCase {
         }
 
         let widgetURL = try XCTUnwrap(
-            bundle.builtInPlugInsURL?.appendingPathComponent("Ambient Ops Widgets.appex")
+            bundle.builtInPlugInsURL?.appendingPathComponent("OPL Fleet Cockpit Widgets.appex")
         )
         let widgetBundle = try XCTUnwrap(Bundle(url: widgetURL))
+        XCTAssertEqual(widgetBundle.bundleIdentifier, "cn.gaofeng.oplfleetcockpit.widgets")
+        XCTAssertEqual(
+            widgetBundle.infoDictionary?["CFBundleDisplayName"] as? String,
+            "OPL Fleet Cockpit Widgets"
+        )
         XCTAssertEqual(widgetBundle.developmentLocalization, "en")
         XCTAssertTrue(widgetBundle.localizations.contains("zh-Hans"))
         XCTAssertNotNil(
@@ -247,16 +253,16 @@ final class AmbientOpsTests: XCTestCase {
 
     @MainActor
     func testLiveModeCanDisableDemoAndClearsDemoSnapshot() {
-        let suiteName = "AmbientOpsTests.demo.\(UUID().uuidString)"
+        let suiteName = "OPLFleetCockpitTests.demo.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
-        let demoKey = "ambient-ops.demo-mode"
+        let demoKey = "opl-fleet-cockpit.demo-mode"
         defer {
             defaults.removePersistentDomain(forName: suiteName)
         }
 
         defaults.set(true, forKey: demoKey)
-        let store = AmbientOpsStore(defaults: defaults)
+        let store = OPLFleetCockpitStore(defaults: defaults)
         XCTAssertTrue(store.isDemoMode)
         XCTAssertTrue(store.status.demo)
 
@@ -271,20 +277,20 @@ final class AmbientOpsTests: XCTestCase {
 
     @MainActor
     func testFirstLaunchUsesAutomaticDiscoveryInsteadOfDemo() {
-        let suiteName = "AmbientOpsTests.first-launch.\(UUID().uuidString)"
+        let suiteName = "OPLFleetCockpitTests.first-launch.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         defer {
             defaults.removePersistentDomain(forName: suiteName)
         }
 
-        let store = AmbientOpsStore(defaults: defaults)
+        let store = OPLFleetCockpitStore(defaults: defaults)
 
         XCTAssertFalse(store.isDemoMode)
         XCTAssertFalse(store.status.demo)
         XCTAssertTrue(store.isDiscovering)
         XCTAssertEqual(store.connectionState, .loading)
-        XCTAssertEqual(defaults.object(forKey: "ambient-ops.demo-mode") as? Bool, false)
+        XCTAssertEqual(defaults.object(forKey: "opl-fleet-cockpit.demo-mode") as? Bool, false)
 
         store.useLiveMode()
     }
@@ -362,10 +368,10 @@ final class AmbientOpsTests: XCTestCase {
 
     func testServerURLNormalization() {
         XCTAssertEqual(
-            AmbientOpsClient.normalizedServerURL("ambient-ops.local:8787")?.absoluteString,
-            "http://ambient-ops.local:8787"
+            OPLFleetCockpitClient.normalizedServerURL("gateway.local:8787")?.absoluteString,
+            "http://gateway.local:8787"
         )
-        XCTAssertNil(AmbientOpsClient.normalizedServerURL("not a host"))
+        XCTAssertNil(OPLFleetCockpitClient.normalizedServerURL("not a host"))
     }
 
     func testSourceSelectionPrefersSavedThenGatewayThenUniqueDirect() throws {
@@ -454,7 +460,7 @@ final class AmbientOpsTests: XCTestCase {
             AmbientStatus.self,
             from: JSONSerialization.data(withJSONObject: object)
         )
-        let store = AmbientOpsStore(automaticallyConnect: false)
+        let store = OPLFleetCockpitStore(automaticallyConnect: false)
         store.useLiveMode()
         store.status = direct
 

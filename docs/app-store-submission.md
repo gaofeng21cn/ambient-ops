@@ -1,14 +1,15 @@
 # App Store Submission Draft
 
 This is submission metadata for the native OPL Fleet Cockpit iOS and iPadOS
-client. Build 9 remains TestFlight history with the old home-screen name. Build
-10 is the first submission candidate carrying the `OPL Cockpit` display name.
+client. The Apple identity starts at build 1.
 
 ## Identity
 
 - App name: `OPL Fleet Cockpit`
-- Bundle ID: `cn.gaofeng.ambientops`
-- SKU: `ambient-ops-ios-1` (preserved)
+- Bundle ID: `cn.gaofeng.oplfleetcockpit`
+- Widget Bundle ID: `cn.gaofeng.oplfleetcockpit.widgets`
+- App Group: `group.cn.gaofeng.oplfleetcockpit`
+- SKU: `opl-fleet-cockpit-ios-1`
 - Primary category: `Utilities`
 - Secondary category: `Developer Tools`
 - Age rating: `4+`
@@ -28,7 +29,7 @@ Promotional text:
 Description:
 
 > OPL Fleet Cockpit is the native iPhone and iPad companion for your self-hosted
-> Ambient Ops telemetry gateway.
+> OPL Fleet Telemetry Gateway.
 >
 > See the operational state that matters at a glance:
 >
@@ -77,7 +78,7 @@ canonical branch.
 > 4. Settings can start a local Live Activity for the focused demo host.
 >
 > Local-network discovery is optional and is invoked only when the reviewer chooses
-> Find on Local Network. No Ambient Ops cloud service is required.
+> Find on Local Network. No OPL-operated cloud service is required.
 
 ## Privacy labels
 
@@ -93,9 +94,9 @@ or developer-operated service.
 
 ## Remaining submission inputs
 
-- confirm the existing App Store Connect app record and build 9 processing state;
-- final iPhone and iPad screenshots captured from signed build 10;
-- signed build 10 archive validation and upload;
+- create the new App Store Connect record for `cn.gaofeng.oplfleetcockpit`;
+- final iPhone and iPad screenshots captured from signed build 1;
+- signed build 1 archive validation and upload;
 - TestFlight processing and Automatic Testers assignment;
 - export-compliance answers;
 - territory choice, including whether mainland China distribution will be enabled;

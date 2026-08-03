@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Bindable var store: AmbientOpsStore
+    @Bindable var store: OPLFleetCockpitStore
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @FocusState private var isServerAddressFocused: Bool
 
@@ -69,7 +69,7 @@ struct SettingsView: View {
                 }
 
                 Section("Manual Connection") {
-                    TextField("http://ambient-ops.local:8787", text: $store.serverAddress)
+                    TextField("http://gateway.local:8787", text: $store.serverAddress)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
@@ -93,7 +93,7 @@ struct SettingsView: View {
                 }
 
                 Section("About") {
-                    LabeledContent("Product", value: "OPL Fleet Cockpit · Ambient Ops")
+                    LabeledContent("Product", value: "OPL Fleet Cockpit")
                     LabeledContent("Source", value: store.providerLabel)
                     LabeledContent("Status schema", value: "v\(store.status.schemaVersion)")
                     LabeledContent("Server", value: store.status.serverVersion)
@@ -183,7 +183,7 @@ struct SettingsView: View {
         case .loading where store.isDiscovering:
             return String(localized: "Searching local network…")
         default:
-            return AmbientOpsClient.normalizedServerURL(store.serverAddress)?.host
+            return OPLFleetCockpitClient.normalizedServerURL(store.serverAddress)?.host
                 ?? String(localized: "No live source")
         }
     }
@@ -197,7 +197,7 @@ struct SettingsView: View {
             return store.status.effectiveProvider.productName
                 ?? (store.isFleet
                     ? "OPL Fleet Telemetry Gateway"
-                    : "OPL Fleet Agent · Codex TPS")
+                    : "OPL Fleet Agent")
         case .loading where store.isDiscovering:
             return String(localized: "Fleet Gateway and Fleet Agent")
         case let .error(message):

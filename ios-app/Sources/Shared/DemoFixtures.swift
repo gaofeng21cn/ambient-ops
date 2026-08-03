@@ -70,16 +70,16 @@ enum DemoFixtures {
         return AmbientStatus(
             schemaVersion: 1,
             serverVersion: "demo",
-            instanceId: "ambient-ops-demo",
+            instanceId: "opl-fleet-cockpit-demo",
             generatedAt: timestamp(now),
             demo: true,
-            site: SiteStatus(name: "Ambient Ops Demo", timeZone: "Asia/Shanghai"),
+            site: SiteStatus(name: "OPL Fleet Cockpit Demo", timeZone: "Asia/Shanghai"),
             overallStatus: "live",
             provider: StatusProvider(
                 kind: "gateway",
                 scope: "fleet",
-                id: "ambient-ops-demo",
-                name: "Ambient Ops Demo"
+                id: "opl-fleet-cockpit-demo",
+                name: "OPL Fleet Cockpit Demo"
             ),
             capabilities: ServerCapabilities(
                 loadVisualState: true,

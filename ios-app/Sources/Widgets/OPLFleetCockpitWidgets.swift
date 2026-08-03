@@ -4,7 +4,7 @@ import SwiftUI
 import WidgetKit
 
 @main
-struct AmbientOpsWidgetBundle: WidgetBundle {
+struct OPLFleetCockpitWidgetBundle: WidgetBundle {
     var body: some Widget {
         AmbientLoadWidget()
         AmbientLoadLiveActivity()
@@ -142,7 +142,7 @@ private struct AmbientLoadWidgetView: View {
         }
         .padding(.horizontal, 5)
         .padding(.vertical, 3)
-        .widgetURL(URL(string: "ambientops://display/load"))
+        .widgetURL(URL(string: "oplfleetcockpit://display/load"))
     }
 
     private var small: some View {
@@ -196,7 +196,7 @@ private struct AmbientLoadWidgetView: View {
             }
         }
         .padding(12)
-        .widgetURL(URL(string: "ambientops://display/load"))
+        .widgetURL(URL(string: "oplfleetcockpit://display/load"))
     }
 
     private var medium: some View {
@@ -242,7 +242,7 @@ private struct AmbientLoadWidgetView: View {
             }
         }
         .padding(14)
-        .widgetURL(URL(string: "ambientops://display/load"))
+        .widgetURL(URL(string: "oplfleetcockpit://display/load"))
     }
 }
 
@@ -438,7 +438,7 @@ struct AmbientLoadLiveActivity: Widget {
                 Circle()
                     .fill(AmbientTheme.statusColor(context.state.state))
             }
-            .widgetURL(URL(string: "ambientops://display/load"))
+            .widgetURL(URL(string: "oplfleetcockpit://display/load"))
             .keylineTint(AmbientTheme.statusColor(context.state.state))
         }
     }
@@ -472,7 +472,7 @@ private struct LiveActivitySurface: View {
                 .frame(minWidth: 560, minHeight: 170)
             lockScreen
         }
-        .widgetURL(URL(string: "ambientops://display/load"))
+        .widgetURL(URL(string: "oplfleetcockpit://display/load"))
     }
 
     private var standBy: some View {

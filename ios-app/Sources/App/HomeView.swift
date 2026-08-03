@@ -2,7 +2,7 @@ import Charts
 import SwiftUI
 
 struct HomeView: View {
-    @Bindable var store: AmbientOpsStore
+    @Bindable var store: OPLFleetCockpitStore
     let openDisplay: () -> Void
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass

@@ -1,14 +1,14 @@
 # OPL Fleet Cockpit Privacy Policy
 
-Last updated: July 31, 2026
+Last updated: August 3, 2026
 
 OPL Fleet Cockpit is a self-hosted operational display. The iOS and iPadOS app
-does not require an Ambient Ops cloud account and does not send analytics,
+does not require an OPL cloud account and does not send analytics,
 advertising identifiers, conversation content, or usage data to the developer.
 
 ## Data the app reads
 
-When the user connects a self-hosted Ambient Ops server, the app reads aggregate
+When the user connects a self-hosted OPL Fleet Telemetry Gateway, the app reads aggregate
 operational status over the local network. This may include:
 
 - server and machine display names;
@@ -30,7 +30,7 @@ Live Activity extension through its private App Group container.
 
 Bonjour local-network access is used only after the user chooses discovery. Demo
 Mode does not request local-network access. The current release does not use an
-Ambient Ops-operated push relay.
+developer-operated push relay.
 
 ## Tracking and third parties
 
@@ -44,7 +44,7 @@ terms and the user's device settings.
 ## Deletion
 
 Deleting the app removes its local settings and cached aggregate status. Data on a
-self-hosted Ambient Ops server remains under the server operator's control.
+self-hosted OPL Fleet Telemetry Gateway remains under the server operator's control.
 
 ## Contact
 

@@ -1,4 +1,4 @@
-name: AmbientOps
+name: OPLFleetCockpit
 options:
   bundleIdPrefix: cn.gaofeng
   developmentLanguage: en
@@ -10,13 +10,13 @@ settings:
     DEVELOPMENT_TEAM: SVVC4TA784
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: 10
+    CURRENT_PROJECT_VERSION: 1
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
 packages: {}
 targets:
-  AmbientOps:
+  OPLFleetCockpit:
     type: application
     platform: iOS
     sources:
@@ -24,7 +24,7 @@ targets:
       - path: Sources/Shared
       - path: Resources
     info:
-      path: Config/AmbientOps-Info.plist
+      path: Config/OPLFleetCockpit-Info.plist
       properties:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
@@ -33,8 +33,9 @@ targets:
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
-        NSLocalNetworkUsageDescription: Ambient Ops discovers and reads status from your self-hosted server on this local network.
+        NSLocalNetworkUsageDescription: OPL Fleet Cockpit discovers and reads aggregate status from your self-hosted OPL Fleet Telemetry Gateway on this local network.
         NSBonjourServices:
+          # Current Gateway wire identity; retain until its separately deployed migration.
           - _ambient-ops._tcp
           - _codex-tps._tcp
         NSAppTransportSecurity:
@@ -42,9 +43,9 @@ targets:
         NSSupportsLiveActivities: true
         NSSupportsLiveActivitiesFrequentUpdates: false
         CFBundleURLTypes:
-          - CFBundleURLName: cn.gaofeng.ambientops
+          - CFBundleURLName: cn.gaofeng.oplfleetcockpit
             CFBundleURLSchemes:
-              - ambientops
+              - oplfleetcockpit
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -56,21 +57,21 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIRequiresFullScreen: false
     entitlements:
-      path: Config/AmbientOps.entitlements
+      path: Config/OPLFleetCockpit.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.cn.gaofeng.ambientops
+          - group.cn.gaofeng.oplfleetcockpit
     dependencies:
-      - target: AmbientOpsWidgets
+      - target: OPLFleetCockpitWidgets
         embed: true
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        PRODUCT_BUNDLE_IDENTIFIER: cn.gaofeng.ambientops
-        PRODUCT_NAME: AmbientOps
+        PRODUCT_BUNDLE_IDENTIFIER: cn.gaofeng.oplfleetcockpit
+        PRODUCT_NAME: OPLFleetCockpit
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: false
-  AmbientOpsWidgets:
+  OPLFleetCockpitWidgets:
     type: app-extension
     platform: iOS
     sources:
@@ -79,47 +80,47 @@ targets:
       - path: Resources/PrivacyInfo.xcprivacy
       - path: Resources/Localizable.xcstrings
     info:
-      path: Config/AmbientOpsWidgets-Info.plist
+      path: Config/OPLFleetCockpitWidgets-Info.plist
       properties:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        CFBundleDisplayName: Ambient Ops Widgets
+        CFBundleDisplayName: OPL Fleet Cockpit Widgets
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
-      path: Config/AmbientOpsWidgets.entitlements
+      path: Config/OPLFleetCockpitWidgets.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.cn.gaofeng.ambientops
+          - group.cn.gaofeng.oplfleetcockpit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: cn.gaofeng.ambientops.widgets
-        PRODUCT_NAME: Ambient Ops Widgets
+        PRODUCT_BUNDLE_IDENTIFIER: cn.gaofeng.oplfleetcockpit.widgets
+        PRODUCT_NAME: OPL Fleet Cockpit Widgets
         SKIP_INSTALL: true
         APPLICATION_EXTENSION_API_ONLY: true
-  AmbientOpsTests:
+  OPLFleetCockpitTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: Tests
     dependencies:
-      - target: AmbientOps
+      - target: OPLFleetCockpit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: cn.gaofeng.ambientops.tests
+        PRODUCT_BUNDLE_IDENTIFIER: cn.gaofeng.oplfleetcockpit.tests
         CODE_SIGNING_ALLOWED: false
 schemes:
-  AmbientOps:
+  OPLFleetCockpit:
     build:
       targets:
-        AmbientOps: all
-        AmbientOpsWidgets: all
-        AmbientOpsTests: [test]
+        OPLFleetCockpit: all
+        OPLFleetCockpitWidgets: all
+        OPLFleetCockpitTests: [test]
     test:
       targets:
-        - AmbientOpsTests
+        - OPLFleetCockpitTests
     run:
       config: Debug
     archive:

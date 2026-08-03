@@ -1,6 +1,7 @@
-# Ambient Ops for iOS
+# OPL Fleet Cockpit for iOS
 
-Ambient Ops for iOS is a native companion for the self-hosted Ambient Ops server.
+OPL Fleet Cockpit for iOS is a native companion for the self-hosted OPL Fleet
+Telemetry Gateway.
 It reads the versioned `/api/v1/status` endpoint and does not embed the browser
 dashboard.
 
@@ -44,7 +45,7 @@ reuses a saved server address when available, or offers local-network discovery
 when no server has been configured.
 
 Discovery uses `_ambient-ops._tcp`. The app requests only the public aggregate
-status endpoint. Server, Codex TPS, and router credentials remain outside the app.
+status endpoint. Gateway, OPL Fleet Agent, and router credentials remain outside the app.
 
 ## Live Activity boundary
 
@@ -64,14 +65,15 @@ The Xcode project is generated with XcodeGen:
 ```bash
 cd ios-app
 xcodegen generate
-open AmbientOps.xcodeproj
+open OPLFleetCockpit.xcodeproj
 ```
 
 The app and widget use:
 
-- App bundle ID: `cn.gaofeng.ambientops`
-- Widget bundle ID: `cn.gaofeng.ambientops.widgets`
-- App Group: `group.cn.gaofeng.ambientops`
+- App bundle ID: `cn.gaofeng.oplfleetcockpit`
+- Widget bundle ID: `cn.gaofeng.oplfleetcockpit.widgets`
+- App Group: `group.cn.gaofeng.oplfleetcockpit`
+- URL scheme: `oplfleetcockpit`
 - Team: `SVVC4TA784`
 - Minimum iOS version: iOS 18
 

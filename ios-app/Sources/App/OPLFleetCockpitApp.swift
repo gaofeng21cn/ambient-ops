@@ -1,8 +1,8 @@
 import SwiftUI
 
 @main
-struct AmbientOpsApp: App {
-    @State private var store = AmbientOpsStore()
+struct OPLFleetCockpitApp: App {
+    @State private var store = OPLFleetCockpitStore()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -18,7 +18,7 @@ struct AmbientOpsApp: App {
 }
 
 private struct RootView: View {
-    @Bindable var store: AmbientOpsStore
+    @Bindable var store: OPLFleetCockpitStore
     @State private var selection = 0
 
     var body: some View {
@@ -49,7 +49,7 @@ private struct RootView: View {
         }
         .background(AmbientTheme.background)
         .onOpenURL { url in
-            guard url.scheme == "ambientops",
+            guard url.scheme == "oplfleetcockpit",
                   url.host == "display",
                   url.path == "/load" else {
                 return

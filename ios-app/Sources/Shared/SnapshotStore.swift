@@ -1,7 +1,7 @@
 import Foundation
 
 enum SharedSnapshotStore {
-    static let appGroup = "group.cn.gaofeng.ambientops"
+    static let appGroup = "group.cn.gaofeng.oplfleetcockpit"
     private static let snapshotKey = "latest-status-v1"
     private static let selectedMachineKey = "focused-machine-v1"
     private static let sourceURLKey = "status-source-url-v1"

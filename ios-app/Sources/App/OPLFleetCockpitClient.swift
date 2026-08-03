@@ -1,6 +1,6 @@
 import Foundation
 
-enum AmbientOpsClientError: LocalizedError {
+enum OPLFleetCockpitClientError: LocalizedError {
     case invalidServerURL
     case invalidResponse
     case unsupportedSchema(Int)
@@ -9,7 +9,7 @@ enum AmbientOpsClientError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidServerURL:
-            String(localized: "Enter a valid Ambient Ops server address.")
+            String(localized: "Enter a valid Gateway address.")
         case .invalidResponse:
             String(localized: "The server returned an invalid response.")
         case .unsupportedSchema(let version):
@@ -19,17 +19,17 @@ enum AmbientOpsClientError: LocalizedError {
             )
         case .server(let status):
             String(
-                localized: "Ambient Ops returned HTTP \(status).",
+                localized: "The Gateway returned HTTP \(status).",
                 comment: "HTTP error returned by the user's self-hosted server."
             )
         }
     }
 }
 
-struct AmbientOpsClient: Sendable {
+struct OPLFleetCockpitClient: Sendable {
     func fetchStatus(from serverURL: URL) async throws -> AmbientStatus {
         guard let endpoint = URL(string: "/api/v1/status", relativeTo: serverURL)?.absoluteURL else {
-            throw AmbientOpsClientError.invalidServerURL
+            throw OPLFleetCockpitClientError.invalidServerURL
         }
         var request = URLRequest(url: endpoint)
         request.timeoutInterval = 8
@@ -38,14 +38,14 @@ struct AmbientOpsClient: Sendable {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw AmbientOpsClientError.invalidResponse
+            throw OPLFleetCockpitClientError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw AmbientOpsClientError.server(http.statusCode)
+            throw OPLFleetCockpitClientError.server(http.statusCode)
         }
         let snapshot = try JSONDecoder().decode(AmbientStatus.self, from: data)
         guard snapshot.schemaVersion == 1 else {
-            throw AmbientOpsClientError.unsupportedSchema(snapshot.schemaVersion)
+            throw OPLFleetCockpitClientError.unsupportedSchema(snapshot.schemaVersion)
         }
         return snapshot
     }

@@ -2,7 +2,7 @@
   <strong>English</strong> | <a href="./README.zh-CN.md">中文</a>
 </p>
 
-<h1 align="center">OPL Fleet Cockpit · Ambient Ops</h1>
+<h1 align="center">OPL Fleet Cockpit</h1>
 
 <p align="center"><strong>A quiet, always-on, self-hosted cockpit for OPL Fleet telemetry</strong></p>
 <p align="center">OPL Fleet Agents · Telemetry Gateway · Browser, Android, and native iOS displays</p>
@@ -42,10 +42,10 @@
 
 <table>
   <tr>
-    <td width="25%"><img src="./docs/assets/readme-gallery/ios-home.png" alt="Ambient Ops native iPhone Home"></td>
+    <td width="25%"><img src="./docs/assets/readme-gallery/ios-home.png" alt="OPL Fleet Cockpit native iPhone Home"></td>
     <td width="25%"><img src="./docs/assets/readme-gallery/ios-load.png" alt="Uncropped portrait Load animation on iPhone"></td>
     <td width="25%"><img src="./docs/assets/readme-gallery/ios-pet.png" alt="Codex Pet display on iPhone"></td>
-    <td width="25%"><img src="./docs/assets/readme-gallery/ios-live-activity.jpg" alt="Ambient Ops Load Live Activity on the iPhone Lock Screen"></td>
+    <td width="25%"><img src="./docs/assets/readme-gallery/ios-live-activity.jpg" alt="OPL Fleet Cockpit Load Live Activity on the iPhone Lock Screen"></td>
   </tr>
   <tr>
     <td align="center"><sub>Home</sub></td>
@@ -78,7 +78,7 @@
 
 ### What it is
 
-OPL Fleet Cockpit · Ambient Ops is a self-hosted status aggregator for a local network. It combines
+OPL Fleet Cockpit is a self-hosted status aggregator for a local network. It combines
 aggregate Codex activity from multiple computers with optional live WAN counters
 from a compatible router, then presents the normalized state through browser and
 dedicated Android displays.
@@ -301,4 +301,4 @@ docker compose -f compose.yaml -f compose.host-network.yaml config
 python3 ops/public-readiness-check.py
 ```
 
-Ambient Ops is available under the [MIT License](LICENSE).
+OPL Fleet Cockpit is available under the [MIT License](LICENSE).
