@@ -114,8 +114,10 @@ or developer-operated service.
 - Build `1.0.0 (2)` has been uploaded, processed, and assigned to the internal
   `Automatic Testers` group for the richer Fleet workload animation and branded
   App Store identity.
-- The internal group contains builds 1 and 2 and the account holder as its first
-  tester.
+- Build `1.0.0 (3)` is the landscape layout release that keeps the Home,
+  Machines, Display, and Settings tab bar clear of the Load display on iPhone.
+- The internal group contains the processed TestFlight builds and the account
+  holder as its first tester.
 
 ## Legacy Apple identity
 
