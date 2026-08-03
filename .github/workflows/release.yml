@@ -96,8 +96,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.value }}
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/gaofeng21cn/ambient-ops:${{ steps.version.outputs.value }}
+            ghcr.io/gaofeng21cn/ambient-ops:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -264,8 +264,8 @@ jobs:
         shell: bash
         run: |
           printf '%s\n' \
-            "ghcr.io/${GITHUB_REPOSITORY}:${IMAGE_VERSION}" \
-            "ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}" \
+            "ghcr.io/gaofeng21cn/ambient-ops:${IMAGE_VERSION}" \
+            "ghcr.io/gaofeng21cn/ambient-ops@${IMAGE_DIGEST}" \
             > "release-assets/Ambient-Ops-Docker-${IMAGE_VERSION}.txt"
           (
             cd release-assets
