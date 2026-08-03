@@ -2,6 +2,15 @@ import XCTest
 @testable import OPLFleetCockpit
 
 final class OPLFleetCockpitTests: XCTestCase {
+    func testCompactLandscapeDisplayReservesFloatingTabBarClearance() {
+        XCTAssertEqual(
+            DisplayLayoutProfile.tabBarClearance(compactLandscape: true),
+            DisplayLayoutProfile.compactLandscapeTabBarClearance
+        )
+        XCTAssertGreaterThan(DisplayLayoutProfile.compactLandscapeTabBarClearance, 50)
+        XCTAssertEqual(DisplayLayoutProfile.tabBarClearance(compactLandscape: false), 0)
+    }
+
     func testTPSFormattingMatchesTheWebDisplay() {
         XCTAssertEqual(MetricFormat.tps(56_840), "56,840")
         XCTAssertEqual(MetricFormat.tps(2_329.4), "2,329")

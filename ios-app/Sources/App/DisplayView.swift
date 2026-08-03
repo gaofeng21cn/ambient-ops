@@ -4,8 +4,10 @@ import SwiftUI
 struct DisplayView: View {
     @Bindable var store: OPLFleetCockpitStore
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private var largeCanvas: Bool { horizontalSizeClass == .regular }
+    private var compactLandscape: Bool { verticalSizeClass == .compact }
 
     var body: some View {
         GeometryReader { proxy in
@@ -54,6 +56,10 @@ struct DisplayView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .padding(
+                .bottom,
+                DisplayLayoutProfile.tabBarClearance(compactLandscape: compactLandscape)
+            )
             .background(AmbientTheme.background)
         }
     }
@@ -183,13 +189,23 @@ struct DisplayView: View {
     }
 }
 
+enum DisplayLayoutProfile {
+    static let compactLandscapeTabBarClearance: CGFloat = 56
+
+    static func tabBarClearance(compactLandscape: Bool) -> CGFloat {
+        compactLandscape ? compactLandscapeTabBarClearance : 0
+    }
+}
+
 private struct FleetLoadDisplay: View {
     let presentation: FleetLoadPresentation
     let history: [LoadHistoryPoint]
     let landscape: Bool
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private var largeCanvas: Bool { horizontalSizeClass == .regular }
+    private var compactLandscape: Bool { landscape && verticalSizeClass == .compact }
 
     var body: some View {
         Group {
@@ -264,7 +280,7 @@ private struct FleetLoadDisplay: View {
             }
         }
         .padding(.horizontal, largeCanvas ? 18 : 14)
-        .frame(height: largeCanvas ? 62 : landscape ? 50 : 48)
+        .frame(height: largeCanvas ? 62 : compactLandscape ? 38 : landscape ? 50 : 48)
         .background(AmbientTheme.surface.opacity(0.72))
         .overlay(alignment: .bottom) {
             Rectangle().fill(AmbientTheme.line).frame(height: 1)
@@ -295,7 +311,7 @@ private struct FleetLoadDisplay: View {
                         : "NO REPORTS"
                 )
             }
-            .padding(14)
+            .padding(compactLandscape ? 8 : 14)
             Divider().overlay(AmbientTheme.line)
             trend
             Divider().overlay(AmbientTheme.line)
@@ -314,7 +330,13 @@ private struct FleetLoadDisplay: View {
                 .foregroundStyle(AmbientTheme.muted)
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Text(value)
-                    .font(.system(size: largeCanvas ? 48 : 38, weight: .semibold, design: .rounded))
+                    .font(
+                        .system(
+                            size: largeCanvas ? 48 : compactLandscape ? 30 : 38,
+                            weight: .semibold,
+                            design: .rounded
+                        )
+                    )
                     .foregroundStyle(color)
                     .minimumScaleFactor(0.65)
                     .lineLimit(1)
@@ -323,7 +345,7 @@ private struct FleetLoadDisplay: View {
                     .foregroundStyle(AmbientTheme.muted)
             }
         }
-        .padding(14)
+        .padding(compactLandscape ? 8 : 14)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -367,7 +389,7 @@ private struct FleetLoadDisplay: View {
             .chartYScale(domain: 0...trendScale)
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
-            .frame(height: largeCanvas ? 80 : landscape ? 58 : 46)
+            .frame(height: largeCanvas ? 80 : compactLandscape ? 34 : landscape ? 58 : 46)
 
             HStack {
                 Text(coveredMinutes > 0 ? "-\(coveredMinutes)M" : "NOW")
@@ -377,7 +399,7 @@ private struct FleetLoadDisplay: View {
             .font(.system(size: largeCanvas ? 9 : 7, weight: .medium))
             .foregroundStyle(AmbientTheme.muted)
         }
-        .padding(14)
+        .padding(compactLandscape ? 8 : 14)
     }
 
     private var loadScale: some View {
@@ -403,7 +425,7 @@ private struct FleetLoadDisplay: View {
             .font(.system(size: largeCanvas ? 9 : 7, weight: .semibold))
             .foregroundStyle(AmbientTheme.muted)
         }
-        .padding(14)
+        .padding(compactLandscape ? 8 : 14)
     }
 
     private var coveredMinutes: Int { LoadHistorySeries.coveredMinutes(history) }
@@ -438,8 +460,10 @@ private struct HostLoadDisplay: View {
     let history: [LoadHistoryPoint]
     let landscape: Bool
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private var largeCanvas: Bool { horizontalSizeClass == .regular }
+    private var compactLandscape: Bool { landscape && verticalSizeClass == .compact }
 
     var body: some View {
         Group {
@@ -502,7 +526,7 @@ private struct HostLoadDisplay: View {
                 .lineLimit(1)
         }
         .padding(.horizontal, largeCanvas ? 18 : 14)
-        .frame(height: largeCanvas ? 54 : landscape ? 44 : 40)
+        .frame(height: largeCanvas ? 54 : compactLandscape ? 36 : landscape ? 44 : 40)
         .background(AmbientTheme.surface.opacity(0.72))
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -529,7 +553,7 @@ private struct HostLoadDisplay: View {
                     machine.cpuPercent == nil ? "" : "HOST"
                 )
             }
-            .padding(14)
+            .padding(compactLandscape ? 8 : 14)
             Divider().overlay(AmbientTheme.line)
             trend
             Divider().overlay(AmbientTheme.line)
@@ -548,7 +572,13 @@ private struct HostLoadDisplay: View {
                 .foregroundStyle(AmbientTheme.muted)
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Text(value)
-                    .font(.system(size: largeCanvas ? 48 : 38, weight: .semibold, design: .rounded))
+                    .font(
+                        .system(
+                            size: largeCanvas ? 48 : compactLandscape ? 30 : 38,
+                            weight: .semibold,
+                            design: .rounded
+                        )
+                    )
                     .foregroundStyle(color)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
@@ -557,7 +587,7 @@ private struct HostLoadDisplay: View {
                     .foregroundStyle(AmbientTheme.muted)
             }
         }
-        .padding(14)
+        .padding(compactLandscape ? 8 : 14)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -596,7 +626,7 @@ private struct HostLoadDisplay: View {
             .chartYScale(domain: 0...trendScale)
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
-            .frame(height: largeCanvas ? 80 : landscape ? 58 : 46)
+            .frame(height: largeCanvas ? 80 : compactLandscape ? 34 : landscape ? 58 : 46)
 
             HStack {
                 Text(trendStartLabel)
@@ -606,7 +636,7 @@ private struct HostLoadDisplay: View {
             .font(.system(size: largeCanvas ? 9 : 7, weight: .medium))
             .foregroundStyle(AmbientTheme.muted)
         }
-        .padding(14)
+        .padding(compactLandscape ? 8 : 14)
     }
 
     private var coveredMinutes: Int {
@@ -654,7 +684,7 @@ private struct HostLoadDisplay: View {
             .font(.system(size: largeCanvas ? 9 : 7, weight: .semibold))
             .foregroundStyle(AmbientTheme.muted)
         }
-        .padding(14)
+        .padding(compactLandscape ? 8 : 14)
     }
 }
 
