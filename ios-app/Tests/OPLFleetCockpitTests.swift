@@ -225,8 +225,8 @@ final class OPLFleetCockpitTests: XCTestCase {
         XCTAssertEqual(fleet.activeSessions, 21)
         XCTAssertEqual(fleet.cpuPercent, 83)
         XCTAssertEqual(fleet.cpuReportedNodeCount, 3)
-        XCTAssertEqual(fleet.visual.state, "constrained")
-        XCTAssertTrue(fleet.visual.constrained)
+        XCTAssertEqual(fleet.visual.state, "heavy")
+        XCTAssertFalse(fleet.visual.constrained)
         XCTAssertEqual(fleet.nodes.map(\.id), ["notebook", "studio", "workstation", "lab-mini"])
         XCTAssertLessThanOrEqual(fleet.nodes.count, 6)
     }
@@ -316,6 +316,7 @@ final class OPLFleetCockpitTests: XCTestCase {
         codex["liveMachineCount"] = 1
         codex["staleMachineCount"] = 0
         object["codex"] = codex
+        object.removeValue(forKey: "fleet")
 
         var machine = try XCTUnwrap(
             (object["machines"] as? [[String: Any]])?.first
@@ -374,6 +375,7 @@ final class OPLFleetCockpitTests: XCTestCase {
         codex["liveMachineCount"] = 4
         codex["staleMachineCount"] = 0
         object["codex"] = codex
+        object.removeValue(forKey: "fleet")
         object["machines"] = Array(
             try XCTUnwrap(object["machines"] as? [[String: Any]]).prefix(1)
         )
@@ -389,6 +391,63 @@ final class OPLFleetCockpitTests: XCTestCase {
         XCTAssertEqual(fleet.liveNodeCount, 4)
         XCTAssertEqual(fleet.oneMinuteTps, 120_000)
         XCTAssertEqual(fleet.visual.score, expectedScore, accuracy: 0.000_001)
+    }
+
+    @MainActor
+    func testFleetPresentationPrefersGatewayAuthorityAndHistory() throws {
+        let encoded = try JSONEncoder().encode(DemoFixtures.status())
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        let fleet: [String: Any] = [
+            "status": "live",
+            "oneMinuteTps": 100_840,
+            "fiveMinuteTps": 86_320,
+            "cachePercent": 83,
+            "activeSessions": 21,
+            "cpuPercent": 83,
+            "cpuReportedMachineCount": 3,
+            "memoryPercent": 51,
+            "memoryReportedMachineCount": 3,
+            "machineCount": 4,
+            "liveMachineCount": 3,
+            "staleMachineCount": 1,
+            "workingMachineCount": 2,
+            "loadVisualState": [
+                "modelVersion": 1,
+                "state": "active",
+                "label": "ACTIVE",
+                "score": 0.31,
+                "constrained": false,
+                "activity": 0.4,
+                "parallel": 0.25,
+                "tempo": 0.9,
+                "travelMs": 2_400,
+                "clusterCount": 2,
+                "taskDensity": 0.46,
+                "pressure": 0,
+                "queueDepth": 0,
+                "heat": 0.04,
+            ],
+            "tpsHistory": [
+                ["at": "2026-08-03T00:00:00.000Z", "tps": 12_000],
+                ["at": "2026-08-03T00:00:04.000Z", "tps": 15_000],
+            ],
+        ]
+        object["fleet"] = fleet
+
+        let status = try JSONDecoder().decode(
+            AmbientStatus.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        let presentation = FleetLoadPresentation(status: status)
+        let store = OPLFleetCockpitStore(automaticallyConnect: false)
+        store.status = status
+
+        XCTAssertEqual(presentation.workingNodeCount, 2)
+        XCTAssertEqual(presentation.visual.state, "active")
+        XCTAssertEqual(presentation.visual.score, 0.31)
+        XCTAssertEqual(store.fleetLoadHistory.map(\.tps), [12_000, 15_000])
     }
 
     func testLiveActivityCarriesTheProviderVisualStateIntoStandBy() throws {

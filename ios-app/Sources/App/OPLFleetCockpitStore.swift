@@ -159,16 +159,27 @@ struct FleetLoadPresentation: Hashable {
     let nodes: [FleetLoadNode]
 
     init(status: AmbientStatus) {
+        let fleet = status.fleet
         let liveMachines = status.machines.filter { $0.status == "live" }
         let liveCount = liveMachines.count
-        let reportedLiveCount = max(liveCount, Int(status.codex.liveMachineCount))
+        let reportedLiveCount = max(
+            liveCount,
+            Int(fleet?.liveMachineCount ?? status.codex.liveMachineCount)
+        )
         let liveDivisor = Double(max(1, reportedLiveCount))
-        let workingCount = liveMachines.filter {
+        let derivedWorkingCount = liveMachines.filter {
             $0.oneMinute.tps > 0 || $0.activeSessions > 0
         }.count
-        let averageTPS = max(0, status.codex.oneMinuteTps) / liveDivisor
-        let averageSessions = max(0, status.codex.activeSessions) / liveDivisor
-        let cpu = status.codex.cpuPercent
+        let workingCount = min(
+            reportedLiveCount,
+            max(0, Int(fleet?.workingMachineCount ?? Double(derivedWorkingCount)))
+        )
+        let aggregateOneMinuteTps = max(0, fleet?.oneMinuteTps ?? status.codex.oneMinuteTps)
+        let aggregateFiveMinuteTps = max(0, fleet?.fiveMinuteTps ?? status.codex.fiveMinuteTps)
+        let aggregateSessions = max(0, fleet?.activeSessions ?? status.codex.activeSessions)
+        let averageTPS = aggregateOneMinuteTps / liveDivisor
+        let averageSessions = aggregateSessions / liveDivisor
+        let cpu = fleet?.cpuPercent ?? status.codex.cpuPercent
         let tpsIntensity = sqrt(averageTPS / 60_000).clamped(to: 0...1)
         let sessionIntensity = (averageSessions / 12).clamped(to: 0...1)
         let cpuIntensity = cpu.map { ($0 / 100).clamped(to: 0...1) }
@@ -177,12 +188,12 @@ struct FleetLoadPresentation: Hashable {
         } ?? (tpsIntensity * 0.72 + sessionIntensity * 0.28)
         let engagement = (Double(workingCount) / liveDivisor).clamped(to: 0...1)
         let score = (baseScore * 0.78 + engagement * 0.22).clamped(to: 0...1)
-        let hasWork = status.codex.oneMinuteTps > 0 || status.codex.activeSessions > 0
+        let hasWork = aggregateOneMinuteTps > 0 || aggregateSessions > 0
         let constrained = hasWork && (cpu ?? 0) >= 88 && baseScore >= 0.35
         let pressure = cpu.map { (($0 - 68) / 32).clamped(to: 0...1) } ?? 0
-        let parallel = hasWork ? sqrt(max(0, status.codex.activeSessions) / 18).clamped(to: 0...1) : 0
+        let parallel = hasWork ? sqrt(aggregateSessions / 18).clamped(to: 0...1) : 0
         let tempo = hasWork
-            ? (0.45 + score * 1.35 + sqrt(max(0, status.codex.oneMinuteTps) / 90_000) * 0.7)
+            ? (0.45 + score * 1.35 + sqrt(aggregateOneMinuteTps / 90_000) * 0.7)
                 .clamped(to: 0.45...2.5)
             : 0.2
         let travelMs = hasWork
@@ -195,7 +206,7 @@ struct FleetLoadPresentation: Hashable {
             : (max(0, score - 0.68) * 0.7).clamped(to: 0...0.25)
         let state = constrained ? "constrained" : score >= 0.45 ? "heavy" : score >= 0.18 ? "active" : "quiet"
 
-        visual = LoadVisualState(
+        let fallbackVisual = LoadVisualState(
             state: state,
             label: LoadStatePalette.label(for: state),
             score: score,
@@ -212,12 +223,18 @@ struct FleetLoadPresentation: Hashable {
             queueDepth: queueDepth,
             heat: (pressure * 0.9 + activity * 0.12).clamped(to: 0...1)
         )
-        oneMinuteTps = max(0, status.codex.oneMinuteTps)
-        fiveMinuteTps = max(0, status.codex.fiveMinuteTps)
-        activeSessions = max(0, status.codex.activeSessions)
+        visual = fleet?.loadVisualState ?? fallbackVisual
+        oneMinuteTps = aggregateOneMinuteTps
+        fiveMinuteTps = aggregateFiveMinuteTps
+        activeSessions = aggregateSessions
         cpuPercent = cpu
-        cpuReportedNodeCount = Int(status.codex.cpuReportedMachineCount ?? 0)
-        totalNodeCount = max(status.machines.count, Int(status.codex.machineCount))
+        cpuReportedNodeCount = Int(
+            fleet?.cpuReportedMachineCount ?? status.codex.cpuReportedMachineCount ?? 0
+        )
+        totalNodeCount = max(
+            status.machines.count,
+            Int(fleet?.machineCount ?? status.codex.machineCount)
+        )
         liveNodeCount = reportedLiveCount
         workingNodeCount = workingCount
         nodes = Self.visualNodes(status.machines)
@@ -357,7 +374,17 @@ final class OPLFleetCockpitStore {
     }
 
     var fleetLoadHistory: [LoadHistoryPoint] {
-        LoadHistorySeries.fleetHistory(loadHistory)
+        if let history = status.fleet?.tpsHistory, !history.isEmpty {
+            return Array(
+                history
+                    .compactMap { point in
+                        point.atDate.map { LoadHistoryPoint(at: $0, tps: max(0, point.tps)) }
+                    }
+                    .sorted { $0.at < $1.at }
+                    .suffix(LoadHistorySeries.maximumPointCount)
+            )
+        }
+        return LoadHistorySeries.fleetHistory(loadHistory)
     }
 
     var providerLabel: String {

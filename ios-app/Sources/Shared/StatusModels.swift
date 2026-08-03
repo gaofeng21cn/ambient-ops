@@ -13,6 +13,7 @@ struct AmbientStatus: Codable, Hashable, Sendable {
     let capabilities: ServerCapabilities
     let network: NetworkStatus
     let codex: CodexStatus
+    let fleet: FleetStatus?
     let machines: [MachineStatus]
 
     var generatedDate: Date? {
@@ -87,6 +88,7 @@ struct AmbientStatus: Codable, Hashable, Sendable {
                 liveMachineCount: 0,
                 staleMachineCount: 0
             ),
+            fleet: nil,
             machines: []
         )
     }
@@ -161,6 +163,24 @@ struct CodexStatus: Codable, Hashable, Sendable {
     let machineCount: Double
     let liveMachineCount: Double
     let staleMachineCount: Double
+}
+
+struct FleetStatus: Codable, Hashable, Sendable {
+    let status: String
+    let oneMinuteTps: Double
+    let fiveMinuteTps: Double
+    let cachePercent: Double
+    let activeSessions: Double
+    let cpuPercent: Double?
+    let cpuReportedMachineCount: Double?
+    let memoryPercent: Double?
+    let memoryReportedMachineCount: Double?
+    let machineCount: Double
+    let liveMachineCount: Double
+    let staleMachineCount: Double
+    let workingMachineCount: Double?
+    let tpsHistory: [MachineTPSHistoryPoint]?
+    let loadVisualState: LoadVisualState?
 }
 
 struct MachineStatus: Codable, Hashable, Sendable, Identifiable {
