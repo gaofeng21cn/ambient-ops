@@ -116,8 +116,12 @@ or developer-operated service.
   App Store identity.
 - Build `1.0.0 (3)` is the landscape layout release that keeps the Home,
   Machines, Display, and Settings tab bar clear of the Load display on iPhone.
-- The internal group contains the processed TestFlight builds and the account
-  holder as its first tester.
+  Xcode uploaded it once on August 3, 2026 with Delivery UUID
+  `1af3a9da-0559-4d47-b85e-ab35562be27c`; App Store Connect reports the upload
+  complete, the processed build as `Ready to Submit`, and a 90-day TestFlight
+  expiry.
+- The internal `Automatic Testers` group contains one tester and all three
+  processed TestFlight builds, including build 3.
 
 ## Legacy Apple identity
 
