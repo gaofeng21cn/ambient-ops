@@ -71,6 +71,11 @@ targets:
         PRODUCT_NAME: OPLFleetCockpit
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: false
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: OPL Cockpit App Store 2026
   OPLFleetCockpitWidgets:
     type: app-extension
     platform: iOS
@@ -100,6 +105,11 @@ targets:
         PRODUCT_NAME: OPL Fleet Cockpit Widgets
         SKIP_INSTALL: true
         APPLICATION_EXTENSION_API_ONLY: true
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: OPL Cockpit Widgets App Store 2026
   OPLFleetCockpitTests:
     type: bundle.unit-test
     platform: iOS

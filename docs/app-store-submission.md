@@ -5,11 +5,14 @@ client. The Apple identity starts at build 1.
 
 ## Identity
 
-- App name: `OPL Fleet Cockpit`
+- App name: `OPL Cockpit`
+- App Store Connect ID: `6797375745`
 - Bundle ID: `cn.gaofeng.oplfleetcockpit`
 - Widget Bundle ID: `cn.gaofeng.oplfleetcockpit.widgets`
 - App Group: `group.cn.gaofeng.oplfleetcockpit`
-- SKU: `opl-fleet-cockpit-ios-1`
+- SKU: `opl-fleet-cockpit-ios-2026`
+- App Store profile: `OPL Cockpit App Store 2026`
+- Widget App Store profile: `OPL Cockpit Widgets App Store 2026`
 - Primary category: `Utilities`
 - Secondary category: `Developer Tools`
 - Age rating: `4+`
@@ -94,10 +97,26 @@ or developer-operated service.
 
 ## Remaining submission inputs
 
-- create the new App Store Connect record for `cn.gaofeng.oplfleetcockpit`;
 - final iPhone and iPad screenshots captured from signed build 1;
-- signed build 1 archive validation and upload;
-- TestFlight processing and Automatic Testers assignment;
+- App Review contact phone number in international format;
+- assign processed build 1 to App Store version 1.0;
+- complete categories, age rating, App Privacy, pricing, and territories;
 - export-compliance answers;
 - territory choice, including whether mainland China distribution will be enabled;
 - version release mode and review submission approval.
+
+## Current distribution state
+
+- App Store Connect record `6797375745` exists as `OPL Cockpit`.
+- Signed archive `1.0.0 (1)` uses Apple Distribution identity `SVVC4TA784`
+  and the two App Store profiles above.
+- Build `1.0.0 (1)` has been uploaded and processed by App Store Connect.
+- The internal `Automatic Testers` group contains build 1 and the account
+  holder as its first tester.
+
+## Legacy Apple identity
+
+The former `cn.gaofeng.ambientops` App ID is not used by this project or by new
+builds. Apple refuses to remove it because it has previously been associated
+with the App Store, so it remains only as a non-reusable historical identifier
+in the Developer portal. The former widget App ID has been removed.
