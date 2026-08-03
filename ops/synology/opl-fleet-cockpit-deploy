@@ -1,0 +1,645 @@
+#!/bin/sh
+
+set -eu
+
+umask 077
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/packages/ContainerManager/target/usr/bin
+export PATH
+
+PROGRAM=opl-fleet-cockpit-deploy
+PRODUCT_NAME="OPL Fleet Cockpit"
+SERVICE_NAME="OPL Fleet Cockpit Gateway"
+IMAGE_REPOSITORY=ghcr.io/gaofeng21cn/opl-fleet-cockpit
+PROJECT_NAME=opl-fleet-cockpit
+SERVICE_KEY=gateway
+LEGACY_PROJECT_NAME=ambient-ops
+LEGACY_SERVICE_KEY=ambient-ops
+MANAGED_DIR=/volume1/.opl-fleet-cockpit-deploy
+ENV_FILE=$MANAGED_DIR/.env
+COMPOSE_FILE=$MANAGED_DIR/compose.yaml
+SECRETS_DIR=$MANAGED_DIR/secrets
+STATE_DIR=$MANAGED_DIR/state
+LOCK_FILE=$STATE_DIR/deploy.lock
+DOCKER_BIN=/var/packages/ContainerManager/target/usr/bin/docker
+CURL_BIN=/usr/bin/curl
+JQ_BIN=/usr/bin/jq
+FLOCK_BIN=/usr/bin/flock
+STAT_BIN=/usr/bin/stat
+READLINK_BIN=/usr/bin/readlink
+SHA256_BIN=/usr/bin/sha256sum
+PROC_STAT_FILE=/proc/stat
+
+TEST_ROOT=${OPL_FLEET_COCKPIT_DEPLOY_TEST_ROOT:-${AMBIENT_OPS_DEPLOY_TEST_ROOT:-}}
+if [ -n "$TEST_ROOT" ]; then
+  if [ "$(id -u)" -eq 0 ]; then
+    printf '%s\n' "$PROGRAM: test mode is disabled for root" >&2
+    exit 77
+  fi
+  MANAGED_DIR=$TEST_ROOT/managed
+  ENV_FILE=$MANAGED_DIR/.env
+  COMPOSE_FILE=$MANAGED_DIR/compose.yaml
+  SECRETS_DIR=$MANAGED_DIR/secrets
+  STATE_DIR=$MANAGED_DIR/state
+  LOCK_FILE=$STATE_DIR/deploy.lock
+  DOCKER_BIN=$TEST_ROOT/bin/docker
+  CURL_BIN=$TEST_ROOT/bin/curl
+  JQ_BIN=${AMBIENT_OPS_DEPLOY_TEST_JQ:-/opt/homebrew/bin/jq}
+  FLOCK_BIN=$TEST_ROOT/bin/flock
+  STAT_BIN=
+  READLINK_BIN=
+  SHA256_BIN=$TEST_ROOT/bin/sha256sum
+  PROC_STAT_FILE=$TEST_ROOT/proc-stat
+fi
+
+log() {
+  printf '%s\n' "$PROGRAM: $*"
+}
+
+fail() {
+  printf '%s\n' "$PROGRAM: $*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  opl-fleet-cockpit-deploy --check
+  opl-fleet-cockpit-deploy status
+  opl-fleet-cockpit-deploy deploy <version> <sha256:index-digest>
+
+Example:
+  sudo -n opl-fleet-cockpit-deploy deploy 0.1.39 sha256:a3a34a6ebb43ea94e3498c22f87e5c876f62093cc14859984135ab8cf9c67453
+EOF
+}
+
+require_executable() {
+  [ -x "$1" ] || fail "required executable is missing: $1"
+}
+
+require_root() {
+  [ "$(id -u)" -eq 0 ] || fail "must run as root through the approved sudo rule"
+}
+
+stat_identity() {
+  "$STAT_BIN" -c '%u:%a' "$1"
+}
+
+require_identity() {
+  path=$1
+  expected=$2
+  actual=$(stat_identity "$path") || fail "cannot inspect $path"
+  [ "$actual" = "$expected" ] || fail "unsafe ownership or mode for $path (expected $expected, got $actual)"
+}
+
+check_secure_layout() {
+  [ -d "$MANAGED_DIR" ] || fail "managed directory is missing: $MANAGED_DIR"
+  [ -f "$ENV_FILE" ] && [ ! -L "$ENV_FILE" ] || fail "managed .env must be a regular file"
+  [ -f "$COMPOSE_FILE" ] && [ ! -L "$COMPOSE_FILE" ] || fail "managed compose.yaml must be a regular file"
+  [ -d "$SECRETS_DIR" ] && [ ! -L "$SECRETS_DIR" ] || fail "managed secrets must be a directory"
+  [ -d "$STATE_DIR" ] && [ ! -L "$STATE_DIR" ] || fail "managed state must be a directory"
+
+  if [ -z "$TEST_ROOT" ]; then
+    [ "$("$READLINK_BIN" -f "$MANAGED_DIR")" = "$MANAGED_DIR" ] || fail "managed directory must not traverse symlinks"
+    require_identity "$MANAGED_DIR" "0:700"
+    require_identity "$ENV_FILE" "0:600"
+    require_identity "$COMPOSE_FILE" "0:644"
+    require_identity "$STATE_DIR" "0:700"
+    require_identity "$SECRETS_DIR" "1000:700"
+
+    secret_path=
+    for secret_path in "$SECRETS_DIR"/*; do
+      [ -e "$secret_path" ] || continue
+      [ -f "$secret_path" ] && [ ! -L "$secret_path" ] || fail "secret entries must be regular files"
+      require_identity "$secret_path" "1000:600"
+    done
+  fi
+}
+
+require_tools() {
+  require_executable "$DOCKER_BIN"
+  require_executable "$CURL_BIN"
+  require_executable "$JQ_BIN"
+  require_executable "$FLOCK_BIN"
+  require_executable "$SHA256_BIN"
+  if [ -z "$TEST_ROOT" ]; then
+    require_executable "$STAT_BIN"
+    require_executable "$READLINK_BIN"
+  fi
+}
+
+docker_command() {
+  if [ -n "$TEST_ROOT" ]; then
+    env -i \
+      PATH="$PATH" \
+      OPL_FLEET_COCKPIT_DEPLOY_TEST_ROOT="$TEST_ROOT" \
+      "$DOCKER_BIN" "$@"
+  else
+    env -i PATH="$PATH" HOME=/root "$DOCKER_BIN" "$@"
+  fi
+}
+
+curl_local() {
+  if [ -n "$TEST_ROOT" ]; then
+    env -i \
+      PATH="$PATH" \
+      OPL_FLEET_COCKPIT_DEPLOY_TEST_ROOT="$TEST_ROOT" \
+      "$CURL_BIN" --noproxy '*' "$@"
+  else
+    env -i PATH="$PATH" HOME=/root "$CURL_BIN" --noproxy '*' "$@"
+  fi
+}
+
+compose() {
+  docker_command compose \
+    -p "$PROJECT_NAME" \
+    --project-directory "$MANAGED_DIR" \
+    -f "$COMPOSE_FILE" \
+    "$@"
+}
+
+current_image() {
+  count=$(awk -F= '$1 == "OPL_FLEET_COCKPIT_IMAGE" { count += 1 } END { print count + 0 }' "$ENV_FILE")
+  [ "$count" -eq 1 ] || fail ".env must contain exactly one OPL_FLEET_COCKPIT_IMAGE entry"
+  awk -F= '$1 == "OPL_FLEET_COCKPIT_IMAGE" { sub(/^[^=]*=/, ""); print; exit }' "$ENV_FILE"
+}
+
+current_data_volume() {
+  count=$(awk -F= '$1 == "OPL_FLEET_COCKPIT_DATA_VOLUME" { count += 1 } END { print count + 0 }' "$ENV_FILE")
+  [ "$count" -eq 1 ] || fail ".env must contain exactly one OPL_FLEET_COCKPIT_DATA_VOLUME entry"
+  awk -F= '$1 == "OPL_FLEET_COCKPIT_DATA_VOLUME" { sub(/^[^=]*=/, ""); print; exit }' "$ENV_FILE"
+}
+
+current_state_value() {
+  key=$1
+  [ -f "$STATE_DIR/current" ] || return 0
+  awk -F= -v key="$key" '
+    $1 == key {
+      sub(/^[^=]*=/, "")
+      print
+      exit
+    }
+  ' "$STATE_DIR/current"
+}
+
+write_image_to_env() {
+  image_ref=$1
+  temp_env=$STATE_DIR/.env.new.$$
+  awk -v image_ref="$image_ref" '
+    $0 ~ /^OPL_FLEET_COCKPIT_IMAGE=/ {
+      print "OPL_FLEET_COCKPIT_IMAGE=" image_ref
+      next
+    }
+    { print }
+  ' "$ENV_FILE" > "$temp_env"
+  chmod 600 "$temp_env"
+  if [ -z "$TEST_ROOT" ]; then
+    chown root:root "$temp_env"
+  fi
+  mv -f "$temp_env" "$ENV_FILE"
+}
+
+validate_compose() {
+  expected_image=$1
+  expected_volume=$(current_data_volume)
+  compose config --quiet
+  rendered=$(compose config --format json)
+  # shellcheck disable=SC2016
+  printf '%s\n' "$rendered" | "$JQ_BIN" -e \
+    --arg image "$expected_image" \
+    --arg secrets "$SECRETS_DIR" \
+    --arg volume "$expected_volume" '
+      .services.gateway as $service
+      | $service.image == $image
+        and $service.network_mode == "host"
+        and $service.restart == "unless-stopped"
+        and $service.read_only == true
+        and ($service.ports == null)
+        and ($service.build == null)
+        and any(
+          $service.volumes[]?;
+          .type == "volume"
+            and .source == $volume
+            and .target == "/data"
+            and .read_only == false
+        )
+        and ($service.environment.DEMO_MODE == "false")
+        and ($service.environment.DISCOVERY_ENABLED == "true")
+        and any(
+          $service.volumes[]?;
+          .type == "bind"
+            and .source == $secrets
+            and .target == "/run/secrets"
+            and .read_only == true
+        )
+    ' >/dev/null || fail "rendered Compose contract is outside the approved boundary"
+}
+
+verify_pulled_digest() {
+  image_ref=$1
+  expected_digest=$2
+  repo_digest=$IMAGE_REPOSITORY@$expected_digest
+
+  docker_command pull "$image_ref"
+  inspected=$(docker_command image inspect \
+    --format '{{range .RepoDigests}}{{println .}}{{end}}' \
+    "$image_ref")
+  printf '%s\n' "$inspected" | grep -F -x "$repo_digest" >/dev/null ||
+    fail "pulled image does not expose expected digest $repo_digest"
+}
+
+wait_for_release() {
+  version=$1
+  attempt=0
+  health_file=$STATE_DIR/health.$$.json
+  status_file=$STATE_DIR/status.$$.json
+
+  while [ "$attempt" -lt 45 ]; do
+    attempt=$((attempt + 1))
+    # shellcheck disable=SC2016
+    if curl_local -fsS --max-time 4 http://127.0.0.1:8787/healthz > "$health_file" 2>/dev/null &&
+      curl_local -fsS --max-time 4 http://127.0.0.1:8787/api/v1/status > "$status_file" 2>/dev/null &&
+      "$JQ_BIN" -e '
+        .ok == true
+          and .mode == "live"
+          and .network == "live"
+          and .codex == "live"
+          and .machines >= 1
+      ' "$health_file" >/dev/null 2>&1 &&
+      "$JQ_BIN" -e \
+        --arg version "$version" '
+          .schemaVersion == 1
+            and .serverVersion == $version
+            and .demo == false
+            and (.instanceId | type == "string" and length > 0)
+            and (.capabilities.loadVisualState == true)
+            and (.machines | length >= 1)
+        ' "$status_file" >/dev/null 2>&1; then
+      rm -f "$health_file" "$status_file"
+      return 0
+    fi
+    sleep 2
+  done
+
+  rm -f "$health_file" "$status_file"
+  return 1
+}
+
+wait_for_basic_health() {
+  attempt=0
+  health_file=$STATE_DIR/rollback-health.$$.json
+  while [ "$attempt" -lt 30 ]; do
+    attempt=$((attempt + 1))
+    if curl_local -fsS --max-time 4 http://127.0.0.1:8787/healthz > "$health_file" 2>/dev/null &&
+      "$JQ_BIN" -e '.ok == true' "$health_file" >/dev/null 2>&1; then
+      rm -f "$health_file"
+      return 0
+    fi
+    sleep 2
+  done
+  rm -f "$health_file"
+  return 1
+}
+
+ROLLBACK_ARMED=false
+BACKUP_ENV=
+LEGACY_CONTAINER_ID=
+LEGACY_STOPPED=false
+
+find_legacy_container() {
+  docker_command ps -aq \
+    --filter "label=com.docker.compose.project=$LEGACY_PROJECT_NAME" \
+    --filter "label=com.docker.compose.service=$LEGACY_SERVICE_KEY"
+}
+
+stop_legacy_container_if_present() {
+  ids=$(find_legacy_container)
+  count=$(printf '%s\n' "$ids" | awk 'NF { count += 1 } END { print count + 0 }')
+  [ "$count" -le 1 ] || fail "multiple legacy Ambient Ops containers found"
+  [ "$count" -eq 1 ] || return 0
+
+  LEGACY_CONTAINER_ID=$(printf '%s\n' "$ids" | awk 'NF { print; exit }')
+  expected_volume=$(current_data_volume)
+  legacy_volume=$(
+    docker_command inspect --format '{{json .Mounts}}' "$LEGACY_CONTAINER_ID" |
+      "$JQ_BIN" -r '[.[] | select(.Destination == "/data" and .Type == "volume") | .Name] | if length == 1 then .[0] else "" end'
+  )
+  [ "$legacy_volume" = "$expected_volume" ] ||
+    fail "legacy container data volume does not match the approved migration volume"
+  docker_command stop "$LEGACY_CONTAINER_ID" >/dev/null
+  LEGACY_STOPPED=true
+  log "stopped the compatibility container after verifying data volume $expected_volume"
+}
+
+rollback_if_needed() {
+  exit_code=$?
+  trap - EXIT HUP INT TERM
+
+  if [ "$ROLLBACK_ARMED" = true ] && [ -n "$BACKUP_ENV" ] && [ -f "$BACKUP_ENV" ]; then
+    log "deployment failed; restoring the previous configuration"
+    rollback_temp=$STATE_DIR/.env.rollback.$$
+    cp "$BACKUP_ENV" "$rollback_temp"
+    chmod 600 "$rollback_temp"
+    if [ -z "$TEST_ROOT" ]; then
+      chown root:root "$rollback_temp"
+    fi
+    mv -f "$rollback_temp" "$ENV_FILE"
+    previous_image=$(current_image)
+    if [ "$LEGACY_STOPPED" = true ] && [ -n "$LEGACY_CONTAINER_ID" ]; then
+      new_container_id=$(compose ps -q "$SERVICE_KEY" 2>/dev/null || true)
+      [ -z "$new_container_id" ] || docker_command rm -f "$new_container_id" >/dev/null 2>&1 || true
+      if docker_command start "$LEGACY_CONTAINER_ID" >/dev/null && wait_for_basic_health; then
+        log "rollback completed and the compatibility container is healthy"
+      else
+        log "rollback could not restart the compatibility container; manual recovery is required"
+      fi
+    elif validate_compose "$previous_image" && compose up -d && wait_for_basic_health; then
+      log "rollback completed and the previous Gateway release is healthy"
+    else
+      log "rollback could not be verified; manual recovery is required"
+    fi
+  fi
+
+  exit "$exit_code"
+}
+
+check_installation() {
+  require_tools
+  check_secure_layout
+  installed_image=$(current_image)
+  case "$installed_image" in
+    "$IMAGE_REPOSITORY":*) ;;
+    *) fail "managed image is outside $IMAGE_REPOSITORY" ;;
+  esac
+  validate_compose "$installed_image"
+  log "installation check passed"
+}
+
+installation_status() {
+  require_tools
+  check_secure_layout
+
+  configured_image=$(current_image)
+  case "$configured_image" in
+    "$IMAGE_REPOSITORY":*@sha256:*) ;;
+    *) fail "managed image must be a versioned $IMAGE_REPOSITORY tag pinned by digest" ;;
+  esac
+  configured_version=${configured_image#"$IMAGE_REPOSITORY":}
+  configured_version=${configured_version%@*}
+  configured_digest=${configured_image##*@}
+  printf '%s\n' "$configured_version" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z][0-9A-Za-z.-]*)?$' >/dev/null ||
+    fail "managed image version is invalid"
+  printf '%s\n' "$configured_digest" | grep -E '^sha256:[0-9a-f]{64}$' >/dev/null ||
+    fail "managed image digest is invalid"
+  validate_compose "$configured_image"
+
+  expected_data_volume=$(current_data_volume)
+  container_id=$(compose ps -q "$SERVICE_KEY")
+  [ -n "$container_id" ] || fail "managed container is not present"
+
+  container_configured_image=$(docker_command inspect --format '{{.Config.Image}}' "$container_id")
+  runtime_image_id=$(docker_command inspect --format '{{.Image}}' "$container_id")
+  container_name=$(docker_command inspect --format '{{.Name}}' "$container_id" | sed 's#^/##')
+  container_status=$(docker_command inspect --format '{{.State.Status}}' "$container_id")
+  container_running=$(docker_command inspect --format '{{.State.Running}}' "$container_id")
+  container_started_at=$(docker_command inspect --format '{{.State.StartedAt}}' "$container_id")
+  restart_policy=$(docker_command inspect --format '{{.HostConfig.RestartPolicy.Name}}' "$container_id")
+  data_mount=$(
+    docker_command inspect --format '{{json .Mounts}}' "$container_id" |
+      "$JQ_BIN" -c '
+        [
+          .[]
+          | select(.Destination == "/data")
+          | {
+              type: .Type,
+              name: (.Name // null),
+              destination: .Destination,
+              readOnly: (.RW | not)
+            }
+        ]
+        | if length == 1 then .[0] else null end
+      '
+  )
+  repo_digests=$(
+    docker_command image inspect --format '{{json .RepoDigests}}' "$runtime_image_id" |
+      "$JQ_BIN" -c 'if type == "array" then sort else [] end'
+  )
+
+  health=$(
+    curl_local -fsS --max-time 4 http://127.0.0.1:8787/healthz |
+      "$JQ_BIN" -c '{ok, mode, network, codex, machines}'
+  )
+  public_status=$(
+    curl_local -fsS --max-time 4 http://127.0.0.1:8787/api/v1/status |
+      "$JQ_BIN" -c '{schemaVersion, serverVersion, demo, machineCount: (.machines | length)}'
+  )
+
+  host_boot_epoch=$(awk '$1 == "btime" { print $2; exit }' "$PROC_STAT_FILE")
+  printf '%s\n' "$host_boot_epoch" | grep -E '^[0-9]+$' >/dev/null ||
+    fail "host boot time is unavailable"
+  deployed_at=$(current_state_value deployed_at)
+
+  # shellcheck disable=SC2016
+  status_json=$(
+    "$JQ_BIN" -n \
+      --arg schema "opl_fleet_cockpit_gateway_status.v1" \
+      --arg product "$PRODUCT_NAME" \
+      --arg service "$SERVICE_NAME" \
+      --arg runtimeId "$PROJECT_NAME" \
+      --arg compatibilityId "$LEGACY_PROJECT_NAME" \
+      --arg configuredImage "$configured_image" \
+      --arg configuredVersion "$configured_version" \
+      --arg configuredDigest "$configured_digest" \
+      --arg containerConfiguredImage "$container_configured_image" \
+      --arg runtimeImageId "$runtime_image_id" \
+      --arg containerId "$container_id" \
+      --arg containerName "$container_name" \
+      --arg containerStatus "$container_status" \
+      --arg containerRunning "$container_running" \
+      --arg containerStartedAt "$container_started_at" \
+      --arg restartPolicy "$restart_policy" \
+      --arg expectedDataVolume "$expected_data_volume" \
+      --arg deployedAt "$deployed_at" \
+      --argjson hostBootEpoch "$host_boot_epoch" \
+      --argjson dataMount "$data_mount" \
+      --argjson repoDigests "$repo_digests" \
+      --argjson health "$health" \
+      --argjson publicStatus "$public_status" '
+        def iso_epoch:
+          if . == "" then null
+          else (sub("\\.[0-9]+Z$"; "Z") | try fromdateiso8601 catch null)
+          end;
+        ($configuredDigest as $digest
+          | ("ghcr.io/gaofeng21cn/opl-fleet-cockpit@" + $digest)) as $expectedRepoDigest
+        | ($repoDigests | index($expectedRepoDigest) != null) as $digestVerified
+        | ($containerStartedAt | iso_epoch) as $containerStartedEpoch
+        | ($deployedAt | iso_epoch) as $deployedEpoch
+        | (
+            if $deployedEpoch == null or $containerStartedEpoch == null then
+              {verified: false, reason: "deployment_or_start_time_unavailable"}
+            elif $deployedEpoch > $hostBootEpoch then
+              {verified: false, reason: "current_release_deployed_after_host_boot"}
+            elif $containerStartedEpoch >= $hostBootEpoch then
+              {verified: true, reason: "current_release_survived_latest_host_boot"}
+            else
+              {verified: false, reason: "container_start_precedes_host_boot"}
+            end
+          ) as $rebootRecovery
+        | (
+            $containerConfiguredImage == $configuredImage
+              and $digestVerified
+              and $containerStatus == "running"
+              and $containerRunning == "true"
+              and $restartPolicy == "unless-stopped"
+              and $dataMount.type == "volume"
+              and $dataMount.name == $expectedDataVolume
+              and $dataMount.destination == "/data"
+              and $dataMount.readOnly == false
+              and $health.ok == true
+              and $health.mode == "live"
+              and $health.network == "live"
+              and $health.codex == "live"
+              and $publicStatus.schemaVersion == 1
+              and $publicStatus.serverVersion == $configuredVersion
+              and $publicStatus.demo == false
+              and $publicStatus.machineCount >= 1
+          ) as $ok
+        | {
+            schema: $schema,
+            product: $product,
+            service: $service,
+            runtimeId: $runtimeId,
+            compatibilityId: $compatibilityId,
+            ok: $ok,
+            image: {
+              configured: $configuredImage,
+              version: $configuredVersion,
+              indexDigest: $configuredDigest,
+              containerConfigured: $containerConfiguredImage,
+              runtimeImageId: $runtimeImageId,
+              repoDigests: $repoDigests,
+              digestVerified: $digestVerified
+            },
+            container: {
+              id: $containerId,
+              name: $containerName,
+              status: $containerStatus,
+              running: ($containerRunning == "true"),
+              restartPolicy: $restartPolicy,
+              startedAt: $containerStartedAt,
+              dataMount: $dataMount
+            },
+            health: $health,
+            publicStatus: $publicStatus,
+            host: {
+              bootEpoch: $hostBootEpoch,
+              deployedAt: (if $deployedAt == "" then null else $deployedAt end),
+              rebootRecovery: $rebootRecovery
+            }
+          }
+      '
+  )
+
+  printf '%s\n' "$status_json"
+  printf '%s\n' "$status_json" | "$JQ_BIN" -e '.ok == true' >/dev/null
+}
+
+deploy_release() {
+  version=$1
+  expected_digest=$2
+
+  printf '%s\n' "$version" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z][0-9A-Za-z.-]*)?$' >/dev/null ||
+    fail "version must be a semantic version without a v prefix"
+  printf '%s\n' "$expected_digest" | grep -E '^sha256:[0-9a-f]{64}$' >/dev/null ||
+    fail "digest must be sha256 followed by 64 lowercase hexadecimal characters"
+
+  require_tools
+  check_secure_layout
+
+  exec 9>"$LOCK_FILE"
+  "$FLOCK_BIN" -n 9 || fail "another OPL Fleet Cockpit Gateway deployment is active"
+
+  image_ref=$IMAGE_REPOSITORY:$version@$expected_digest
+  previous_image=$(current_image)
+  [ "$previous_image" != "$image_ref" ] || {
+    validate_compose "$image_ref"
+    wait_for_release "$version" || fail "requested release is configured but not healthy"
+    log "$version is already deployed and healthy"
+    return 0
+  }
+
+  verify_pulled_digest "$image_ref" "$expected_digest"
+
+  BACKUP_ENV=$STATE_DIR/previous.env.$$
+  cp "$ENV_FILE" "$BACKUP_ENV"
+  chmod 600 "$BACKUP_ENV"
+  ROLLBACK_ARMED=true
+  trap rollback_if_needed EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  write_image_to_env "$image_ref"
+  validate_compose "$image_ref"
+  compose pull
+  stop_legacy_container_if_present
+  compose up -d
+  wait_for_release "$version" || fail "release failed health or version verification"
+
+  if [ "$LEGACY_STOPPED" = true ] && [ -n "$LEGACY_CONTAINER_ID" ]; then
+    docker_command rm "$LEGACY_CONTAINER_ID" >/dev/null
+    LEGACY_STOPPED=false
+    log "removed the stopped compatibility container without deleting its data volume"
+  fi
+
+  state_temp=$STATE_DIR/current.new.$$
+  {
+    printf 'version=%s\n' "$version"
+    printf 'digest=%s\n' "$expected_digest"
+    printf 'image=%s\n' "$image_ref"
+    printf 'deployed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  } > "$state_temp"
+  chmod 600 "$state_temp"
+  mv -f "$state_temp" "$STATE_DIR/current"
+  cp "$BACKUP_ENV" "$STATE_DIR/previous.env"
+  chmod 600 "$STATE_DIR/previous.env"
+  rm -f "$BACKUP_ENV"
+
+  ROLLBACK_ARMED=false
+  trap - EXIT HUP INT TERM
+  log "deployed $version at $expected_digest"
+}
+
+if [ -z "$TEST_ROOT" ]; then
+  require_root
+fi
+
+case ${1:-} in
+  --check)
+    [ "$#" -eq 1 ] || {
+      usage >&2
+      exit 64
+    }
+    check_installation
+    ;;
+  status)
+    [ "$#" -eq 1 ] || {
+      usage >&2
+      exit 64
+    }
+    installation_status
+    ;;
+  deploy)
+    [ "$#" -eq 3 ] || {
+      usage >&2
+      exit 64
+    }
+    deploy_release "$2" "$3"
+    ;;
+  -h|--help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 64
+    ;;
+esac

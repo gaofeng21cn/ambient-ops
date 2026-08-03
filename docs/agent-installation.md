@@ -37,7 +37,7 @@ Install or upgrade Ambient Ops from the canonical repository into
 <absolute-target-directory> on <Docker-host>. Use SITE_NAME=<site-name>,
 DISPLAY_TIME_ZONE=<iana-time-zone>, and AMBIENT_OPS_NETWORK_MODE=<profile>.
 
-Follow docs/installation.md and scripts/ambient-ops.sh. Use only the public,
+Follow docs/installation.md and scripts/opl-fleet-cockpit.sh. Use only the public,
 versioned GHCR image. Do not use compose.local-build.yaml, do not build source
 on the NAS, do not create a GHCR login or DSM scheduled task, and do not use a
 moving image tag.
@@ -51,15 +51,16 @@ flow. Only headless and legacy bearer agents require the existing token to be
 entered locally.
 
 Preserve an existing .env, INSTANCE_ID, secrets directory, and
-ambient_ops_data volume. Never run docker compose down -v. Before changing a
+opl-fleet-cockpit_data volume. Never run docker compose down -v. Before changing a
 running installation, record the exact current image, commit, health response,
 and rollback command. Keep exactly one LAN discovery owner.
 
 Finish only after: Compose contains no build directive; the pinned public
 image is running; /healthz is live for every configured source; each expected
-Codex host appears once; mDNS resolves the configured instance; the Android
-kiosk works over Wi-Fi with no adb reverse; and the service returns after an
-actual Docker-host restart when I authorize that reboot. Report exact commands,
+Codex host appears once; mDNS resolves the configured instance; and the Android
+kiosk works over Wi-Fi with no adb reverse. A real Docker-host restart is a
+separate optional, explicitly authorized operation, not part of this migration.
+Report exact commands,
 non-secret readbacks, changed files, image/version, and remaining limitations.
 ```
 
@@ -97,7 +98,7 @@ For a fresh installation:
 git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git <target>
 cd <target>
 git rev-parse HEAD
-./scripts/ambient-ops.sh init --profile <codex-only|snmpv3|unifi-api>
+./scripts/opl-fleet-cockpit.sh init --profile <codex-only|snmpv3|unifi-api>
 ```
 
 For an existing installation, `init` must not be run. The Agent edits only
@@ -107,8 +108,8 @@ When a secret is needed, the Agent should ask the user to run one exact command
 in the already-open trusted terminal:
 
 ```bash
-./scripts/ambient-ops.sh set-secret unifi_snmp_auth_password
-./scripts/ambient-ops.sh set-secret unifi_snmp_priv_password
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_auth_password
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_priv_password
 ```
 
 The Agent resumes after the command exits successfully; it does not request the
@@ -118,8 +119,8 @@ documented UID 1000 ownership without weakening file modes.
 ### 3. Validate before mutation
 
 ```bash
-./scripts/ambient-ops.sh validate
-docker compose --env-file .env -p ambient-ops \
+./scripts/opl-fleet-cockpit.sh validate
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml -f compose.host-network.yaml config --images
 ```
 
@@ -132,11 +133,11 @@ for older CLI commands.
 ### 4. Start through the repository helper
 
 ```bash
-./scripts/ambient-ops.sh up
-./scripts/ambient-ops.sh status
+./scripts/opl-fleet-cockpit.sh up
+./scripts/opl-fleet-cockpit.sh status
 ```
 
-The Agent may inspect `./scripts/ambient-ops.sh logs`. It must diagnose the
+The Agent may inspect `./scripts/opl-fleet-cockpit.sh logs`. It must diagnose the
 first real failure rather than create a scheduled restart workaround. Normal
 restart ownership is Docker Compose `restart: unless-stopped`.
 
@@ -168,7 +169,7 @@ Evidence should include only non-secret facts:
 - mDNS service identity and resolved LAN endpoint
 - Android package/version, certificate digest, Home activity, Wi-Fi state, and
   empty reverse list
-- restart readback after an owner-authorized host reboot
+- optional restart readback only when a separate owner-authorized reboot exists
 
 Do not call validation, pull, container creation, or HTTP liveness alone a
 finished deployment.
@@ -178,21 +179,21 @@ finished deployment.
 Before an upgrade, record:
 
 ```bash
-docker compose --env-file .env -p ambient-ops \
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml -f compose.host-network.yaml config --images
 git rev-parse HEAD
-./scripts/ambient-ops.sh status
+./scripts/opl-fleet-cockpit.sh status
 ```
 
 An upgrade changes only the reviewed deployment commit and
-`AMBIENT_OPS_IMAGE`; it preserves `.env`, `INSTANCE_ID`, `secrets/`, and the
+`OPL_FLEET_COCKPIT_IMAGE`; it preserves `.env`, `INSTANCE_ID`, `secrets/`, and the
 named volume. If acceptance fails, restore the recorded image and commit and
 run `validate` then `up`. Do not rotate tokens, delete state, uninstall the
 Android app, or start a second discovery owner as an improvised rollback.
 
 ## DSM build-error rule
 
-If DSM reports that it cannot **build** `ambient-ops`, the Agent must inspect
+If DSM reports that it cannot **build** `opl-fleet-cockpit`, the Agent must inspect
 the project definition and logs. This production project pulls a public image;
 it does not build. The DSM project should contain only `compose.yaml`; remove an
 accidentally selected `compose.local-build.yaml` or `build:` entry after

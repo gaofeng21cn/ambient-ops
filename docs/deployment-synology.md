@@ -1,11 +1,12 @@
 # Synology Deployment
 
-OPL Fleet Cockpit runs as one compatibility-preserving `ambient-ops` Linux
-container. The container is the OPL Fleet Telemetry Gateway: the NAS owns
+OPL Fleet Cockpit runs as the `opl-fleet-cockpit` Compose project with one
+`gateway` service. The container is the OPL Fleet Cockpit Gateway: the NAS owns
 aggregation, persistence, LAN discovery, and the web app; display clients only
-discover and open it. The repository, Compose project, container service, mDNS
-type, and upgrade command keep their existing `ambient-ops` identities during
-the product-name migration.
+discover and open it. New installations use the branded project, service,
+container, image, volume, and deploy-command identities. The old `ambient-ops`
+image, command, environment variable, mDNS type, and data volume remain bounded
+compatibility aliases for in-place upgrades.
 
 Use [`production-migration-checklist.md`](production-migration-checklist.md) for
 an existing Mac-to-NAS cutover. This page describes the target installation.
@@ -17,7 +18,7 @@ For the shorter ordinary-user path, start with the
 
 - Synology Container Manager or Docker Compose over SSH
 - A persistent project directory, for example
-  `/volume1/docker/ambient-ops`
+  `/volume1/docker/opl-fleet-cockpit`
 - UDP/161 access from the NAS to the qualified SNMPv3 router
 - TCP/8787 access from trusted LAN clients to the NAS
 - UDP/5353 multicast on the client LAN
@@ -35,10 +36,10 @@ copying any secrets:
 ```bash
 docker compose -f compose.yaml config --quiet
 docker compose -f compose.yaml config --format json | \
-  jq -e '.services["ambient-ops"].network_mode == "host" and
-    .services["ambient-ops"].environment.DISCOVERY_ENABLED == "true" and
-    (.services["ambient-ops"].ports == null) and
-    (.services["ambient-ops"].build == null)'
+  jq -e '.services.gateway.network_mode == "host" and
+    .services.gateway.environment.DISCOVERY_ENABLED == "true" and
+    (.services.gateway.ports == null) and
+    (.services.gateway.build == null)'
 ```
 
 The compatibility override is still accepted by the repository helper, but it is
@@ -50,8 +51,8 @@ single-file project after the reviewed files are copied into the project directo
 Clone or copy a reviewed source commit into the persistent project directory:
 
 ```bash
-cd /volume1/docker/ambient-ops
-./scripts/ambient-ops.sh init --profile snmpv3
+cd /volume1/docker/opl-fleet-cockpit
+./scripts/opl-fleet-cockpit.sh init --profile snmpv3
 ```
 
 The helper refuses to overwrite an existing installation, generates a stable
@@ -61,12 +62,12 @@ interactive `set-secret` commands. A manual `cp .env.example .env` path remains
 valid for operators who deliberately manage identity and secret generation
 themselves.
 
-Set `AMBIENT_OPS_IMAGE` in `.env` to the reviewed release, for example
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.22`. The GitHub Container Registry package
+Set `OPL_FLEET_COCKPIT_IMAGE` in `.env` to the reviewed release, for example
+`ghcr.io/gaofeng21cn/opl-fleet-cockpit:0.1.22`. The GitHub Container Registry package
 is public, so Synology can pull the image without a GitHub token:
 
 ```bash
-docker compose -p ambient-ops -f compose.yaml pull
+docker compose -p opl-fleet-cockpit -f compose.yaml pull
 ```
 
 Do not add GitHub credentials to `.env`, Compose, or the repository for normal
@@ -80,7 +81,7 @@ Set at least:
 
 ```dotenv
 DEMO_MODE=false
-SITE_NAME=Ambient Ops
+SITE_NAME=OPL Fleet Cockpit
 DISPLAY_TIME_ZONE=Asia/Shanghai
 INSTANCE_ID=<stable-existing-or-new-id>
 UNIFI_SNMP_HOST=<gateway-address>
@@ -133,14 +134,14 @@ isolated gate on a Docker development/build host:
 ## Validate the single-file LAN instance
 
 The production file uses host networking and publishes mDNS. Do not start a
-second candidate on the same NAS while another Ambient Ops owner is active. Pull
+second candidate on the same NAS while another Gateway owner is active. Pull
 and validate the exact image and rendered service in place:
 
 ```bash
-docker compose -p ambient-ops -f compose.yaml config --quiet
-docker compose -p ambient-ops -f compose.yaml pull
-docker compose -p ambient-ops -f compose.yaml up -d
-docker compose -p ambient-ops -f compose.yaml ps
+docker compose -p opl-fleet-cockpit -f compose.yaml config --quiet
+docker compose -p opl-fleet-cockpit -f compose.yaml pull
+docker compose -p opl-fleet-cockpit -f compose.yaml up -d
+docker compose -p opl-fleet-cockpit -f compose.yaml ps
 curl -fsS http://127.0.0.1:8787/healthz
 curl -fsS http://127.0.0.1:8787/api/status
 ```
@@ -156,12 +157,15 @@ separately reports the normalized source state.
 The same single-file project can be recreated from DSM Container Manager or SSH:
 
 ```bash
-docker compose -p ambient-ops -f compose.yaml pull
-docker compose -p ambient-ops -f compose.yaml up -d
+docker compose -p opl-fleet-cockpit -f compose.yaml pull
+docker compose -p opl-fleet-cockpit -f compose.yaml up -d
 ```
 
-The named `ambient_ops_data` volume is preserved by `down`; never add `-v`
-during an upgrade. The volume retains normalized machine snapshots, network
+The named `opl-fleet-cockpit_data` volume is preserved by `down`; never add `-v`
+during an upgrade. A migrated installation explicitly sets
+`OPL_FLEET_COCKPIT_DATA_VOLUME=ambient-ops_ambient_ops_data`, so the branded
+container mounts the original data in place instead of creating an empty copy.
+The volume retains normalized machine snapshots, device approvals, network
 state, and short history across container replacement.
 
 Host networking removes the published-port mapping and publishes
@@ -174,30 +178,30 @@ exposing them to WAN interfaces.
 Run the persistence probe while the service is still being qualified:
 
 ```bash
-docker compose -p ambient-ops \
+docker compose -p opl-fleet-cockpit \
   -f compose.yaml \
   -f compose.host-network.yaml \
-  exec ambient-ops sh -c 'printf persisted > /data/.persistence-probe'
+  exec gateway sh -c 'printf persisted > /data/.persistence-probe'
 
-docker compose -p ambient-ops \
+docker compose -p opl-fleet-cockpit \
   -f compose.yaml \
   -f compose.host-network.yaml \
   up -d --force-recreate
 
-docker compose -p ambient-ops \
+docker compose -p opl-fleet-cockpit \
   -f compose.yaml \
   -f compose.host-network.yaml \
-  exec ambient-ops test -f /data/.persistence-probe
+  exec gateway test -f /data/.persistence-probe
 
-docker compose -p ambient-ops \
+docker compose -p opl-fleet-cockpit \
   -f compose.yaml \
   -f compose.host-network.yaml \
-  exec ambient-ops rm /data/.persistence-probe
+  exec gateway rm /data/.persistence-probe
 ```
 
-After the acceptance checks pass, reboot the NAS once and repeat the health,
-API, discovery, HTC, and Codex TPS readbacks. `restart: unless-stopped` is not
-proof until the service has returned after a real daemon/host restart.
+This identity migration does not require or authorize a NAS reboot. The status
+receipt continues to report reboot recovery as unverified until a separately
+authorized real reboot occurs; that evidence is not a gate for this migration.
 
 Codex TPS needs the exact `secrets/agent_push_token` value in each host's
 credential store: Keychain service `cn.gaofeng.ambient-ops.agent-push` on macOS
@@ -213,42 +217,43 @@ complete agent and APK installation commands.
 For a NAS that is administered repeatedly, install the repository-owned
 restricted deploy command once. It is safer than granting a user access to the
 Docker socket: Docker access is effectively root access, while this command is
-limited to the Ambient Ops project, image repository, and validation contract.
+limited to the OPL Fleet Cockpit project, image repository, and validation contract.
 
 The one-time installer creates:
 
-- `/usr/local/sbin/ambient-ops-deploy`, owned by root and not writable by the
+- `/usr/local/sbin/opl-fleet-cockpit-deploy`, owned by root and not writable by the
   SSH user;
-- `/etc/sudoers.d/ambient-ops-deploy`, allowing `gaofeng` to run only that
+- `/etc/sudoers.d/opl-fleet-cockpit-deploy`, allowing `gaofeng` to run only that
   command without a password;
-- `/volume1/.ambient-ops-deploy`, a root-controlled runtime directory copied
+- `/volume1/.opl-fleet-cockpit-deploy`, a root-controlled runtime directory copied
   from the existing `/volume1/docker/ambient-ops` configuration.
 
 The root-controlled directory is intentional. A privileged deployer must not
-read Compose or environment files from a user-writable parent directory. The
-installer preserves the existing `.env`, secrets, `INSTANCE_ID`, agent token,
-and Compose project name, so the named data volume remains
-`ambient-ops_ambient_ops_data`.
+read Compose or environment files from a user-writable parent directory. During
+an existing installation migration, the installer preserves `.env`, secrets,
+`INSTANCE_ID`, and the agent token; switches the runtime project/service/image
+to the branded identity; and explicitly binds the original
+`ambient-ops_ambient_ops_data` volume.
 
 Stage the three reviewed files together:
 
 ```text
-ambient-ops-deploy
-install-deploy-command.sh
+opl-fleet-cockpit-deploy
+install-cockpit-deploy-command.sh
 compose.yaml
 ```
 
 From that staging directory, run the installer once as root:
 
 ```bash
-sudo /bin/sh ./install-deploy-command.sh
+sudo /bin/sh ./install-cockpit-deploy-command.sh
 ```
 
 Then verify from the ordinary SSH account:
 
 ```bash
-sudo -n /usr/local/sbin/ambient-ops-deploy --check
-sudo -n /usr/local/sbin/ambient-ops-deploy status | jq .
+sudo -n /usr/local/sbin/opl-fleet-cockpit-deploy --check
+sudo -n /usr/local/sbin/opl-fleet-cockpit-deploy status | jq .
 ```
 
 `status` is a read-only deployment attestation. It returns a sanitized
@@ -257,8 +262,7 @@ digest, runtime image ID and repository digests, container state, restart
 policy, `/data` named volume, public health summary, host boot time, and reboot
 recovery evidence. It never returns environment variables, secret values,
 volume source paths, machine details, or raw logs. The output uses the OPL Fleet
-Cockpit and Telemetry Gateway product names while retaining
-`compatibilityId=ambient-ops`.
+Cockpit and Gateway product names while retaining `compatibilityId=ambient-ops`.
 
 Reboot recovery is true only when the current release was already deployed
 before the latest host boot and the current container started after that boot.
@@ -269,7 +273,7 @@ Ordinary upgrades then need no DSM browser session and no password. Supply both
 the semantic version and the reviewed multi-architecture OCI index digest:
 
 ```bash
-sudo -n /usr/local/sbin/ambient-ops-deploy deploy \
+sudo -n /usr/local/sbin/opl-fleet-cockpit-deploy deploy \
   0.1.26 \
   sha256:a3a34a6ebb43ea94e3498c22f87e5c876f62093cc14859984135ab8cf9c67453
 ```
@@ -279,13 +283,16 @@ The command:
 1. rejects other image repositories, malformed versions, and malformed digests;
 2. serializes deployments with `flock`;
 3. pulls and verifies the exact `tag@digest`;
-4. atomically updates only `AMBIENT_OPS_IMAGE`;
+4. atomically updates only `OPL_FLEET_COCKPIT_IMAGE`;
 5. validates the rendered Compose security and networking contract;
 6. recreates the service without deleting volumes;
 7. requires live `/healthz` plus the versioned `/api/v1/status`;
 8. restores the previous `.env` and service automatically on failure.
 
-It never calls `docker compose down` and has no path that accepts `-v`.
+It never calls `docker compose down` and has no path that accepts `-v`. During
+the one-time identity migration it stops the verified legacy container, starts
+`opl-fleet-cockpit-gateway-1` on the same volume, and restarts the legacy
+container automatically if health or version verification fails.
 Arbitrary Docker commands remain password-protected. A release that changes the
 Compose structure requires reviewing and rerunning the one-time installer; an
 ordinary image-only release does not.
@@ -326,31 +333,32 @@ Pin and record source commits. Qualify the new commit with
 `./ops/docker/smoke-test.sh`, then recreate the service:
 
 ```bash
-docker compose -p ambient-ops \
+docker compose -p opl-fleet-cockpit \
   -f compose.yaml \
   pull
-docker compose -p ambient-ops \
+docker compose -p opl-fleet-cockpit \
   -f compose.yaml \
   up -d
 ```
 
-Repeat live network/Codex, mDNS, HTC, and reboot readbacks. To roll back, set
-`AMBIENT_OPS_IMAGE` to the recorded prior release and run the same commands. Keep
+Repeat live network/Codex, mDNS, and HTC readbacks. A reboot readback is optional
+and separately authorized; it is not part of this migration. To roll back, set
+`OPL_FLEET_COCKPIT_IMAGE` to the recorded prior release and run the same commands. Keep
 `.env`, `secrets`, `INSTANCE_ID`, and the named volume unchanged. Never use
 `down -v` during an upgrade or rollback.
 
 Inspect failures with:
 
 ```bash
-docker compose -p ambient-ops \
+docker compose -p opl-fleet-cockpit \
   -f compose.yaml \
   -f compose.host-network.yaml \
-  logs --tail=200 ambient-ops
+  logs --tail=200 gateway
 curl -fsS http://127.0.0.1:8787/healthz
 curl -fsS http://127.0.0.1:8787/api/status
 ```
 
-If DSM reports **Unable to build project ambient-ops**, treat that as a project
+If DSM reports **Unable to build project opl-fleet-cockpit**, treat that as a project
 definition error. Production uses the public versioned image and must not
 build. Confirm that the project uses only `compose.yaml`, does not include
 `compose.local-build.yaml`, and renders `network_mode: host`, discovery enabled,

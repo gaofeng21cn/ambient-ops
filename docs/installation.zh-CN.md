@@ -6,9 +6,10 @@
 `.env`、`secrets/` 下的私密文件、公开的多架构镜像和正式签名 Android APK。
 NAS 不在本地构建应用源码。
 
-用户可见产品名为 `OPL Fleet Cockpit · Ambient Ops`，其中的容器承担
-`OPL Fleet Telemetry Gateway`。仓库、镜像、Compose project、路径、环境变量和
-`_ambient-ops._tcp.local` 继续使用既有 `ambient-ops` 兼容身份。
+用户可见产品名为 `OPL Fleet Cockpit`，其中的容器承担
+`OPL Fleet Cockpit Gateway`。新安装使用品牌化的仓库、镜像、Compose project、路径和
+数据卷；已有安装的 `ambient-ops` 镜像、环境变量、数据卷和
+`_ambient-ops._tcp.local` 作为原位迁移兼容别名保留。
 
 ## 准备条件
 
@@ -19,27 +20,27 @@ NAS 不在本地构建应用源码。
 - 可选：Docker 主机可通过 IPv4/UDP 161 访问经过验证的 SNMPv3 路由器
 - 首次安装 Android 时可使用一台装有 `adb` 的电脑
 
-当前正式服务端镜像是 `ghcr.io/gaofeng21cn/ambient-ops:0.1.22`，同时支持
+当前正式服务端镜像是 `ghcr.io/gaofeng21cn/opl-fleet-cockpit:0.1.39`，同时支持
 `linux/amd64` 与 `linux/arm64`。该镜像公开可拉取；正常安装不要创建或配置
 GitHub Token。
 
 ## 1. 创建安装目录
 
-选择一个长期保留的目录。群晖常用路径是 `/volume1/docker/ambient-ops`。
+选择一个长期保留的目录。群晖常用路径是 `/volume1/docker/opl-fleet-cockpit`。
 
 ```bash
 git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git
 cd opl-fleet-cockpit
 git rev-parse HEAD
-./scripts/ambient-ops.sh init
+./scripts/opl-fleet-cockpit.sh init
 ```
 
 `init` 默认生成最小的 `codex-only` 配置。若新安装一开始就需要路由器遥测，
 在 `.env` 尚不存在时改用：
 
 ```bash
-./scripts/ambient-ops.sh init --profile snmpv3
-# 或者：./scripts/ambient-ops.sh init --profile unifi-api
+./scripts/opl-fleet-cockpit.sh init --profile snmpv3
+# 或者：./scripts/opl-fleet-cockpit.sh init --profile unifi-api
 ```
 
 `init` 会拒绝覆盖已有 `.env`，并创建：
@@ -60,7 +61,7 @@ SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Asia/Shanghai
 ```
 
-模板已经固定到经过审查的版本化镜像；升级时才修改 `AMBIENT_OPS_IMAGE`，并且
+模板已经固定到经过审查的版本化镜像；升级时才修改 `OPL_FLEET_COCKPIT_IMAGE`，并且
 不要使用移动标签。时区使用 IANA 名称，例如 `Asia/Shanghai`、`Europe/London`
 或 `America/Los_Angeles`。首次启动后不要再修改 `INSTANCE_ID`。
 
@@ -74,7 +75,7 @@ DISPLAY_TIME_ZONE=Asia/Shanghai
 
 ### SNMPv3 模式
 
-新安装应先使用 `./scripts/ambient-ops.sh init --profile snmpv3`，再在 `.env`
+新安装应先使用 `./scripts/opl-fleet-cockpit.sh init --profile snmpv3`，再在 `.env`
 中填写非敏感信息。已有 `codex-only` 安装也可手动添加以下字段：
 
 ```dotenv
@@ -105,8 +106,8 @@ TCP 延迟探针同样可选，应填写一个确实希望监测的稳定目标�
 用交互式命令录入两个密码，避免写入 shell 历史：
 
 ```bash
-./scripts/ambient-ops.sh set-secret unifi_snmp_auth_password
-./scripts/ambient-ops.sh set-secret unifi_snmp_priv_password
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_auth_password
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_priv_password
 ```
 
 历史遗留的 `UNIFI_` 前缀不代表只能使用 UniFi。路由器只有在真实流量下验证
@@ -115,7 +116,7 @@ TCP 延迟探针同样可选，应填写一个确实希望监测的稳定目标�
 
 ### UniFi API 备用模式
 
-新安装应先使用 `./scripts/ambient-ops.sh init --profile unifi-api`，再设置：
+新安装应先使用 `./scripts/opl-fleet-cockpit.sh init --profile unifi-api`，再设置：
 
 ```dotenv
 UNIFI_BASE_URL=https://192.168.1.1
@@ -125,7 +126,7 @@ UNIFI_SITE=default
 再执行：
 
 ```bash
-./scripts/ambient-ops.sh set-secret unifi_api_key
+./scripts/opl-fleet-cockpit.sh set-secret unifi_api_key
 ```
 
 SNMPv3 已经正常工作时不需要 API key。
@@ -147,8 +148,8 @@ macOS Docker Desktop 通常会自动转换 bind mount 权限，不需要这一�
 ## 4. 验证并启动
 
 ```bash
-./scripts/ambient-ops.sh validate
-./scripts/ambient-ops.sh up
+./scripts/opl-fleet-cockpit.sh validate
+./scripts/opl-fleet-cockpit.sh up
 ```
 
 脚本会验证必填项和 secret、渲染生产 Compose、拉取固定版本的公开镜像，并使用
@@ -157,8 +158,8 @@ macOS Docker Desktop 通常会自动转换 bind mount 权限，不需要这一�
 随时检查：
 
 ```bash
-./scripts/ambient-ops.sh status
-./scripts/ambient-ops.sh logs
+./scripts/opl-fleet-cockpit.sh status
+./scripts/opl-fleet-cockpit.sh logs
 curl -fsS http://<server-ip>:8787/api/status
 ```
 
@@ -227,7 +228,7 @@ Kiosk `1.2.7` 在页面可见时每 15 秒读取当前服务器由构建内容�
 - 使用 `snmpv3` 时 `network=live`，制造已知流量时 WAN 速率会变化。
 - Android Kiosk 通过 Wi-Fi 加载所有页面，`adb reverse --list` 为空。
 - HTC 冷启动后无需 USB 即可重新成为 Android Home。
-- Docker 主机或 NAS 真正重启后，Ambient Ops 自动恢复。
+- 重启恢复检查需要另行获得 owner 授权，不属于本次品牌迁移门禁。
 
 容器自启动依靠 `restart: unless-stopped`。不需要也不建议创建 DSM 计划任务。
 
@@ -236,26 +237,26 @@ Kiosk `1.2.7` 在页面可见时每 15 秒读取当前服务器由构建内容�
 升级前记录当前镜像和仓库提交：
 
 ```bash
-docker compose --env-file .env -p ambient-ops \
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml -f compose.host-network.yaml config --images
 git rev-parse HEAD
 ```
 
-只把 `AMBIENT_OPS_IMAGE` 改为经过审查的新版本；若该版本要求新的部署文件，再更新
+只把 `OPL_FLEET_COCKPIT_IMAGE` 改为经过审查的新版本；若该版本要求新的部署文件，再更新
 检出的仓库提交，然后执行：
 
 ```bash
-./scripts/ambient-ops.sh validate
-./scripts/ambient-ops.sh up
+./scripts/opl-fleet-cockpit.sh validate
+./scripts/opl-fleet-cockpit.sh up
 ```
 
 重新完成验收。回滚时恢复之前记录的镜像和部署提交，再运行同样两条命令。保留
-`.env`、`secrets/`、`INSTANCE_ID` 和命名卷 `ambient_ops_data`。升级或回滚时
+`.env`、`secrets/`、`INSTANCE_ID` 和命名卷 `opl-fleet-cockpit_data`。升级或回滚时
 绝不能执行 `docker compose down -v`。
 
 ## 群晖“无法构建项目”处理
 
-生产部署根本不执行构建。如果 DSM 提示“无法构建项目 ambient-ops”，进入
+生产部署根本不执行构建。如果 DSM 提示“无法构建项目 opl-fleet-cockpit”，进入
 Container Manager 日志，并检查项目使用的 Compose 文件。DSM 项目只能使用：
 
 ```text
@@ -266,13 +267,13 @@ compose.yaml
 `DISCOVERY_ENABLED=true`，且不能有 `ports` 或 `build:`。通过 SSH 验证：
 
 ```bash
-docker compose --env-file .env -p ambient-ops \
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml config --quiet
-docker compose --env-file .env -p ambient-ops \
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml config --images
 ```
 
-镜像应为 `ghcr.io/gaofeng21cn/ambient-ops:<version>`。它是公开镜像，不需要
+镜像应为 `ghcr.io/gaofeng21cn/opl-fleet-cockpit:<version>`。它是公开镜像，不需要
 GHCR 登录或 DSM 计划任务。迁移、持久化、防火墙与重启验证见
 [群晖部署参考](deployment-synology.md)。
 

@@ -1,9 +1,9 @@
 services:
-  ambient-ops:
+  gateway:
     build: .
-    image: ${AMBIENT_OPS_LOCAL_IMAGE:-ambient-ops:local}
+    image: ${OPL_FLEET_COCKPIT_LOCAL_IMAGE:-opl-fleet-cockpit:local}
     network_mode: bridge
     ports:
-      - "${AMBIENT_OPS_PORT:-8787}:8787"
+      - "${OPL_FLEET_COCKPIT_PORT:-${AMBIENT_OPS_PORT:-8787}}:8787"
     environment:
       DISCOVERY_ENABLED: "false"

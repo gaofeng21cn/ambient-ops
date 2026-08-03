@@ -1,8 +1,8 @@
 # This is the complete production definition. DSM Container Manager reads this
 # file by itself, so LAN discovery must not depend on a second override file.
 services:
-  ambient-ops:
-    image: ${AMBIENT_OPS_IMAGE:-ghcr.io/gaofeng21cn/ambient-ops:0.1.26}
+  gateway:
+    image: ${OPL_FLEET_COCKPIT_IMAGE:-${AMBIENT_OPS_IMAGE:-ghcr.io/gaofeng21cn/opl-fleet-cockpit:0.1.39}}
     network_mode: host
     restart: unless-stopped
     init: true
@@ -15,7 +15,7 @@ services:
       PORT: "8787"
       DATA_DIR: /data
       DEMO_MODE: ${DEMO_MODE:-true}
-      SITE_NAME: ${SITE_NAME:-Ambient Ops}
+      SITE_NAME: ${SITE_NAME:-OPL Fleet Cockpit}
       DISPLAY_TIME_ZONE: ${DISPLAY_TIME_ZONE:-Asia/Shanghai}
       DISCOVERY_ENABLED: "true"
       INSTANCE_ID: ${INSTANCE_ID:-}
@@ -51,7 +51,7 @@ services:
       HA_SYNC_MS: ${HA_SYNC_MS:-30000}
       HA_TIMEOUT_MS: ${HA_TIMEOUT_MS:-5000}
     volumes:
-      - ambient_ops_data:/data
+      - cockpit_data:/data
       - ./secrets:/run/secrets:ro
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -63,4 +63,7 @@ services:
       retries: 3
 
 volumes:
-  ambient_ops_data:
+  cockpit_data:
+    # Existing installations set this to ambient-ops_ambient_ops_data during
+    # the one-time identity migration. New installations use the branded name.
+    name: ${OPL_FLEET_COCKPIT_DATA_VOLUME:-opl-fleet-cockpit_data}

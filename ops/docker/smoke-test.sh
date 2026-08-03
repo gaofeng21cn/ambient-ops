@@ -4,8 +4,8 @@ set -eu
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd)
 temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/ambient-ops-smoke.XXXXXX")
-project_name="ambient-ops-smoke-$$"
-image_name="${AMBIENT_OPS_SMOKE_IMAGE:-ambient-ops:smoke}"
+project_name="opl-fleet-cockpit-smoke-$$"
+image_name="${OPL_FLEET_COCKPIT_SMOKE_IMAGE:-opl-fleet-cockpit:smoke}"
 package_version=$(CDPATH='' cd -- "$repo_root" && node -p "require('./package.json').version")
 host_uid=$(id -u)
 host_gid=$(id -g)
@@ -13,7 +13,7 @@ secret_owner_changed=false
 
 cleanup() {
   AMBIENT_OPS_SMOKE_SECRETS_DIR="$temporary_dir/secrets" \
-  AMBIENT_OPS_SMOKE_IMAGE="$image_name" \
+  OPL_FLEET_COCKPIT_SMOKE_IMAGE="$image_name" \
     docker compose \
       -f "$repo_root/compose.yaml" \
       -f "$repo_root/compose.local-build.yaml" \
@@ -45,7 +45,7 @@ fi
 
 compose() {
   AMBIENT_OPS_SMOKE_SECRETS_DIR="$temporary_dir/secrets" \
-  AMBIENT_OPS_SMOKE_IMAGE="$image_name" \
+  OPL_FLEET_COCKPIT_SMOKE_IMAGE="$image_name" \
     docker compose \
       -f "$repo_root/compose.yaml" \
       -f "$repo_root/compose.local-build.yaml" \
@@ -74,7 +74,7 @@ compose build \
   --build-arg "VERSION=$package_version"
 compose up --detach --wait --no-build
 
-mapped_port=$(compose port ambient-ops 8787 | tail -n 1)
+mapped_port=$(compose port gateway 8787 | tail -n 1)
 port=${mapped_port##*:}
 base_url="http://127.0.0.1:$port"
 wait_for_http "$base_url/healthz"
@@ -93,7 +93,7 @@ curl --fail --silent --show-error "$base_url/healthz" > "$health_file"
 curl --fail --silent --show-error \
   --dump-header "$revision_headers" \
   "$base_url/api/v1/ui/revision" > "$revision_file"
-container_id=$(compose ps --quiet ambient-ops)
+container_id=$(compose ps --quiet gateway)
 node -e '
   const health = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
   const revision = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8"));
@@ -195,8 +195,8 @@ if docker exec "$container_id" touch /app/should-not-be-writable 2>/dev/null; th
   exit 1
 fi
 
-compose restart ambient-ops
-mapped_port=$(compose port ambient-ops 8787 | tail -n 1)
+compose restart gateway
+mapped_port=$(compose port gateway 8787 | tail -n 1)
 port=${mapped_port##*:}
 base_url="http://127.0.0.1:$port"
 wait_for_http "$base_url/healthz"
@@ -209,4 +209,4 @@ node -e '
   }
 ' "$persisted_file"
 
-echo "Ambient Ops Docker smoke test passed at $base_url"
+echo "OPL Fleet Cockpit Gateway Docker smoke test passed at $base_url"

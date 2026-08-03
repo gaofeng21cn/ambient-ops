@@ -44,6 +44,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: ./ops/synology/deploy.test.sh
+      - run: ./ops/synology/gateway-brand-migration.test.sh
       - run: ./ops/docker/smoke-test.sh
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3

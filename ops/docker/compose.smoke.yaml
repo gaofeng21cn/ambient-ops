@@ -1,6 +1,6 @@
 services:
-  ambient-ops:
-    image: ${AMBIENT_OPS_SMOKE_IMAGE:-ambient-ops:smoke}
+  gateway:
+    image: ${OPL_FLEET_COCKPIT_SMOKE_IMAGE:-opl-fleet-cockpit:smoke}
     network_mode: bridge
     ports: !override
       - "127.0.0.1::8787"
@@ -10,5 +10,5 @@ services:
       LIVE_AFTER_SECONDS: "3600"
       STALE_AFTER_SECONDS: "7200"
     volumes: !override
-      - ambient_ops_data:/data
+      - cockpit_data:/data
       - ${AMBIENT_OPS_SMOKE_SECRETS_DIR:?set AMBIENT_OPS_SMOKE_SECRETS_DIR}:/run/secrets:ro

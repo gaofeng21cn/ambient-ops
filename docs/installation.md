@@ -7,10 +7,11 @@ uses one non-secret `.env` file, private files under `secrets/`, the public
 multi-platform image, and the signed Android APK. The NAS never builds the
 application from source.
 
-The user-facing product is `OPL Fleet Cockpit · Ambient Ops`; its container is
-`OPL Fleet Telemetry Gateway`. Repository, image, Compose project, paths,
-environment variables, and `_ambient-ops._tcp.local` keep their existing
-`ambient-ops` compatibility identities.
+The user-facing product is `OPL Fleet Cockpit`; its container is
+`OPL Fleet Cockpit Gateway`. New installations use the branded repository,
+image, Compose project, paths, and volume. Existing `ambient-ops` image,
+environment, data-volume, and `_ambient-ops._tcp.local` identities remain
+compatibility aliases during in-place migration.
 
 ## What you need
 
@@ -22,20 +23,20 @@ environment variables, and `_ambient-ops._tcp.local` keep their existing
 - Optional for initial Android installation: a computer with `adb`
 
 The current published server image is
-`ghcr.io/gaofeng21cn/ambient-ops:0.1.22` for both `linux/amd64` and
+`ghcr.io/gaofeng21cn/opl-fleet-cockpit:0.1.39` for both `linux/amd64` and
 `linux/arm64`. The package is public. Do not create or configure a GitHub token
 for a normal pull.
 
 ## 1. Create the installation
 
 Choose a persistent directory. On Synology, a typical location is
-`/volume1/docker/ambient-ops`.
+`/volume1/docker/opl-fleet-cockpit`.
 
 ```bash
 git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git
 cd opl-fleet-cockpit
 git rev-parse HEAD
-./scripts/ambient-ops.sh init
+./scripts/opl-fleet-cockpit.sh init
 ```
 
 `init` creates the minimal `codex-only` configuration by default. For a new
@@ -43,8 +44,8 @@ installation that needs router telemetry immediately, run this before `.env`
 exists instead:
 
 ```bash
-./scripts/ambient-ops.sh init --profile snmpv3
-# or: ./scripts/ambient-ops.sh init --profile unifi-api
+./scripts/opl-fleet-cockpit.sh init --profile snmpv3
+# or: ./scripts/opl-fleet-cockpit.sh init --profile unifi-api
 ```
 
 `init` refuses to overwrite an existing `.env`. It creates:
@@ -65,7 +66,7 @@ SITE_NAME=Home Ambient Ops
 DISPLAY_TIME_ZONE=Asia/Shanghai
 ```
 
-The template already pins a reviewed, versioned image. Change `AMBIENT_OPS_IMAGE`
+The template already pins a reviewed, versioned image. Change `OPL_FLEET_COCKPIT_IMAGE`
 only as part of a reviewed upgrade and never use a moving tag. Use an IANA time-zone
 name such as `Asia/Shanghai`, `Europe/London`, or `America/Los_Angeles`. Preserve
 `INSTANCE_ID` exactly after the first start.
@@ -80,7 +81,7 @@ Choose one network profile:
 
 ### SNMPv3 profile
 
-For a new installation, start with `./scripts/ambient-ops.sh init --profile snmpv3`.
+For a new installation, start with `./scripts/opl-fleet-cockpit.sh init --profile snmpv3`.
 Then set the non-secret values in `.env`. An existing `codex-only` installation may
 add the same fields manually:
 
@@ -114,8 +115,8 @@ you intentionally want to measure; it does not require raw-socket privileges.
 Enter the two passwords without putting them in shell history:
 
 ```bash
-./scripts/ambient-ops.sh set-secret unifi_snmp_auth_password
-./scripts/ambient-ops.sh set-secret unifi_snmp_priv_password
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_auth_password
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_priv_password
 ```
 
 The historical `UNIFI_` prefix does not bind the collector to UniFi. A router
@@ -124,7 +125,7 @@ verified under real traffic. Follow [Router and SNMP qualification](unifi.md).
 
 ### UniFi API fallback
 
-For a new installation, start with `./scripts/ambient-ops.sh init --profile unifi-api`.
+For a new installation, start with `./scripts/opl-fleet-cockpit.sh init --profile unifi-api`.
 Then set:
 
 ```dotenv
@@ -135,7 +136,7 @@ UNIFI_SITE=default
 Then run:
 
 ```bash
-./scripts/ambient-ops.sh set-secret unifi_api_key
+./scripts/opl-fleet-cockpit.sh set-secret unifi_api_key
 ```
 
 An API key is not needed when the SNMPv3 profile is live.
@@ -157,8 +158,8 @@ need this step. Do not use mode 644 as a permission workaround.
 ## 4. Validate and start
 
 ```bash
-./scripts/ambient-ops.sh validate
-./scripts/ambient-ops.sh up
+./scripts/opl-fleet-cockpit.sh validate
+./scripts/opl-fleet-cockpit.sh up
 ```
 
 The helper validates required fields and secret files, renders the production
@@ -168,8 +169,8 @@ Compose merge, pulls the pinned public image, and starts it with
 Check at any time:
 
 ```bash
-./scripts/ambient-ops.sh status
-./scripts/ambient-ops.sh logs
+./scripts/opl-fleet-cockpit.sh status
+./scripts/opl-fleet-cockpit.sh logs
 curl -fsS http://<server-ip>:8787/api/status
 ```
 
@@ -248,7 +249,8 @@ Require all applicable checks:
 - With `snmpv3`, `network=live` and WAN rates change under known traffic.
 - The Android kiosk loads every page over Wi-Fi with `adb reverse --list` empty.
 - The kiosk returns as Android Home after a cold reboot without USB.
-- Ambient Ops returns after a real Docker-host or NAS reboot.
+- A reboot recovery check is optional and requires separate owner authorization;
+  it is not a gate for this identity migration.
 
 `restart: unless-stopped` is the container restart policy. A DSM Task Scheduler
 job is neither required nor recommended.
@@ -258,28 +260,28 @@ job is neither required nor recommended.
 Before an upgrade, record the current image and repository commit:
 
 ```bash
-docker compose --env-file .env -p ambient-ops \
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml -f compose.host-network.yaml config --images
 git rev-parse HEAD
 ```
 
-Change only `AMBIENT_OPS_IMAGE` to the reviewed new version, update the checked
+Change only `OPL_FLEET_COCKPIT_IMAGE` to the reviewed new version, update the checked
 out deployment files when required by that release, then run:
 
 ```bash
-./scripts/ambient-ops.sh validate
-./scripts/ambient-ops.sh up
+./scripts/opl-fleet-cockpit.sh validate
+./scripts/opl-fleet-cockpit.sh up
 ```
 
 Repeat the acceptance checks. To roll back, restore the recorded image and
 deployment commit and run the same two commands. Keep `.env`, `secrets/`,
-`INSTANCE_ID`, and the named `ambient_ops_data` volume. Never use
+`INSTANCE_ID`, and the named `opl-fleet-cockpit_data` volume. Never use
 `docker compose down -v` during upgrade or rollback.
 
 ## Synology build-error recovery
 
 Production does not build a project. If DSM reports **Unable to build project
-ambient-ops**, inspect Container Manager logs and the project Compose file.
+opl-fleet-cockpit**, inspect Container Manager logs and the project Compose file.
 The DSM project must use only:
 
 ```text
@@ -290,13 +292,13 @@ It must not include `compose.local-build.yaml`, and rendered Compose must contai
 `network_mode: host`, `DISCOVERY_ENABLED=true`, no `ports`, and no `build:`. Verify over SSH:
 
 ```bash
-docker compose --env-file .env -p ambient-ops \
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml config --quiet
-docker compose --env-file .env -p ambient-ops \
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml config --images
 ```
 
-The image should be `ghcr.io/gaofeng21cn/ambient-ops:<version>`. It is public,
+The image should be `ghcr.io/gaofeng21cn/opl-fleet-cockpit:<version>`. It is public,
 so GHCR login and DSM scheduled tasks are not needed. See the detailed
 [Synology deployment reference](deployment-synology.md) for migration,
 persistence, firewall, and reboot checks.

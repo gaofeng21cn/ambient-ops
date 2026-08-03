@@ -1,8 +1,9 @@
 # Production Migration Checklist
 
-This checklist moves the accepted macOS LaunchAgent runtime to a canonical
-Synology host-network container. It preserves the logical installation and
-provides a bounded rollback.
+This checklist moves an accepted legacy runtime, either the macOS LaunchAgent
+or the Synology `ambient-ops` Compose identity, to the canonical OPL Fleet
+Cockpit Gateway host-network container. It preserves the logical installation,
+including the existing Synology data volume, and provides a bounded rollback.
 
 Home Assistant is optional and excluded from the completion gate.
 
@@ -14,7 +15,9 @@ Migration is complete only when all of these are true:
 - The Synology container uses the prior stable `INSTANCE_ID`.
 - The exact agent push token and required SNMPv3 secrets are present.
 - `/data` survives forced container replacement.
-- The container returns after a real NAS reboot.
+- The Compose project is `opl-fleet-cockpit`, the service is `gateway`, and the
+  container is `opl-fleet-cockpit-gateway-1`.
+- An existing Synology installation keeps its original named data volume.
 - Health and API readback show live UniFi and Codex state with the expected
   machine set.
 - Codex TPS discovers and pushes to the NAS.
@@ -82,11 +85,11 @@ Keep the Mac as canonical owner. Do not start a second discovery owner on the NA
 Validate the single-file production definition without starting it:
 
 ```bash
-docker compose -p ambient-ops -f compose.yaml config --quiet
-docker compose -p ambient-ops -f compose.yaml config --format json | \
-  jq -e '.services["ambient-ops"].network_mode == "host" and
-    .services["ambient-ops"].environment.DISCOVERY_ENABLED == "true" and
-    (.services["ambient-ops"].ports == null)'
+docker compose -p opl-fleet-cockpit -f compose.yaml config --quiet
+docker compose -p opl-fleet-cockpit -f compose.yaml config --format json | \
+  jq -e '.services.gateway.network_mode == "host" and
+    .services.gateway.environment.DISCOVERY_ENABLED == "true" and
+    (.services.gateway.ports == null)'
 ```
 
 Validate live SNMP without expecting Codex to move yet:
@@ -109,16 +112,16 @@ Do not run `up` until the Mac owner has been stopped in the cutover step below.
 On the staged NAS candidate:
 
 ```bash
-docker compose -p ambient-ops -f compose.yaml \
-  exec ambient-ops sh -c 'printf persisted > /data/.persistence-probe'
+docker compose -p opl-fleet-cockpit -f compose.yaml \
+  exec gateway sh -c 'printf persisted > /data/.persistence-probe'
 
-docker compose -p ambient-ops -f compose.yaml up -d --force-recreate
+docker compose -p opl-fleet-cockpit -f compose.yaml up -d --force-recreate
 
-docker compose -p ambient-ops -f compose.yaml \
-  exec ambient-ops test -f /data/.persistence-probe
+docker compose -p opl-fleet-cockpit -f compose.yaml \
+  exec gateway test -f /data/.persistence-probe
 
-docker compose -p ambient-ops -f compose.yaml \
-  exec ambient-ops rm /data/.persistence-probe
+docker compose -p opl-fleet-cockpit -f compose.yaml \
+  exec gateway rm /data/.persistence-probe
 ```
 
 Also confirm `/data/state.json` exists after live SNMP sampling. Never use
@@ -135,8 +138,8 @@ launchctl bootout gui/$(id -u)/cn.gaofeng.ambient-ops.server
 Immediately start Synology from the single production file:
 
 ```bash
-docker compose -p ambient-ops -f compose.yaml pull
-docker compose -p ambient-ops -f compose.yaml up -d
+docker compose -p opl-fleet-cockpit -f compose.yaml pull
+docker compose -p opl-fleet-cockpit -f compose.yaml up -d
 ```
 
 Do not restart the Mac owner while Synology is publishing. A short collection
@@ -182,13 +185,14 @@ On the HTC without a reverse tunnel or manual URL:
    pet animates, and no discovery/retry page remains.
 5. Reboot the HTC and verify it returns to the kiosk as Home.
 
-## 7. Prove NAS reboot recovery
+## Optional NAS reboot recovery
 
-Reboot the NAS during an owner-approved maintenance window. After the host
-returns:
+This is a separate operational check, not a completion gate for the identity
+migration. Run it only after explicit owner authorization for a maintenance
+window. After the host returns:
 
 ```bash
-docker compose -p ambient-ops \
+docker compose -p opl-fleet-cockpit \
   -f compose.yaml \
   -f compose.host-network.yaml \
   ps
@@ -198,7 +202,9 @@ Repeat the exact health/API assertions and HTC/Codex readbacks from step 6.
 Confirm the expected machines return without duplicating IDs and that the
 network history resumes.
 
-Only then is Synology the canonical production owner.
+The migration can complete without this optional reboot check when the live
+container, restart policy, persisted data volume, API, agents, and kiosk have
+all been read back successfully.
 
 ## Rollback
 
@@ -210,7 +216,7 @@ If a post-cutover check fails:
 1. Stop Synology first:
 
    ```bash
-   docker compose -p ambient-ops \
+   docker compose -p opl-fleet-cockpit \
      -f compose.yaml \
      -f compose.host-network.yaml \
      down
@@ -227,6 +233,6 @@ If a post-cutover check fails:
 3. Require the original live health/API state, one mDNS owner, Codex TPS push,
    and automatic HTC recovery.
 
-The Mac data, Keychain entries, plist, and prior runtime releases must remain
-untouched until Synology has passed the reboot gate. Do not run both owners to
-mask a failed rollback.
+The Mac data, Keychain entries, plist, prior runtime releases, and legacy
+Synology data volume must remain untouched until the live migration checks have
+passed. Do not run both owners to mask a failed rollback.

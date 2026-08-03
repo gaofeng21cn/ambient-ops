@@ -83,11 +83,12 @@ aggregate Codex activity from multiple computers with optional live WAN counters
 from a compatible router, then presents the normalized state through browser and
 dedicated Android displays.
 
-The container is OPL Fleet Telemetry Gateway and Codex TPS is presented as
+The container is the OPL Fleet Cockpit Gateway and Codex TPS is presented as
 OPL Fleet Agent · Codex TPS. These are telemetry-only roles: registry, policy,
 admission, leases, and dispatch remain with OPL Flow, the private Instance, and
-OPL Fleet Controller. Existing repository, image, package, discovery, and update
-identities remain compatible with `ambient-ops` and `codex-tps`.
+OPL Fleet Controller. New installations use the `opl-fleet-cockpit` project and
+image identities; `ambient-ops` and `codex-tps` remain bounded compatibility aliases
+for existing agents and in-place upgrades.
 
 It is intentionally narrower than a general observability platform. It helps when
 you want to:
@@ -150,18 +151,18 @@ Requirements: Docker Engine, Docker Compose v2, `curl`, and `openssl`.
 ```bash
 git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git
 cd opl-fleet-cockpit
-./scripts/ambient-ops.sh init
+./scripts/opl-fleet-cockpit.sh init
 ```
 
 This creates the minimal `codex-only` configuration. Most users edit only the
 site name and time zone in `.env`:
 
 ```dotenv
-SITE_NAME=Home Ambient Ops
+SITE_NAME=Home OPL Fleet Cockpit
 DISPLAY_TIME_ZONE=Asia/Shanghai
 ```
 
-The template pins a reviewed release image. Change `AMBIENT_OPS_IMAGE` only when
+The template pins a reviewed release image. Change `OPL_FLEET_COCKPIT_IMAGE` only when
 deliberately moving to a newer reviewed
 [release](https://github.com/gaofeng21cn/opl-fleet-cockpit/releases/latest); never use `latest`.
 
@@ -169,18 +170,18 @@ If router telemetry is needed from the beginning, select the profile during
 initialization:
 
 ```bash
-./scripts/ambient-ops.sh init --profile snmpv3
-# or: ./scripts/ambient-ops.sh init --profile unifi-api
+./scripts/opl-fleet-cockpit.sh init --profile snmpv3
+# or: ./scripts/opl-fleet-cockpit.sh init --profile unifi-api
 ```
 
 The SNMPv3 profile also requires both passwords through the interactive helpers:
 
 ```bash
-./scripts/ambient-ops.sh set-secret unifi_snmp_auth_password
-./scripts/ambient-ops.sh set-secret unifi_snmp_priv_password
-./scripts/ambient-ops.sh validate
-./scripts/ambient-ops.sh up
-./scripts/ambient-ops.sh status
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_auth_password
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_priv_password
+./scripts/opl-fleet-cockpit.sh validate
+./scripts/opl-fleet-cockpit.sh up
+./scripts/opl-fleet-cockpit.sh status
 ```
 
 `init` refuses to overwrite an existing configuration. It creates a stable instance
@@ -212,7 +213,7 @@ interfaces. “SNMP enabled” is not sufficient; qualify the device with
   remains a compatibility override for older operator commands; `compose.local-build.yaml`
   is for local development only.
 - Do not expose the service directly to the internet.
-- Preserve `.env`, `INSTANCE_ID`, `secrets/`, and the `ambient_ops_data` volume during upgrades.
+- Preserve `.env`, `INSTANCE_ID`, `secrets/`, and the `OPL_FLEET_COCKPIT_DATA_VOLUME` during upgrades.
 - Do not run `docker compose down -v` unless permanent data deletion is intentional.
 
 ## For Agents
@@ -222,19 +223,20 @@ interfaces. “SNMP enabled” is not sufficient; qualify the device with
 Replace only the non-sensitive placeholders:
 
 ```text
-Install or upgrade Ambient Ops on <Docker host> under <absolute target directory>.
+Install or upgrade OPL Fleet Cockpit Gateway on <Docker host> under <absolute target directory>.
 Use SITE_NAME=<site name>, DISPLAY_TIME_ZONE=<IANA time zone>, and
 AMBIENT_OPS_NETWORK_MODE=<codex-only|snmpv3|unifi-api>.
 
 Follow docs/installation.md, docs/agent-installation.md, and
-scripts/ambient-ops.sh. Use only a reviewed versioned GHCR image in production.
+scripts/opl-fleet-cockpit.sh. Use only a reviewed versioned GHCR image in production.
 Do not build source on the NAS, use a moving image tag, create unnecessary GitHub
 credentials, or add a scheduler that duplicates the container restart policy.
 
 Do not request, read, print, or copy tokens and passwords. When a secret is needed,
 ask me to run the documented interactive set-secret command in a trusted terminal.
 An existing installation must preserve .env, INSTANCE_ID, secrets/, and
-ambient_ops_data. Never run docker compose down -v.
+`OPL_FLEET_COCKPIT_DATA_VOLUME`. Never run docker compose down -v. Existing migrations
+may set it to `ambient-ops_ambient_ops_data` to keep the original data.
 
 Before completion, read back the rendered image, /healthz, /api/status, mDNS
 discovery, expected machine list, and Android kiosk connection. A successful build,
@@ -249,23 +251,23 @@ For a new installation:
 git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git <target>
 cd <target>
 git rev-parse HEAD
-./scripts/ambient-ops.sh init --profile <codex-only|snmpv3|unifi-api>
+./scripts/opl-fleet-cockpit.sh init --profile <codex-only|snmpv3|unifi-api>
 ```
 
 Modify only documented non-secret `.env` fields. The user enters real tokens and
 passwords in a trusted terminal.
 
 ```bash
-./scripts/ambient-ops.sh validate
-docker compose --env-file .env -p ambient-ops \
+./scripts/opl-fleet-cockpit.sh validate
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml -f compose.host-network.yaml config --images
-./scripts/ambient-ops.sh up
-./scripts/ambient-ops.sh status
+./scripts/opl-fleet-cockpit.sh up
+./scripts/opl-fleet-cockpit.sh status
 ```
 
 Do not run `init` for an existing installation. Before upgrading, record the current
 source commit, effective image, health readback, and exact rollback command. Change
-`AMBIENT_OPS_IMAGE` only to a reviewed version and repeat validation and acceptance.
+`OPL_FLEET_COCKPIT_IMAGE` only to a reviewed version and repeat validation and acceptance.
 
 ### Agent authority and evidence boundaries
 

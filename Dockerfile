@@ -11,8 +11,8 @@ FROM node:22-alpine
 ARG BUILD_DATE
 ARG VCS_REF
 ARG VERSION=dev
-LABEL org.opencontainers.image.title="Ambient Ops" \
-      org.opencontainers.image.description="LAN operations display and metrics aggregator" \
+LABEL org.opencontainers.image.title="OPL Fleet Cockpit Gateway" \
+      org.opencontainers.image.description="Self-hosted OPL Fleet telemetry gateway and cockpit server" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.version="${VERSION}" \

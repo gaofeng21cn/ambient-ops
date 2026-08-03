@@ -35,7 +35,7 @@
 使用 SITE_NAME=<site-name>、DISPLAY_TIME_ZONE=<iana-time-zone>、
 AMBIENT_OPS_NETWORK_MODE=<profile>。
 
-严格遵循 docs/installation.zh-CN.md 和 scripts/ambient-ops.sh。只使用公开的
+严格遵循 docs/installation.zh-CN.md 和 scripts/opl-fleet-cockpit.sh。只使用公开的
 版本化 GHCR 镜像；不得在 NAS 上使用 compose.local-build.yaml 或构建源码，
 不得创建 GHCR 登录或 DSM 计划任务，不得使用移动镜像标签。
 
@@ -45,14 +45,14 @@ AMBIENT_OPS_NETWORK_MODE=<profile>。
 macOS Codex TPS v0.2.11+ 使用同样的自动配对流程；只有 headless 和旧版 bearer
 agent 仍需由我在本机直接输入既有 agent token。
 
-已有安装必须保留 .env、INSTANCE_ID、secrets 目录和 ambient_ops_data 数据卷；
+已有安装必须保留 .env、INSTANCE_ID、secrets 目录和 opl-fleet-cockpit_data 数据卷；
 绝不能执行 docker compose down -v。修改运行中的实例前，记录当前镜像、提交、
 health 回读和准确回滚命令。局域网中只保留一个发现与采集 owner。
 
 只有以下终态全部满足才完成：Compose 没有 build 指令；固定版本的公开镜像正在
 运行；/healthz 中所有已配置来源均 live；每台预期 Codex 主机只出现一次；mDNS
-解析到目标实例；Android Kiosk 通过 Wi-Fi 工作且没有 adb reverse；在我授权
-真实重启 Docker 主机后服务能够恢复。最后报告准确命令、非敏感回读、改动文件、
+解析到目标实例；Android Kiosk 通过 Wi-Fi 工作且没有 adb reverse。真实重启 Docker
+主机是另行授权的可选运维操作，不属于本次品牌迁移。最后报告准确命令、非敏感回读、改动文件、
 镜像/版本和仍存在的边界。
 ```
 
@@ -87,7 +87,7 @@ Agent 应先确认：
 git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git <target>
 cd <target>
 git rev-parse HEAD
-./scripts/ambient-ops.sh init --profile <codex-only|snmpv3|unifi-api>
+./scripts/opl-fleet-cockpit.sh init --profile <codex-only|snmpv3|unifi-api>
 ```
 
 已有安装不得运行 `init`。Agent 只能修改文档允许的非敏感 `.env` 字段，并保留
@@ -96,8 +96,8 @@ git rev-parse HEAD
 需要密码时，Agent 只要求用户在已经打开的可信终端执行准确命令：
 
 ```bash
-./scripts/ambient-ops.sh set-secret unifi_snmp_auth_password
-./scripts/ambient-ops.sh set-secret unifi_snmp_priv_password
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_auth_password
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_priv_password
 ```
 
 命令成功退出后 Agent 继续，不询问刚才输入的值。Linux/群晖上再按文档设置 UID
@@ -106,8 +106,8 @@ git rev-parse HEAD
 ### 3. 生产写入前验证
 
 ```bash
-./scripts/ambient-ops.sh validate
-docker compose --env-file .env -p ambient-ops \
+./scripts/opl-fleet-cockpit.sh validate
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml -f compose.host-network.yaml config --images
 ```
 
@@ -118,11 +118,11 @@ docker compose --env-file .env -p ambient-ops \
 ### 4. 通过仓库助手启动
 
 ```bash
-./scripts/ambient-ops.sh up
-./scripts/ambient-ops.sh status
+./scripts/opl-fleet-cockpit.sh up
+./scripts/opl-fleet-cockpit.sh status
 ```
 
-Agent 可以查看 `./scripts/ambient-ops.sh logs`。遇到失败应修复第一个真实断点，
+Agent 可以查看 `./scripts/opl-fleet-cockpit.sh logs`。遇到失败应修复第一个真实断点，
 而不是增加计划重启。日常自启动 owner 是 Docker Compose 的
 `restart: unless-stopped`。
 
@@ -150,7 +150,7 @@ Android APK 只能来自正式 Release，并同时校验同名 checksum。执行
 - 预期 machine ID/名称，但不含 session 内容
 - mDNS 服务身份与解析出的局域网地址
 - Android package/version、证书摘要、Home activity、Wi-Fi 和空 reverse list
-- 经 owner 授权真实重启后的服务回读
+- 如另有 owner 授权重启，再记录重启后的服务回读
 
 不能把配置校验、镜像拉取、容器创建或单独 HTTP 存活说成部署完成。
 
@@ -159,20 +159,20 @@ Android APK 只能来自正式 Release，并同时校验同名 checksum。执行
 升级前记录：
 
 ```bash
-docker compose --env-file .env -p ambient-ops \
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml -f compose.host-network.yaml config --images
 git rev-parse HEAD
-./scripts/ambient-ops.sh status
+./scripts/opl-fleet-cockpit.sh status
 ```
 
-升级只改变经过审查的部署提交与 `AMBIENT_OPS_IMAGE`，并保留 `.env`、
+升级只改变经过审查的部署提交与 `OPL_FLEET_COCKPIT_IMAGE`，并保留 `.env`、
 `INSTANCE_ID`、`secrets/` 和命名卷。验收失败时恢复之前记录的镜像与提交，再运行
 `validate`、`up`。不得通过旋转 token、删除状态、卸载 Android App 或启动第二个
 发现 owner 来临时回滚。
 
 ## DSM 构建错误规则
 
-如果 DSM 提示无法“构建” `ambient-ops`，Agent 应检查项目定义和日志。生产项目
+如果 DSM 提示无法“构建” `opl-fleet-cockpit`，Agent 应检查项目定义和日志。生产项目
 只拉取公开镜像，根本不构建。DSM 项目应只包含 `compose.yaml`；确认准确项目写集后，
 只移除误选的 `compose.local-build.yaml` 或 `build:`。不得用 GHCR Token、DSM
 计划任务或在 NAS 上编译源码来解决。

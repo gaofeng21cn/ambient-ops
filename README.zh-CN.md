@@ -2,7 +2,7 @@
   <a href="./README.md">English</a> | <strong>中文</strong>
 </p>
 
-<h1 align="center">OPL Fleet Cockpit · Ambient Ops</h1>
+<h1 align="center">OPL Fleet Cockpit</h1>
 
 <p align="center"><strong>把 OPL Fleet 遥测汇总成一块安静、常亮、可自托管的驾驶舱</strong></p>
 <p align="center">OPL Fleet Agent · Telemetry Gateway · 浏览器、Android 常驻屏与原生 iOS 客户端</p>
@@ -78,10 +78,10 @@
 
 ### 这是什么
 
-OPL Fleet Cockpit · Ambient Ops 是一个自托管的局域网状态聚合器。它把多台电脑上的 Codex 使用情况、
+OPL Fleet Cockpit 是一个自托管的局域网状态聚合器。它把多台电脑上的 Codex 使用情况、
 兼容路由器的实时广域网计数器和设备在线状态，整理成一套适合常亮显示的界面。
 
-其中容器承担 `OPL Fleet Telemetry Gateway`，Codex TPS 作为
+其中容器承担 `OPL Fleet Cockpit Gateway`，Codex TPS 作为
 `OPL Fleet Agent · Codex TPS`。两者都只拥有遥测职责；registry、policy、admission、
 lease 与 dispatch 仍由 OPL Flow、私有 Instance 和 `OPL Fleet Controller` 负责。
 仓库、镜像、包名、发现服务和更新通道继续兼容既有 `ambient-ops` 与 `codex-tps` 身份。
@@ -96,7 +96,7 @@ lease 与 dispatch 仍由 OPL Flow、私有 Instance 和 `OPL Fleet Controller` 
 ### 与 Codex TPS 如何协同
 
 [OPL Fleet Agent · Codex TPS](https://github.com/gaofeng21cn/opl-fleet-agent) 运行在每台 macOS 或 Windows
-电脑上，读取本机 Codex 已经写入的用量事件。它只向 Ambient Ops 发送机器名、平台、
+电脑上，读取本机 Codex 已经写入的用量事件。它只向 OPL Fleet Cockpit Gateway 发送机器名、平台、
 采集时间、最近 `1 分钟 / 5 分钟` 的汇总 Token 计数、活跃会话数和可选宠物状态。
 
 会话标识、本机路径、提示词、回复正文、工具调用内容和仓库文件都不会发送。
@@ -110,7 +110,7 @@ lease 与 dispatch 仍由 OPL Flow、私有 Instance 和 `OPL Fleet Controller` 
 ```text
 各电脑上的 OPL Fleet Agent -- 认证汇总快照 -----+
                                                |
-SNMPv3 路由器 -------- 标准 IF-MIB 计数器 ------+--> OPL Fleet Telemetry Gateway
+SNMPv3 路由器 -------- 标准 IF-MIB 计数器 ------+--> OPL Fleet Cockpit Gateway
                                                |      |
 /data ---------------- 状态与短期历史 ---------+      +--> 浏览器
                                                       +--> Android 常驻屏
@@ -139,35 +139,35 @@ SNMPv3 路由器 -------- 标准 IF-MIB 计数器 ------+--> OPL Fleet Telemetry
 ```bash
 git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git
 cd opl-fleet-cockpit
-./scripts/ambient-ops.sh init
+./scripts/opl-fleet-cockpit.sh init
 ```
 
 这会生成最小的 `codex-only` 配置。普通用户只需编辑 `.env` 中的站点名称和时区：
 
 ```dotenv
-SITE_NAME=Home Ambient Ops
+SITE_NAME=Home OPL Fleet Cockpit
 DISPLAY_TIME_ZONE=Asia/Shanghai
 ```
 
-模板默认固定到经过审查的发布镜像；如需升级，才把 `AMBIENT_OPS_IMAGE` 改为
+模板默认固定到经过审查的发布镜像；如需升级，才把 `OPL_FLEET_COCKPIT_IMAGE` 改为
 [最新发布版本](https://github.com/gaofeng21cn/opl-fleet-cockpit/releases/latest)对应的版本化标签，
 不要使用 `latest`。
 
 如果一开始就需要路由器遥测，请在初始化时选择配置模式：
 
 ```bash
-./scripts/ambient-ops.sh init --profile snmpv3
-# 或者：./scripts/ambient-ops.sh init --profile unifi-api
+./scripts/opl-fleet-cockpit.sh init --profile snmpv3
+# 或者：./scripts/opl-fleet-cockpit.sh init --profile unifi-api
 ```
 
 SNMPv3 模式还需要通过交互式命令写入两份密码：
 
 ```bash
-./scripts/ambient-ops.sh set-secret unifi_snmp_auth_password
-./scripts/ambient-ops.sh set-secret unifi_snmp_priv_password
-./scripts/ambient-ops.sh validate
-./scripts/ambient-ops.sh up
-./scripts/ambient-ops.sh status
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_auth_password
+./scripts/opl-fleet-cockpit.sh set-secret unifi_snmp_priv_password
+./scripts/opl-fleet-cockpit.sh validate
+./scripts/opl-fleet-cockpit.sh up
+./scripts/opl-fleet-cockpit.sh status
 ```
 
 `init` 不会覆盖已有配置。它生成稳定的实例 ID 和 Agent 共享令牌，但不会把敏感值
@@ -191,12 +191,12 @@ SNMP 路径使用标准 IF-MIB，不依赖 UniFi 私有 MIB。设备仍需支持
 
 ### 重要边界
 
-- 一个站点只应运行一个对外广播并接收上报的 Ambient Ops 实例。
+- 一个站点只应运行一个对外广播并接收上报的 OPL Fleet Cockpit Gateway 实例。
 - 生产环境的 `compose.yaml` 已经是完整的 host-network 定义，DSM
   Container Manager 可以单独读取；`compose.host-network.yaml` 仅为旧的命令行流程保留，
   `compose.local-build.yaml` 仅用于本地开发。
 - 不要把服务端口直接暴露到互联网。显示页和设备批准页默认信任所在局域网。
-- 升级时保留 `.env`、`INSTANCE_ID`、`secrets/` 和 `ambient_ops_data` 数据卷。
+- 升级时保留 `.env`、`INSTANCE_ID`、`secrets/` 和 `opl-fleet-cockpit_data` 数据卷。
 - 不要执行 `docker compose down -v`，除非你明确要永久删除持久数据。
 
 ## 面向 Agent
@@ -206,17 +206,17 @@ SNMP 路径使用标准 IF-MIB，不依赖 UniFi 私有 MIB。设备仍需支持
 可以直接把下面的任务交给 Codex 或其他本机 Agent，并只替换非敏感字段：
 
 ```text
-在 <Docker 主机> 的 <绝对目标目录> 安装或升级 Ambient Ops。
+在 <Docker 主机> 的 <绝对目标目录> 安装或升级 OPL Fleet Cockpit Gateway。
 使用 SITE_NAME=<站点名称>、DISPLAY_TIME_ZONE=<IANA 时区>、
 AMBIENT_OPS_NETWORK_MODE=<codex-only|snmpv3|unifi-api>。
 
 严格遵循 docs/installation.zh-CN.md、docs/agent-installation.zh-CN.md 和
-scripts/ambient-ops.sh。生产环境只使用经过审查的版本化 GHCR 镜像，不在 NAS
+scripts/opl-fleet-cockpit.sh。生产环境只使用经过审查的版本化 GHCR 镜像，不在 NAS
 上构建源码，不使用移动标签，不创建不必要的 GitHub 登录或计划任务。
 
 不要索取、读取、打印或复制令牌与密码。需要写入 secret 时，只让我在可信终端
 执行文档中的交互式 set-secret 命令。已有安装必须保留 .env、INSTANCE_ID、
-secrets/ 和 ambient_ops_data，禁止执行 docker compose down -v。
+secrets/ 和 opl-fleet-cockpit_data，禁止执行 docker compose down -v。
 
 完成前必须回读 Compose 最终镜像、/healthz、/api/status、mDNS 发现、预期机器
 列表和 Android 常驻屏连接状态；不能把构建成功、HTTP 200 或容器正在运行当成
@@ -231,21 +231,21 @@ secrets/ 和 ambient_ops_data，禁止执行 docker compose down -v。
 git clone https://github.com/gaofeng21cn/opl-fleet-cockpit.git <target>
 cd <target>
 git rev-parse HEAD
-./scripts/ambient-ops.sh init --profile <codex-only|snmpv3|unifi-api>
+./scripts/opl-fleet-cockpit.sh init --profile <codex-only|snmpv3|unifi-api>
 ```
 
 随后只修改允许公开的 `.env` 字段；真实令牌和密码由用户在可信终端写入。
 
 ```bash
-./scripts/ambient-ops.sh validate
-docker compose --env-file .env -p ambient-ops \
+./scripts/opl-fleet-cockpit.sh validate
+docker compose --env-file .env -p opl-fleet-cockpit \
   -f compose.yaml -f compose.host-network.yaml config --images
-./scripts/ambient-ops.sh up
-./scripts/ambient-ops.sh status
+./scripts/opl-fleet-cockpit.sh up
+./scripts/opl-fleet-cockpit.sh status
 ```
 
 已有安装不得重新运行 `init`。升级前先记录当前仓库提交、实际镜像、健康状态和
-准确回滚命令，再把 `AMBIENT_OPS_IMAGE` 改为经过审查的新版本，重新执行验证与
+准确回滚命令，再把 `OPL_FLEET_COCKPIT_IMAGE` 改为经过审查的新版本，重新执行验证与
 验收。
 
 ### Agent 权限与证据边界

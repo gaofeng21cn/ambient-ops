@@ -25,13 +25,14 @@ test("production Compose is self-contained for DSM single-file projects", async 
     return;
   }
 
-  const service = config.services?.["ambient-ops"];
+  const service = config.services?.gateway;
   assert.ok(service);
   assert.equal(service.network_mode, "host");
   assert.equal(service.environment.DISCOVERY_ENABLED, "true");
   assert.equal(service.ports, undefined);
   assert.equal(service.build, undefined);
-  assert.match(service.image, /^ghcr\.io\/gaofeng21cn\/ambient-ops:(?!latest$)[0-9]+\.[0-9]+\.[0-9]+$/);
+  assert.match(service.image, /^ghcr\.io\/gaofeng21cn\/opl-fleet-cockpit:(?!latest$)[0-9]+\.[0-9]+\.[0-9]+$/);
+  assert.equal(config.volumes?.cockpit_data?.name, "opl-fleet-cockpit_data");
 });
 
 test("legacy host override preserves the same production invariants", async (t) => {
@@ -41,7 +42,7 @@ test("legacy host override preserves the same production invariants", async (t) 
     return;
   }
 
-  const service = config.services?.["ambient-ops"];
+  const service = config.services?.gateway;
   assert.ok(service);
   assert.equal(service.network_mode, "host");
   assert.equal(service.environment.DISCOVERY_ENABLED, "true");

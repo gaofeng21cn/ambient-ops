@@ -29,6 +29,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: ./ops/synology/deploy.test.sh
+      - run: ./ops/synology/gateway-brand-migration.test.sh
       - run: npm run build
       - run: npm run build:android
       - run: ./ops/docker/smoke-test.sh
@@ -96,6 +97,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
+            ghcr.io/gaofeng21cn/opl-fleet-cockpit:${{ steps.version.outputs.value }}
+            ghcr.io/gaofeng21cn/opl-fleet-cockpit:latest
             ghcr.io/gaofeng21cn/ambient-ops:${{ steps.version.outputs.value }}
             ghcr.io/gaofeng21cn/ambient-ops:latest
           labels: |
@@ -264,12 +267,14 @@ jobs:
         shell: bash
         run: |
           printf '%s\n' \
+            "ghcr.io/gaofeng21cn/opl-fleet-cockpit:${IMAGE_VERSION}" \
+            "ghcr.io/gaofeng21cn/opl-fleet-cockpit@${IMAGE_DIGEST}" \
             "ghcr.io/gaofeng21cn/ambient-ops:${IMAGE_VERSION}" \
             "ghcr.io/gaofeng21cn/ambient-ops@${IMAGE_DIGEST}" \
-            > "release-assets/Ambient-Ops-Docker-${IMAGE_VERSION}.txt"
+            > "release-assets/OPL-Fleet-Cockpit-Gateway-Docker-${IMAGE_VERSION}.txt"
           (
             cd release-assets
-            sha256sum Ambient-Ops-* kiosk-update.json > SHA256SUMS
+            sha256sum Ambient-Ops-* OPL-Fleet-Cockpit-* kiosk-update.json > SHA256SUMS
           )
       - name: Publish GitHub Release
         env:
@@ -279,6 +284,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Ambient Ops $GITHUB_REF_NAME" \
+            --title "OPL Fleet Cockpit $GITHUB_REF_NAME" \
             --generate-notes \
             --verify-tag
