@@ -78,7 +78,10 @@ case "$command_name" in
     printf '%s\n' legacy-container
     ;;
   rm)
-    target=${@: -1}
+    target=
+    for argument in "$@"; do
+      target=$argument
+    done
     case "$target" in
       legacy-container)
         rm -f "$root/legacy-present" "$root/legacy-stopped"
@@ -212,7 +215,7 @@ export http_proxy=http://untrusted.example:8080
 DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 cp "$TEST_ROOT/managed/.env" "$TEST_ROOT/legacy.env"
 touch "$TEST_ROOT/fail-up-once"
-if "$DEPLOYER" deploy 0.1.39 "$DIGEST"; then
+if "$DEPLOYER" deploy 0.1.40 "$DIGEST"; then
   printf '%s\n' "expected first migration to fail" >&2
   exit 1
 fi
@@ -222,8 +225,8 @@ test ! -f "$TEST_ROOT/legacy-stopped"
 grep -F -x 'stop legacy-container' "$TEST_ROOT/actions" >/dev/null
 grep -F -x 'start legacy-container' "$TEST_ROOT/actions" >/dev/null
 
-"$DEPLOYER" deploy 0.1.39 "$DIGEST"
-grep -F -x "OPL_FLEET_COCKPIT_IMAGE=ghcr.io/gaofeng21cn/opl-fleet-cockpit:0.1.39@$DIGEST" "$TEST_ROOT/managed/.env"
+"$DEPLOYER" deploy 0.1.40 "$DIGEST"
+grep -F -x "OPL_FLEET_COCKPIT_IMAGE=ghcr.io/gaofeng21cn/opl-fleet-cockpit:0.1.40@$DIGEST" "$TEST_ROOT/managed/.env"
 grep -F -x 'OPL_FLEET_COCKPIT_DATA_VOLUME=ambient-ops_ambient_ops_data' "$TEST_ROOT/managed/.env"
 test ! -f "$TEST_ROOT/legacy-present"
 grep -F -x 'rm legacy-container' "$TEST_ROOT/actions" >/dev/null
@@ -250,7 +253,7 @@ fi
 
 cp "$TEST_ROOT/managed/.env" "$TEST_ROOT/success.env"
 touch "$TEST_ROOT/fail-up-once"
-if "$DEPLOYER" deploy 0.1.40 sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; then
+if "$DEPLOYER" deploy 0.1.41 sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; then
   printf '%s\n' "expected failed upgrade" >&2
   exit 1
 fi
