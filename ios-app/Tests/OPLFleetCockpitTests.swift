@@ -301,6 +301,37 @@ final class OPLFleetCockpitTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testFleetSceneUsesBalancedSlotsAndKeepsReducedMotionAlive() {
+        XCTAssertEqual(FleetLoadSceneProfile.maximumNodeCount, 6)
+        XCTAssertEqual(FleetLoadSceneProfile.fieldParticleCapacity, 72)
+        XCTAssertEqual(FleetLoadSceneProfile.slotIndices(nodeCount: 1), [1])
+        XCTAssertEqual(FleetLoadSceneProfile.slotIndices(nodeCount: 2), [1, 4])
+        XCTAssertEqual(FleetLoadSceneProfile.slotIndices(nodeCount: 4), [0, 2, 3, 5])
+        XCTAssertEqual(FleetLoadSceneProfile.slotIndices(nodeCount: 8), [0, 1, 2, 3, 4, 5])
+        XCTAssertGreaterThan(FleetLoadSceneProfile.motionScale(reduceMotion: true), 0)
+        XCTAssertLessThan(
+            FleetLoadSceneProfile.motionScale(reduceMotion: true),
+            FleetLoadSceneProfile.motionScale(reduceMotion: false)
+        )
+    }
+
+    @MainActor
+    func testFleetSceneParticleDensityRespondsToWork() {
+        XCTAssertEqual(FleetLoadSceneProfile.routeParticleCount(intensity: 1, isWorking: false), 0)
+        XCTAssertEqual(FleetLoadSceneProfile.localParticleCount(intensity: 1, isWorking: false), 0)
+        XCTAssertEqual(FleetLoadSceneProfile.routeParticleCount(intensity: 0, isWorking: true), 8)
+        XCTAssertEqual(
+            FleetLoadSceneProfile.routeParticleCount(intensity: 1, isWorking: true),
+            FleetLoadSceneProfile.routeParticleCapacity
+        )
+        XCTAssertEqual(FleetLoadSceneProfile.localParticleCount(intensity: 0, isWorking: true), 5)
+        XCTAssertEqual(
+            FleetLoadSceneProfile.localParticleCount(intensity: 1, isWorking: true),
+            FleetLoadSceneProfile.localParticleCapacity
+        )
+    }
+
     func testFleetConstraintRequiresAggregateLoadInsteadOfOneHotNode() throws {
         let encoded = try JSONEncoder().encode(DemoFixtures.status())
         var object = try XCTUnwrap(

@@ -297,32 +297,82 @@ struct LoadSceneView: View {
 }
 
 @MainActor
+
+enum FleetLoadSceneProfile {
+    static let maximumNodeCount = 6
+    static let routeParticleCapacity = 32
+    static let localParticleCapacity = 18
+    static let fieldParticleCapacity = 72
+
+    static func motionScale(reduceMotion: Bool) -> Double {
+        reduceMotion ? 0.3 : 1
+    }
+
+    static func routeParticleCount(intensity: Double, isWorking: Bool) -> Int {
+        guard isWorking else { return 0 }
+        return min(routeParticleCapacity, max(8, Int(8 + intensity * 24)))
+    }
+
+    static func localParticleCount(intensity: Double, isWorking: Bool) -> Int {
+        guard isWorking else { return 0 }
+        return min(localParticleCapacity, max(5, Int(5 + intensity * 13)))
+    }
+
+    static func slotIndices(nodeCount: Int) -> [Int] {
+        switch min(max(nodeCount, 0), maximumNodeCount) {
+        case 0: []
+        case 1: [1]
+        case 2: [1, 4]
+        case 3: [0, 2, 4]
+        case 4: [0, 2, 3, 5]
+        case 5: [0, 1, 2, 3, 5]
+        default: Array(0..<maximumNodeCount)
+        }
+    }
+}
+
+@MainActor
 final class FleetLoadScene: SKScene {
     private struct NodeSurface {
         let container: SKNode
-        let card: SKShapeNode
+        let bay: SKShapeNode
+        let artwork: SKSpriteNode
+        let screen: SKShapeNode
+        let screenBars: [SKSpriteNode]
         let statusDot: SKShapeNode
         let name: SKLabelNode
         let detail: SKLabelNode
+        let port: SKShapeNode
+        let heatBars: [SKSpriteNode]
         let path: SKShapeNode
-        let particles: [SKSpriteNode]
+        let routeParticles: [SKSpriteNode]
+        let localParticles: [SKSpriteNode]
     }
 
     private let logicalSize = CGSize(width: 960, height: 540)
     private let corePoint = CGPoint(x: 480, y: 270)
     private let slotPositions = [
-        CGPoint(x: 166, y: 405),
-        CGPoint(x: 480, y: 434),
-        CGPoint(x: 794, y: 405),
-        CGPoint(x: 166, y: 135),
-        CGPoint(x: 480, y: 106),
-        CGPoint(x: 794, y: 135),
+        CGPoint(x: 142, y: 424),
+        CGPoint(x: 142, y: 270),
+        CGPoint(x: 142, y: 116),
+        CGPoint(x: 818, y: 424),
+        CGPoint(x: 818, y: 270),
+        CGPoint(x: 818, y: 116),
     ]
     private var presentation = FleetLoadPresentation(status: .unavailable())
     private var surfaces: [NodeSurface] = []
     private var coreRings: [SKShapeNode] = []
+    private var coreBars: [SKSpriteNode] = []
+    private var coreParticles: [SKSpriteNode] = []
+    private var fieldParticles: [SKSpriteNode] = []
+    private var queueNodes: [SKSpriteNode] = []
+    private var heatNodes: [SKSpriteNode] = []
     private var startTime: TimeInterval?
     private var reduceMotion = false
+
+    private var activeSlotIndices: [Int] {
+        FleetLoadSceneProfile.slotIndices(nodeCount: presentation.nodes.count)
+    }
 
     override init() {
         super.init(size: logicalSize)
@@ -341,6 +391,7 @@ final class FleetLoadScene: SKScene {
         view.preferredFramesPerSecond = reduceMotion ? 15 : 30
         buildGrid()
         buildCore()
+        buildCoreFlow()
         buildNodeSurfaces()
         updateSurfaces()
     }
@@ -357,40 +408,88 @@ final class FleetLoadScene: SKScene {
         let elapsed = max(0, currentTime - (startTime ?? currentTime))
         animateCore(elapsed)
         animateFlows(elapsed)
+        animateCoreFlow(elapsed)
+        animateFieldFlow(elapsed)
+        animateQueue(elapsed)
+        animateHeat(elapsed)
     }
 
     private func buildGrid() {
         let grid = SKNode()
         grid.zPosition = -30
-        for x in stride(from: 0, through: Int(logicalSize.width), by: 40) {
+        for x in stride(from: 0, through: Int(logicalSize.width), by: 24) {
             let line = SKSpriteNode(
-                color: UIColor(red: 0.14, green: 0.21, blue: 0.24, alpha: 0.18),
+                color: UIColor(red: 0.14, green: 0.21, blue: 0.24, alpha: 0.14),
                 size: CGSize(width: 1, height: logicalSize.height)
             )
             line.position = CGPoint(x: CGFloat(x), y: logicalSize.height / 2)
             grid.addChild(line)
         }
-        for y in stride(from: 0, through: Int(logicalSize.height), by: 40) {
+        for y in stride(from: 0, through: Int(logicalSize.height), by: 24) {
             let line = SKSpriteNode(
-                color: UIColor(red: 0.14, green: 0.21, blue: 0.24, alpha: 0.18),
+                color: UIColor(red: 0.14, green: 0.21, blue: 0.24, alpha: 0.14),
                 size: CGSize(width: logicalSize.width, height: 1)
             )
             line.position = CGPoint(x: logicalSize.width / 2, y: CGFloat(y))
             grid.addChild(line)
         }
         addChild(grid)
+
+        for y in [38.0, 192.0, 346.0, 500.0] {
+            let floor = SKSpriteNode(
+                color: UIColor(red: 0.14, green: 0.38, blue: 0.43, alpha: 0.28),
+                size: CGSize(width: logicalSize.width - 28, height: 2)
+            )
+            floor.position = CGPoint(x: logicalSize.width / 2, y: y)
+            floor.zPosition = -24
+            addChild(floor)
+        }
+
+        let corridor = SKShapeNode(rectOf: CGSize(width: 372, height: 500), cornerRadius: 3)
+        corridor.position = corePoint
+        corridor.fillColor = UIColor(red: 0.015, green: 0.035, blue: 0.042, alpha: 0.56)
+        corridor.strokeColor = UIColor(AmbientTheme.blue).withAlphaComponent(0.12)
+        corridor.lineWidth = 2
+        corridor.zPosition = -22
+        addChild(corridor)
+
+        for y in stride(from: 7, through: Int(logicalSize.height), by: 8) {
+            let scanline = SKSpriteNode(
+                color: UIColor(red: 0.64, green: 0.76, blue: 0.82, alpha: 0.018),
+                size: CGSize(width: logicalSize.width, height: 1)
+            )
+            scanline.position = CGPoint(x: logicalSize.width / 2, y: CGFloat(y))
+            scanline.zPosition = 30
+            addChild(scanline)
+        }
     }
 
     private func buildCore() {
-        for radius in [88.0, 66.0, 43.0] {
+        let console = SKShapeNode(rectOf: CGSize(width: 186, height: 142), cornerRadius: 4)
+        console.position = corePoint
+        console.fillColor = UIColor(red: 0.025, green: 0.065, blue: 0.073, alpha: 0.96)
+        console.strokeColor = UIColor(AmbientTheme.blue).withAlphaComponent(0.48)
+        console.lineWidth = 3
+        console.zPosition = 2
+        addChild(console)
+
+        let consoleInset = SKShapeNode(rectOf: CGSize(width: 158, height: 92), cornerRadius: 2)
+        consoleInset.position = CGPoint(x: corePoint.x, y: corePoint.y + 8)
+        consoleInset.fillColor = UIColor(red: 0.012, green: 0.035, blue: 0.039, alpha: 0.98)
+        consoleInset.strokeColor = UIColor(AmbientTheme.green).withAlphaComponent(0.28)
+        consoleInset.lineWidth = 2
+        consoleInset.zPosition = 3
+        addChild(consoleInset)
+
+        for radius in [92.0, 76.0, 40.0] {
             let ring = SKShapeNode(circleOfRadius: radius)
             ring.position = corePoint
-            ring.fillColor = radius == 43 ? UIColor(red: 0.03, green: 0.11, blue: 0.12, alpha: 0.95) : .clear
-            ring.strokeColor = radius == 88
+            ring.fillColor = .clear
+            ring.strokeColor = radius == 92
                 ? UIColor(AmbientTheme.blue).withAlphaComponent(0.22)
                 : UIColor(AmbientTheme.green).withAlphaComponent(0.58)
-            ring.lineWidth = radius == 43 ? 3 : 2
-            ring.zPosition = radius == 43 ? 4 : 1
+            ring.lineWidth = radius == 40 ? 3 : 2
+            ring.zPosition = radius == 40 ? 4 : 1
             coreRings.append(ring)
             addChild(ring)
         }
@@ -401,7 +500,7 @@ final class FleetLoadScene: SKScene {
         icon.fontColor = UIColor(AmbientTheme.green)
         icon.verticalAlignmentMode = .center
         icon.horizontalAlignmentMode = .center
-        icon.position = CGPoint(x: corePoint.x, y: corePoint.y + 5)
+        icon.position = CGPoint(x: corePoint.x, y: corePoint.y + 17)
         icon.zPosition = 7
         addChild(icon)
 
@@ -411,16 +510,86 @@ final class FleetLoadScene: SKScene {
         label.fontColor = UIColor(AmbientTheme.muted)
         label.verticalAlignmentMode = .center
         label.horizontalAlignmentMode = .center
-        label.position = CGPoint(x: corePoint.x, y: corePoint.y - 17)
+        label.position = CGPoint(x: corePoint.x, y: corePoint.y - 7)
         label.zPosition = 7
         addChild(label)
+
+        for index in 0..<9 {
+            let bar = SKSpriteNode(
+                color: index.isMultiple(of: 4) ? UIColor(AmbientTheme.blue) : UIColor(AmbientTheme.green),
+                size: CGSize(width: CGFloat(20 + (index * 17) % 54), height: 3)
+            )
+            bar.anchorPoint = CGPoint(x: 0, y: 0.5)
+            bar.position = CGPoint(
+                x: corePoint.x - 68 + CGFloat(index % 3) * 48,
+                y: corePoint.y + 51 - CGFloat(index / 3) * 11
+            )
+            bar.zPosition = 7
+            coreBars.append(bar)
+            addChild(bar)
+        }
+
+        let inbound = SKLabelNode(fontNamed: "Menlo-Bold")
+        inbound.text = "ROUTER  /  TASK QUEUE"
+        inbound.fontSize = 9
+        inbound.fontColor = UIColor(AmbientTheme.muted)
+        inbound.position = CGPoint(x: corePoint.x, y: corePoint.y - 51)
+        inbound.zPosition = 7
+        addChild(inbound)
+    }
+
+    private func buildCoreFlow() {
+        for index in 0..<FleetLoadSceneProfile.fieldParticleCapacity {
+            let particle = SKSpriteNode(
+                color: index.isMultiple(of: 5) ? UIColor(AmbientTheme.blue) : UIColor(AmbientTheme.green),
+                size: CGSize(width: index.isMultiple(of: 8) ? 12 : 5, height: 3)
+            )
+            particle.zPosition = 0
+            particle.isHidden = true
+            fieldParticles.append(particle)
+            addChild(particle)
+        }
+
+        for index in 0..<84 {
+            let particle = SKSpriteNode(
+                color: index.isMultiple(of: 6) ? UIColor(AmbientTheme.blue) : UIColor(AmbientTheme.green),
+                size: CGSize(width: index.isMultiple(of: 9) ? 10 : 5, height: index.isMultiple(of: 9) ? 4 : 5)
+            )
+            particle.zPosition = 6
+            particle.isHidden = true
+            coreParticles.append(particle)
+            addChild(particle)
+        }
+
+        for index in 0..<24 {
+            let queue = SKSpriteNode(
+                color: index.isMultiple(of: 5) ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.amber),
+                size: CGSize(width: index.isMultiple(of: 4) ? 11 : 6, height: 6)
+            )
+            queue.zPosition = 10
+            queue.isHidden = true
+            queueNodes.append(queue)
+            addChild(queue)
+        }
+
+        for _ in 0..<10 {
+            let heat = SKSpriteNode(
+                color: UIColor(AmbientTheme.amber),
+                size: CGSize(width: 8, height: 22)
+            )
+            heat.zPosition = 11
+            heat.isHidden = true
+            heatNodes.append(heat)
+            addChild(heat)
+        }
     }
 
     private func buildNodeSurfaces() {
         for (index, position) in slotPositions.enumerated() {
+            let isLeft = index < 3
             let path = SKShapeNode()
             path.strokeColor = UIColor(AmbientTheme.line)
-            path.lineWidth = 2
+            path.lineWidth = 1.5
             path.zPosition = -2
             addChild(path)
 
@@ -429,60 +598,138 @@ final class FleetLoadScene: SKScene {
             container.zPosition = 8
             addChild(container)
 
-            let card = SKShapeNode(rectOf: CGSize(width: 170, height: 78), cornerRadius: 5)
-            card.fillColor = UIColor(red: 0.035, green: 0.055, blue: 0.064, alpha: 0.94)
-            card.strokeColor = UIColor(AmbientTheme.line)
-            card.lineWidth = 2
-            container.addChild(card)
+            let bay = SKShapeNode(rectOf: CGSize(width: 268, height: 130), cornerRadius: 4)
+            bay.fillColor = UIColor(red: 0.028, green: 0.048, blue: 0.056, alpha: 0.96)
+            bay.strokeColor = UIColor(AmbientTheme.line)
+            bay.lineWidth = 2
+            container.addChild(bay)
+
+            let bayFloor = SKSpriteNode(
+                color: UIColor(red: 0.11, green: 0.28, blue: 0.31, alpha: 0.52),
+                size: CGSize(width: 242, height: 2)
+            )
+            bayFloor.position = CGPoint(x: 0, y: -48)
+            bayFloor.zPosition = 1
+            container.addChild(bayFloor)
+
+            let artwork = SKSpriteNode(texture: SKTexture(imageNamed: "operator-workbench.webp"))
+            artwork.texture?.filteringMode = .nearest
+            artwork.size = CGSize(width: 132, height: 132)
+            artwork.position = CGPoint(x: isLeft ? -66 : 66, y: -3)
+            artwork.alpha = 0.82
+            artwork.zPosition = 2
+            artwork.xScale = isLeft ? 1 : -1
+            container.addChild(artwork)
+
+            let screenX: CGFloat = isLeft ? -32 : 32
+            let screen = SKShapeNode(rectOf: CGSize(width: 38, height: 28), cornerRadius: 1)
+            screen.position = CGPoint(x: screenX, y: 26)
+            screen.fillColor = UIColor(red: 0.015, green: 0.07, blue: 0.075, alpha: 0.84)
+            screen.strokeColor = UIColor(AmbientTheme.blue).withAlphaComponent(0.45)
+            screen.lineWidth = 1
+            screen.zPosition = 4
+            container.addChild(screen)
+
+            var screenBars: [SKSpriteNode] = []
+            for barIndex in 0..<4 {
+                let bar = SKSpriteNode(
+                    color: barIndex.isMultiple(of: 3) ? UIColor(AmbientTheme.blue) : UIColor(AmbientTheme.green),
+                    size: CGSize(width: CGFloat(12 + barIndex * 5), height: 2)
+                )
+                bar.anchorPoint = CGPoint(x: 0, y: 0.5)
+                bar.position = CGPoint(x: screenX - 15, y: 35 - CGFloat(barIndex * 6))
+                bar.zPosition = 5
+                screenBars.append(bar)
+                container.addChild(bar)
+            }
 
             let statusDot = SKShapeNode(circleOfRadius: 5)
-            statusDot.position = CGPoint(x: -67, y: 20)
+            statusDot.position = CGPoint(x: isLeft ? 6 : -120, y: 44)
             statusDot.fillColor = UIColor(AmbientTheme.muted)
             statusDot.strokeColor = .clear
-            statusDot.zPosition = 2
+            statusDot.zPosition = 5
             container.addChild(statusDot)
 
             let name = SKLabelNode(fontNamed: "Menlo-Bold")
-            name.fontSize = 15
+            name.fontSize = 13
             name.fontColor = .white
             name.horizontalAlignmentMode = .left
             name.verticalAlignmentMode = .center
-            name.position = CGPoint(x: -56, y: 20)
-            name.zPosition = 2
+            name.position = CGPoint(x: isLeft ? 17 : -109, y: 44)
+            name.zPosition = 5
             container.addChild(name)
 
             let detail = SKLabelNode(fontNamed: "Menlo")
-            detail.fontSize = 11
+            detail.fontSize = 9
             detail.fontColor = UIColor(AmbientTheme.muted)
             detail.horizontalAlignmentMode = .left
             detail.verticalAlignmentMode = .center
-            detail.position = CGPoint(x: -68, y: -16)
-            detail.zPosition = 2
+            detail.position = CGPoint(x: isLeft ? 6 : -120, y: 20)
+            detail.zPosition = 5
             container.addChild(detail)
 
-            var particles: [SKSpriteNode] = []
-            for particleIndex in 0..<18 {
+            let port = SKShapeNode(rectOf: CGSize(width: 13, height: 13), cornerRadius: 1)
+            port.position = CGPoint(x: isLeft ? 134 : -134, y: 0)
+            port.fillColor = UIColor(red: 0.02, green: 0.07, blue: 0.075, alpha: 1)
+            port.strokeColor = UIColor(AmbientTheme.green)
+            port.lineWidth = 2
+            port.zPosition = 8
+            container.addChild(port)
+
+            var heatBars: [SKSpriteNode] = []
+            for heatIndex in 0..<4 {
+                let heat = SKSpriteNode(
+                    color: UIColor(AmbientTheme.amber),
+                    size: CGSize(width: 5, height: CGFloat(8 + heatIndex * 5))
+                )
+                heat.position = CGPoint(x: isLeft ? 110 + CGFloat(heatIndex * 7) : -110 - CGFloat(heatIndex * 7), y: -44)
+                heat.zPosition = 6
+                heat.isHidden = true
+                heatBars.append(heat)
+                container.addChild(heat)
+            }
+
+            var routeParticles: [SKSpriteNode] = []
+            for particleIndex in 0..<FleetLoadSceneProfile.routeParticleCapacity {
                 let particle = SKSpriteNode(
                     color: particleIndex.isMultiple(of: 5)
                         ? UIColor(AmbientTheme.blue)
                         : UIColor(AmbientTheme.green),
-                    size: CGSize(width: particleIndex.isMultiple(of: 7) ? 12 : 7, height: 4)
+                    size: CGSize(width: particleIndex.isMultiple(of: 7) ? 12 : 6, height: 4)
                 )
-                particle.zPosition = 3
+                particle.zPosition = 7
                 particle.isHidden = true
-                particles.append(particle)
+                routeParticles.append(particle)
                 addChild(particle)
+            }
+
+            var localParticles: [SKSpriteNode] = []
+            for particleIndex in 0..<FleetLoadSceneProfile.localParticleCapacity {
+                let particle = SKSpriteNode(
+                    color: particleIndex.isMultiple(of: 4) ? UIColor(AmbientTheme.blue) : UIColor(AmbientTheme.green),
+                    size: CGSize(width: particleIndex.isMultiple(of: 6) ? 7 : 4, height: 4)
+                )
+                particle.zPosition = 6
+                particle.isHidden = true
+                localParticles.append(particle)
+                container.addChild(particle)
             }
 
             surfaces.append(
                 NodeSurface(
                     container: container,
-                    card: card,
+                    bay: bay,
+                    artwork: artwork,
+                    screen: screen,
+                    screenBars: screenBars,
                     statusDot: statusDot,
                     name: name,
                     detail: detail,
+                    port: port,
+                    heatBars: heatBars,
                     path: path,
-                    particles: particles
+                    routeParticles: routeParticles,
+                    localParticles: localParticles
                 )
             )
             updatePath(path, from: position, slotIndex: index)
@@ -491,10 +738,12 @@ final class FleetLoadScene: SKScene {
 
     private func updatePath(_ node: SKShapeNode, from point: CGPoint, slotIndex: Int) {
         let path = CGMutablePath()
-        path.move(to: point)
+        let isLeft = slotIndex < 3
+        let origin = CGPoint(x: point.x + (isLeft ? 134 : -134), y: point.y)
+        path.move(to: origin)
         let bend = CGPoint(
-            x: (point.x + corePoint.x) / 2 + CGFloat(slotIndex.isMultiple(of: 2) ? 22 : -22),
-            y: (point.y + corePoint.y) / 2 + CGFloat(slotIndex < 3 ? -12 : 12)
+            x: (origin.x + corePoint.x) / 2,
+            y: (origin.y + corePoint.y) / 2 + CGFloat((slotIndex % 3 - 1) * 28)
         )
         path.addQuadCurve(to: corePoint, control: bend)
         node.path = path
@@ -503,14 +752,17 @@ final class FleetLoadScene: SKScene {
     private func updateSurfaces() {
         let stateColor = UIColor(AmbientTheme.statusColor(presentation.visual.state))
         coreRings.last?.strokeColor = stateColor
+        let activeSlots = Set(activeSlotIndices)
         for (index, surface) in surfaces.enumerated() {
-            guard index < presentation.nodes.count else {
+            guard activeSlots.contains(index),
+                  let nodeIndex = activeSlotIndices.firstIndex(of: index) else {
                 surface.container.isHidden = true
                 surface.path.isHidden = true
-                surface.particles.forEach { $0.isHidden = true }
+                surface.routeParticles.forEach { $0.isHidden = true }
+                surface.localParticles.forEach { $0.isHidden = true }
                 continue
             }
-            let node = presentation.nodes[index]
+            let node = presentation.nodes[nodeIndex]
             surface.container.isHidden = false
             surface.path.isHidden = false
             surface.name.text = displayName(node.name)
@@ -520,10 +772,16 @@ final class FleetLoadScene: SKScene {
                 : node.status.uppercased()
             let color = nodeColor(node)
             surface.statusDot.fillColor = color
-            surface.card.strokeColor = color.withAlphaComponent(node.status == "live" ? 0.68 : 0.32)
-            surface.path.strokeColor = color.withAlphaComponent(node.isWorking ? 0.38 : 0.16)
+            surface.bay.strokeColor = color.withAlphaComponent(node.status == "live" ? 0.62 : 0.28)
+            surface.screen.strokeColor = color.withAlphaComponent(node.isWorking ? 0.72 : 0.28)
+            surface.port.strokeColor = color
+            surface.path.strokeColor = color.withAlphaComponent(node.isWorking ? 0.42 : 0.14)
             surface.name.fontColor = node.status == "live" ? .white : UIColor(AmbientTheme.muted)
             surface.detail.fontColor = node.isWorking ? color : UIColor(AmbientTheme.muted)
+            surface.artwork.alpha = node.status == "live" ? 0.88 : 0.32
+            for heatBar in surface.heatBars {
+                heatBar.color = (node.cpuPercent ?? 0) >= 90 ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.amber)
+            }
         }
     }
 
@@ -537,22 +795,36 @@ final class FleetLoadScene: SKScene {
                 ring.setScale(scale)
             }
         }
+        for (index, bar) in coreBars.enumerated() {
+            let pulse = 0.5 + 0.5 * sin(elapsed * speed * 2.2 + Double(index) * 0.73)
+            bar.alpha = 0.25 + CGFloat(max(0.08, presentation.visual.activity)) * CGFloat(pulse) * 0.74
+            bar.xScale = 0.52 + CGFloat(pulse) * 0.48
+        }
     }
 
     private func animateFlows(_ elapsed: TimeInterval) {
         for (surfaceIndex, surface) in surfaces.enumerated() {
-            guard surfaceIndex < presentation.nodes.count else { continue }
-            let nodeModel = presentation.nodes[surfaceIndex]
-            let visibleCount = nodeModel.isWorking
-                ? min(surface.particles.count, max(3, Int(3 + nodeModel.intensity * 15)))
-                : 0
-            let origin = slotPositions[surfaceIndex]
+            guard let nodeIndex = activeSlotIndices.firstIndex(of: surfaceIndex) else { continue }
+            let nodeModel = presentation.nodes[nodeIndex]
+            let visibleCount = FleetLoadSceneProfile.routeParticleCount(
+                intensity: nodeModel.intensity,
+                isWorking: nodeModel.isWorking
+            )
+            let localCount = FleetLoadSceneProfile.localParticleCount(
+                intensity: nodeModel.intensity,
+                isWorking: nodeModel.isWorking
+            )
+            let isLeft = surfaceIndex < 3
+            let origin = CGPoint(
+                x: slotPositions[surfaceIndex].x + (isLeft ? 134 : -134),
+                y: slotPositions[surfaceIndex].y
+            )
             let delta = CGPoint(x: corePoint.x - origin.x, y: corePoint.y - origin.y)
             let distance = max(1, hypot(delta.x, delta.y))
             let perpendicular = CGPoint(x: -delta.y / distance, y: delta.x / distance)
-            let speedScale = reduceMotion ? 0.3 : 1.0
+            let speedScale = FleetLoadSceneProfile.motionScale(reduceMotion: reduceMotion)
 
-            for (particleIndex, particle) in surface.particles.enumerated() {
+            for (particleIndex, particle) in surface.routeParticles.enumerated() {
                 guard particleIndex < visibleCount else {
                     particle.isHidden = true
                     continue
@@ -573,8 +845,154 @@ final class FleetLoadScene: SKScene {
                     ? (nodeModel.cpuPercent ?? 0) >= 90 ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.amber)
                     : particleIndex.isMultiple(of: 5) ? UIColor(AmbientTheme.blue) : UIColor(AmbientTheme.green)
                 particle.zRotation = atan2(delta.y, delta.x)
-                particle.xScale = CGFloat(0.85 + nodeModel.intensity * 0.55)
+                particle.xScale = CGFloat(1.05 + nodeModel.intensity * 0.78)
             }
+
+            for (particleIndex, particle) in surface.localParticles.enumerated() {
+                guard particleIndex < localCount else {
+                    particle.isHidden = true
+                    continue
+                }
+                particle.isHidden = false
+                let phase = fmod(
+                    elapsed * speedScale * (0.36 + nodeModel.intensity * 0.9)
+                        + noise(Double(surfaceIndex * 61 + particleIndex))
+                        + Double(particleIndex) / Double(max(localCount, 1)),
+                    1
+                )
+                let direction: CGFloat = isLeft ? 1 : -1
+                let sweep = CGFloat(phase) * 98 * direction
+                particle.position = CGPoint(
+                    x: (isLeft ? -94 : 94) + sweep,
+                    y: -34 + CGFloat(noise(Double(particleIndex) * 3.7) * 60)
+                        + CGFloat(sin(elapsed * 2.4 + Double(particleIndex)) * 4)
+                )
+                particle.alpha = CGFloat(min(1, phase / 0.1, (1 - phase) / 0.12)) * 0.78
+                particle.color = nodeModel.isPressured
+                    ? (nodeModel.cpuPercent ?? 0) >= 90 ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.amber)
+                    : particleIndex.isMultiple(of: 4) ? UIColor(AmbientTheme.blue) : UIColor(AmbientTheme.green)
+            }
+
+            for (barIndex, bar) in surface.screenBars.enumerated() {
+                let pulse = 0.5 + 0.5 * sin(elapsed * speedScale * 3 + Double(surfaceIndex * 7 + barIndex))
+                bar.alpha = nodeModel.isWorking ? 0.35 + CGFloat(pulse) * 0.65 : 0.18
+                bar.xScale = 0.52 + CGFloat(pulse) * CGFloat(0.26 + nodeModel.intensity * 0.36)
+            }
+            surface.port.alpha = nodeModel.isWorking
+                ? 0.58 + CGFloat(sin(elapsed * speedScale * 4 + Double(surfaceIndex)) * 0.28)
+                : 0.32
+            for (heatIndex, heat) in surface.heatBars.enumerated() {
+                heat.isHidden = !nodeModel.isPressured
+                guard !heat.isHidden else { continue }
+                heat.alpha = 0.28 + CGFloat(nodeModel.intensity) * 0.58
+                heat.yScale = 0.7 + CGFloat(0.3 * sin(elapsed * speedScale * 3.2 + Double(heatIndex)))
+            }
+        }
+    }
+
+    private func animateCoreFlow(_ elapsed: TimeInterval) {
+        let visual = presentation.visual
+        let activeCount = visual.clusterCount == 0
+            ? 0
+            : min(coreParticles.count, Int(18 + visual.taskDensity * 52 + visual.parallel * 14))
+        let speedScale = FleetLoadSceneProfile.motionScale(reduceMotion: reduceMotion)
+        let radiusX = 72 + visual.activity * 52
+        let radiusY = 52 + visual.parallel * 42
+
+        for (index, particle) in coreParticles.enumerated() {
+            guard index < activeCount else {
+                particle.isHidden = true
+                continue
+            }
+            particle.isHidden = false
+            let orbit = elapsed * speedScale * (0.42 + visual.tempo * 0.26)
+                + Double(index) * 2.399
+            let layer = 0.55 + noise(Double(index) * 6.31) * 0.75
+            let flutter = sin(elapsed * speedScale * 2.8 + Double(index)) * (4 + visual.activity * 9)
+            particle.position = CGPoint(
+                x: corePoint.x + CGFloat(cos(orbit) * radiusX * layer + flutter),
+                y: corePoint.y + CGFloat(sin(orbit * 1.13) * radiusY * layer)
+            )
+            particle.alpha = 0.28 + CGFloat(visual.activity) * 0.62
+            if visual.pressure > 0.28 && index.isMultiple(of: 3) {
+                particle.color = visual.pressure > 0.74 ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.amber)
+            } else {
+                particle.color = index.isMultiple(of: 6) ? UIColor(AmbientTheme.blue) : UIColor(AmbientTheme.green)
+            }
+        }
+    }
+
+    private func animateFieldFlow(_ elapsed: TimeInterval) {
+        let visual = presentation.visual
+        let activeCount = visual.clusterCount == 0
+            ? 0
+            : min(fieldParticles.count, Int(16 + visual.taskDensity * 48 + visual.parallel * 8))
+        let speedScale = FleetLoadSceneProfile.motionScale(reduceMotion: reduceMotion)
+        let travelMs = max(1_200, visual.travelMs)
+        for (index, particle) in fieldParticles.enumerated() {
+            guard index < activeCount else {
+                particle.isHidden = true
+                continue
+            }
+            particle.isHidden = false
+            let lane = index % 3
+            let seed = noise(Double(index) * 4.83 + 6.2)
+            let phase = fmod(
+                elapsed * speedScale / (travelMs / 1_000 * (0.72 + seed * 0.48)) + seed,
+                1
+            )
+            let laneY = [188.0, 270.0, 352.0][lane]
+            let wave = sin(elapsed * speedScale * (1.6 + seed) + Double(index)) * (3 + visual.activity * 12)
+            particle.position = CGPoint(
+                x: -24 + CGFloat(phase) * (logicalSize.width + 48),
+                y: laneY + wave + CGFloat(noise(Double(index) * 2.91) - 0.5) * (10 + visual.activity * 28)
+            )
+            let envelope = min(1, phase / 0.08, (1 - phase) / 0.1)
+            particle.alpha = CGFloat(max(0, envelope) * (0.18 + visual.activity * 0.32))
+            particle.color = visual.pressure > 0.7 && index.isMultiple(of: 4)
+                ? UIColor(AmbientTheme.red)
+                : index.isMultiple(of: 5) ? UIColor(AmbientTheme.blue) : UIColor(AmbientTheme.green)
+            particle.xScale = CGFloat(0.8 + visual.tempo * 0.55)
+        }
+    }
+
+    private func animateQueue(_ elapsed: TimeInterval) {
+        let visual = presentation.visual
+        let count = visual.queueDepth <= 0.05
+            ? 0
+            : min(queueNodes.count, Int(4 + visual.queueDepth * 20))
+        let speedScale = FleetLoadSceneProfile.motionScale(reduceMotion: reduceMotion)
+        for (index, node) in queueNodes.enumerated() {
+            guard index < count else {
+                node.isHidden = true
+                continue
+            }
+            node.isHidden = false
+            let side: CGFloat = index.isMultiple(of: 2) ? -1 : 1
+            let column = CGFloat(index % 6)
+            let row = CGFloat((index / 2) % 5)
+            node.position = CGPoint(
+                x: corePoint.x + side * (102 + column * 10),
+                y: corePoint.y - 34 + row * 17
+                    + CGFloat(sin(elapsed * speedScale * 4 + Double(index)) * (2 + visual.pressure * 7))
+            )
+            node.alpha = 0.3 + CGFloat(index % 4) * 0.13
+            node.color = visual.pressure > 0.74 ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.amber)
+        }
+    }
+
+    private func animateHeat(_ elapsed: TimeInterval) {
+        let visual = presentation.visual
+        let speedScale = FleetLoadSceneProfile.motionScale(reduceMotion: reduceMotion)
+        for (index, node) in heatNodes.enumerated() {
+            node.isHidden = visual.heat <= 0.08
+            guard !node.isHidden else { continue }
+            node.position = CGPoint(
+                x: corePoint.x - 82 + CGFloat(index) * 18,
+                y: corePoint.y - 82 + CGFloat(sin(elapsed * speedScale * 3 + Double(index)) * 5)
+            )
+            node.alpha = 0.12 + CGFloat(visual.heat) * 0.62
+            node.color = visual.pressure > 0.7 ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.amber)
         }
     }
 
