@@ -120,6 +120,10 @@ or developer-operated service.
   `1af3a9da-0559-4d47-b85e-ab35562be27c`; App Store Connect reports the upload
   complete, the processed build as `Ready to Submit`, and a 90-day TestFlight
   expiry.
+- Build `1.0.0 (4)` keeps per-node Fleet Load metrics readable at six-digit
+  throughput by placing TPS and active-session counts on separate bounded lines.
+  It is the App Store submission candidate after portrait and landscape visual
+  verification on iPhone 17 Pro Max.
 - The internal `Automatic Testers` group contains one tester and all three
   processed TestFlight builds, including build 3.
 

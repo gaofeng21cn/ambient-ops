@@ -86,7 +86,7 @@ final class OPLFleetCockpitTests: XCTestCase {
         XCTAssertEqual(bundle.infoDictionary?["CFBundleDisplayName"] as? String, "OPL Cockpit")
         XCTAssertEqual(bundle.bundleIdentifier, "cn.gaofeng.oplfleetcockpit")
         XCTAssertEqual(bundle.infoDictionary?["CFBundleShortVersionString"] as? String, "1.0.0")
-        XCTAssertEqual(bundle.infoDictionary?["CFBundleVersion"] as? String, "3")
+        XCTAssertEqual(bundle.infoDictionary?["CFBundleVersion"] as? String, "4")
         XCTAssertEqual(SharedSnapshotStore.appGroup, "group.cn.gaofeng.oplfleetcockpit")
 
         let urlTypes = try XCTUnwrap(bundle.infoDictionary?["CFBundleURLTypes"] as? [[String: Any]])
@@ -194,7 +194,7 @@ final class OPLFleetCockpitTests: XCTestCase {
             widgetBundle.infoDictionary?["CFBundleDisplayName"] as? String,
             "OPL Fleet Cockpit Widgets"
         )
-        XCTAssertEqual(widgetBundle.infoDictionary?["CFBundleVersion"] as? String, "3")
+        XCTAssertEqual(widgetBundle.infoDictionary?["CFBundleVersion"] as? String, "4")
         XCTAssertEqual(widgetBundle.developmentLocalization, "en")
         XCTAssertTrue(widgetBundle.localizations.contains("zh-Hans"))
         XCTAssertNotNil(
@@ -324,6 +324,26 @@ final class OPLFleetCockpitTests: XCTestCase {
             FleetLoadSceneProfile.motionScale(reduceMotion: true),
             FleetLoadSceneProfile.motionScale(reduceMotion: false)
         )
+    }
+
+    @MainActor
+    func testFleetSceneKeepsTPSAndActiveMetricsOnSeparateBoundedLines() {
+        let metrics = FleetLoadSceneProfile.nodeMetricLines(
+            tps: 133_721,
+            sessions: 14
+        )
+
+        XCTAssertEqual(metrics.tps, "133,721 TPS")
+        XCTAssertEqual(metrics.active, "14 ACTIVE")
+        XCTAssertFalse(metrics.tps.contains("ACTIVE"))
+        XCTAssertFalse(metrics.active.contains("TPS"))
+        XCTAssertEqual(FleetLoadSceneProfile.metricScale(textWidth: 100), 1)
+        XCTAssertEqual(
+            FleetLoadSceneProfile.metricScale(textWidth: 145),
+            FleetLoadSceneProfile.nodeMetricMaximumWidth / 145,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(FleetLoadSceneProfile.metricScale(textWidth: 1_000), 0.65)
     }
 
     @MainActor

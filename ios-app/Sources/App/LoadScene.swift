@@ -303,6 +303,12 @@ enum FleetLoadSceneProfile {
     static let routeParticleCapacity = 32
     static let localParticleCapacity = 18
     static let fieldParticleCapacity = 72
+    static let nodeMetricMaximumWidth: CGFloat = 116
+
+    struct NodeMetricLines: Equatable {
+        let tps: String
+        let active: String
+    }
 
     static func motionScale(reduceMotion: Bool) -> Double {
         reduceMotion ? 0.3 : 1
@@ -316,6 +322,18 @@ enum FleetLoadSceneProfile {
     static func localParticleCount(intensity: Double, isWorking: Bool) -> Int {
         guard isWorking else { return 0 }
         return min(localParticleCapacity, max(5, Int(5 + intensity * 13)))
+    }
+
+    static func nodeMetricLines(tps: Double, sessions: Double) -> NodeMetricLines {
+        NodeMetricLines(
+            tps: "\(MetricFormat.tps(tps)) TPS",
+            active: "\(MetricFormat.integer(sessions)) ACTIVE"
+        )
+    }
+
+    static func metricScale(textWidth: CGFloat, maximumWidth: CGFloat = nodeMetricMaximumWidth) -> CGFloat {
+        guard textWidth > maximumWidth else { return 1 }
+        return max(0.65, maximumWidth / textWidth)
     }
 
     static func slotIndices(nodeCount: Int) -> [Int] {
@@ -341,7 +359,8 @@ final class FleetLoadScene: SKScene {
         let screenBars: [SKSpriteNode]
         let statusDot: SKShapeNode
         let name: SKLabelNode
-        let detail: SKLabelNode
+        let tpsDetail: SKLabelNode
+        let activeDetail: SKLabelNode
         let port: SKShapeNode
         let heatBars: [SKSpriteNode]
         let path: SKShapeNode
@@ -659,14 +678,17 @@ final class FleetLoadScene: SKScene {
             name.zPosition = 5
             container.addChild(name)
 
-            let detail = SKLabelNode(fontNamed: "Menlo")
-            detail.fontSize = 9
-            detail.fontColor = UIColor(AmbientTheme.muted)
-            detail.horizontalAlignmentMode = .left
-            detail.verticalAlignmentMode = .center
-            detail.position = CGPoint(x: isLeft ? 6 : -120, y: 20)
-            detail.zPosition = 5
-            container.addChild(detail)
+            let tpsDetail = nodeMetricLabel(
+                position: CGPoint(x: isLeft ? 6 : -120, y: 20),
+                name: "node-tps-\(index)"
+            )
+            container.addChild(tpsDetail)
+
+            let activeDetail = nodeMetricLabel(
+                position: CGPoint(x: isLeft ? 6 : -120, y: 5),
+                name: "node-active-\(index)"
+            )
+            container.addChild(activeDetail)
 
             let port = SKShapeNode(rectOf: CGSize(width: 13, height: 13), cornerRadius: 1)
             port.position = CGPoint(x: isLeft ? 134 : -134, y: 0)
@@ -724,7 +746,8 @@ final class FleetLoadScene: SKScene {
                     screenBars: screenBars,
                     statusDot: statusDot,
                     name: name,
-                    detail: detail,
+                    tpsDetail: tpsDetail,
+                    activeDetail: activeDetail,
                     port: port,
                     heatBars: heatBars,
                     path: path,
@@ -767,9 +790,18 @@ final class FleetLoadScene: SKScene {
             surface.path.isHidden = false
             surface.name.text = displayName(node.name)
             surface.name.fontSize = node.name.count > 16 ? 11 : node.name.count > 12 ? 13 : 15
-            surface.detail.text = node.status == "live"
-                ? "\(MetricFormat.tps(node.tps)) TPS  ·  \(MetricFormat.integer(node.sessions)) ACTIVE"
-                : node.status.uppercased()
+            if node.status == "live" {
+                let metrics = FleetLoadSceneProfile.nodeMetricLines(
+                    tps: node.tps,
+                    sessions: node.sessions
+                )
+                updateMetricLabel(surface.tpsDetail, text: metrics.tps)
+                updateMetricLabel(surface.activeDetail, text: metrics.active)
+                surface.activeDetail.isHidden = false
+            } else {
+                updateMetricLabel(surface.tpsDetail, text: node.status.uppercased())
+                surface.activeDetail.isHidden = true
+            }
             let color = nodeColor(node)
             surface.statusDot.fillColor = color
             surface.bay.strokeColor = color.withAlphaComponent(node.status == "live" ? 0.62 : 0.28)
@@ -777,7 +809,8 @@ final class FleetLoadScene: SKScene {
             surface.port.strokeColor = color
             surface.path.strokeColor = color.withAlphaComponent(node.isWorking ? 0.42 : 0.14)
             surface.name.fontColor = node.status == "live" ? .white : UIColor(AmbientTheme.muted)
-            surface.detail.fontColor = node.isWorking ? color : UIColor(AmbientTheme.muted)
+            surface.tpsDetail.fontColor = node.isWorking ? color : UIColor(AmbientTheme.muted)
+            surface.activeDetail.fontColor = node.isWorking ? color : UIColor(AmbientTheme.muted)
             surface.artwork.alpha = node.status == "live" ? 0.88 : 0.32
             for heatBar in surface.heatBars {
                 heatBar.color = (node.cpuPercent ?? 0) >= 90 ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.amber)
@@ -1010,6 +1043,24 @@ final class FleetLoadScene: SKScene {
     private func displayName(_ name: String) -> String {
         guard name.count > 20 else { return name }
         return "\(name.prefix(19))…"
+    }
+
+    private func nodeMetricLabel(position: CGPoint, name: String) -> SKLabelNode {
+        let label = SKLabelNode(fontNamed: "Menlo")
+        label.name = name
+        label.fontSize = 9
+        label.fontColor = UIColor(AmbientTheme.muted)
+        label.horizontalAlignmentMode = .left
+        label.verticalAlignmentMode = .center
+        label.position = position
+        label.zPosition = 5
+        return label
+    }
+
+    private func updateMetricLabel(_ label: SKLabelNode, text: String) {
+        label.text = text
+        label.xScale = 1
+        label.xScale = FleetLoadSceneProfile.metricScale(textWidth: label.frame.width)
     }
 
     private func noise(_ seed: Double) -> Double {
