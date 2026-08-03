@@ -157,7 +157,7 @@ case "$command_name" in
       image=$(awk -F= '$1 == "OPL_FLEET_COCKPIT_IMAGE" { sub(/^[^=]*=/, ""); print; exit }' "$root/managed/.env")
       volume=$(awk -F= '$1 == "OPL_FLEET_COCKPIT_DATA_VOLUME" { sub(/^[^=]*=/, ""); print; exit }' "$root/managed/.env")
       cat <<JSON
-{"services":{"gateway":{"image":"$image","network_mode":"host","restart":"unless-stopped","read_only":true,"ports":null,"build":null,"environment":{"DEMO_MODE":"false","DISCOVERY_ENABLED":"true"},"volumes":[{"type":"volume","source":"$volume","target":"/data","read_only":false},{"type":"bind","source":"$root/managed/secrets","target":"/run/secrets","read_only":true}]}}}
+{"services":{"gateway":{"image":"$image","network_mode":"host","restart":"unless-stopped","read_only":true,"ports":null,"build":null,"environment":{"DEMO_MODE":"false","DISCOVERY_ENABLED":"true"},"volumes":[{"type":"volume","source":"cockpit_data","target":"/data"},{"type":"bind","source":"$root/managed/secrets","target":"/run/secrets","read_only":true}]}},"volumes":{"cockpit_data":{"name":"$volume"}}}
 JSON
     elif [ "$action" = ps ]; then
       if [ -f "$root/gateway-present" ]; then printf '%s\n' gateway-container; fi
@@ -215,7 +215,7 @@ export http_proxy=http://untrusted.example:8080
 DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 cp "$TEST_ROOT/managed/.env" "$TEST_ROOT/legacy.env"
 touch "$TEST_ROOT/fail-up-once"
-if "$DEPLOYER" deploy 0.1.40 "$DIGEST"; then
+if "$DEPLOYER" deploy 0.1.41 "$DIGEST"; then
   printf '%s\n' "expected first migration to fail" >&2
   exit 1
 fi
@@ -225,8 +225,8 @@ test ! -f "$TEST_ROOT/legacy-stopped"
 grep -F -x 'stop legacy-container' "$TEST_ROOT/actions" >/dev/null
 grep -F -x 'start legacy-container' "$TEST_ROOT/actions" >/dev/null
 
-"$DEPLOYER" deploy 0.1.40 "$DIGEST"
-grep -F -x "OPL_FLEET_COCKPIT_IMAGE=ghcr.io/gaofeng21cn/opl-fleet-cockpit:0.1.40@$DIGEST" "$TEST_ROOT/managed/.env"
+"$DEPLOYER" deploy 0.1.41 "$DIGEST"
+grep -F -x "OPL_FLEET_COCKPIT_IMAGE=ghcr.io/gaofeng21cn/opl-fleet-cockpit:0.1.41@$DIGEST" "$TEST_ROOT/managed/.env"
 grep -F -x 'OPL_FLEET_COCKPIT_DATA_VOLUME=ambient-ops_ambient_ops_data' "$TEST_ROOT/managed/.env"
 test ! -f "$TEST_ROOT/legacy-present"
 grep -F -x 'rm legacy-container' "$TEST_ROOT/actions" >/dev/null
@@ -253,7 +253,7 @@ fi
 
 cp "$TEST_ROOT/managed/.env" "$TEST_ROOT/success.env"
 touch "$TEST_ROOT/fail-up-once"
-if "$DEPLOYER" deploy 0.1.41 sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; then
+if "$DEPLOYER" deploy 0.1.42 sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; then
   printf '%s\n' "expected failed upgrade" >&2
   exit 1
 fi
@@ -263,7 +263,7 @@ if "$DEPLOYER" deploy latest "$DIGEST"; then
   printf '%s\n' "expected invalid version rejection" >&2
   exit 1
 fi
-if "$DEPLOYER" deploy 0.1.40 'sha256:not-a-digest'; then
+if "$DEPLOYER" deploy 0.1.41 'sha256:not-a-digest'; then
   printf '%s\n' "expected invalid digest rejection" >&2
   exit 1
 fi

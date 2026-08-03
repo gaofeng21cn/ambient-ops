@@ -21,6 +21,13 @@ rendered=$(docker compose --env-file "$legacy_env" -f "$REPO_ROOT/compose.yaml" 
 printf '%s\n' "$rendered" | jq -e '
   .services.gateway.image == "ghcr.io/gaofeng21cn/ambient-ops:0.1.38"
     and .volumes.cockpit_data.name == "ambient-ops_ambient_ops_data"
+    and any(
+      .services.gateway.volumes[]?;
+      .type == "volume"
+        and .source == "cockpit_data"
+        and .target == "/data"
+        and ((.read_only // false) == false)
+    )
     and (.services["ambient-ops"] == null)
 ' >/dev/null
 

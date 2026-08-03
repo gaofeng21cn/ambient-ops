@@ -68,7 +68,7 @@ Usage:
   opl-fleet-cockpit-deploy deploy <version> <sha256:index-digest>
 
 Example:
-  sudo -n opl-fleet-cockpit-deploy deploy 0.1.40 sha256:a3a34a6ebb43ea94e3498c22f87e5c876f62093cc14859984135ab8cf9c67453
+  sudo -n opl-fleet-cockpit-deploy deploy 0.1.41 sha256:a3a34a6ebb43ea94e3498c22f87e5c876f62093cc14859984135ab8cf9c67453
 EOF
 }
 
@@ -210,6 +210,7 @@ validate_compose() {
     --arg volume "$expected_volume" '
       .services.gateway as $service
       | $service.image == $image
+        and .volumes.cockpit_data.name == $volume
         and $service.network_mode == "host"
         and $service.restart == "unless-stopped"
         and $service.read_only == true
@@ -218,9 +219,9 @@ validate_compose() {
         and any(
           $service.volumes[]?;
           .type == "volume"
-            and .source == $volume
+            and .source == "cockpit_data"
             and .target == "/data"
-            and .read_only == false
+            and ((.read_only // false) == false)
         )
         and ($service.environment.DEMO_MODE == "false")
         and ($service.environment.DISCOVERY_ENABLED == "true")
