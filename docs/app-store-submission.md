@@ -95,15 +95,13 @@ Widget/Live Activity extension.
 Reassess this answer before enabling any future APNs relay, analytics, crash upload,
 or developer-operated service.
 
-## Remaining submission inputs
+## Post-submission state
 
-- final iPhone and iPad screenshots captured from the current signed build;
-- App Review contact phone number in international format;
-- assign the selected processed build to App Store version 1.0;
-- complete categories, age rating, App Privacy, pricing, and territories;
-- export-compliance answers;
-- territory choice, including whether mainland China distribution will be enabled;
-- version release mode and review submission approval.
+- App Store version `1.0` is `Waiting for Review` with build `1.0.0 (4)`.
+- Review submission ID: `0d3c291e-44d5-42f1-a30f-2b111c6f5bc3`.
+- Release mode is manual. Approval does not publish the app automatically.
+- The next external action is to monitor App Review, answer any reviewer request,
+  and manually release the approved version.
 
 ## Current distribution state
 
@@ -122,10 +120,21 @@ or developer-operated service.
   expiry.
 - Build `1.0.0 (4)` keeps per-node Fleet Load metrics readable at six-digit
   throughput by placing TPS and active-session counts on separate bounded lines.
-  It is the App Store submission candidate after portrait and landscape visual
-  verification on iPhone 17 Pro Max.
-- The internal `Automatic Testers` group contains one tester and all three
-  processed TestFlight builds, including build 3.
+  It passed 29 XCTest cases plus portrait and landscape visual verification on
+  iPhone 17 Pro Max. Xcode uploaded it once on August 3, 2026 with Delivery UUID
+  `4cd1f282-87ff-4e81-9435-b9a64204739a`; App Store Connect processed it,
+  assigned it to `Automatic Testers`, and accepted it for App Review.
+- The App Store version contains two iPhone 6.5-inch screenshots at
+  `1284 x 2778` and two iPad 13-inch screenshots at `2064 x 2752`, covering Home
+  and Fleet Load without private machine names or system dialogs.
+- App Privacy is published as `Data Not Collected`; the age rating is `4+`.
+- The app is free and publicly distributed in 175 countries or regions,
+  including mainland China at `CNY 0.00`.
+- The internal `Automatic Testers` group contains one tester and all four
+  processed TestFlight builds, including build 4.
+- App Store Connect accepted version `1.0` for review on August 3, 2026 and now
+  reports `Waiting for Review`. This is a submission state, not a public App
+  Store release.
 
 ## Legacy Apple identity
 
