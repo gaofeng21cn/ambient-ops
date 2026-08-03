@@ -77,7 +77,7 @@ final class OPLFleetCockpitTests: XCTestCase {
         XCTAssertEqual(bundle.infoDictionary?["CFBundleDisplayName"] as? String, "OPL Cockpit")
         XCTAssertEqual(bundle.bundleIdentifier, "cn.gaofeng.oplfleetcockpit")
         XCTAssertEqual(bundle.infoDictionary?["CFBundleShortVersionString"] as? String, "1.0.0")
-        XCTAssertEqual(bundle.infoDictionary?["CFBundleVersion"] as? String, "1")
+        XCTAssertEqual(bundle.infoDictionary?["CFBundleVersion"] as? String, "2")
         XCTAssertEqual(SharedSnapshotStore.appGroup, "group.cn.gaofeng.oplfleetcockpit")
 
         let urlTypes = try XCTUnwrap(bundle.infoDictionary?["CFBundleURLTypes"] as? [[String: Any]])

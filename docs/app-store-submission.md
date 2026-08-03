@@ -97,9 +97,9 @@ or developer-operated service.
 
 ## Remaining submission inputs
 
-- final iPhone and iPad screenshots captured from signed build 1;
+- final iPhone and iPad screenshots captured from the current signed build;
 - App Review contact phone number in international format;
-- assign processed build 1 to App Store version 1.0;
+- assign the selected processed build to App Store version 1.0;
 - complete categories, age rating, App Privacy, pricing, and territories;
 - export-compliance answers;
 - territory choice, including whether mainland China distribution will be enabled;
@@ -113,6 +113,8 @@ or developer-operated service.
 - Build `1.0.0 (1)` has been uploaded and processed by App Store Connect.
 - The internal `Automatic Testers` group contains build 1 and the account
   holder as its first tester.
+- Build `1.0.0 (2)` is the pending TestFlight release for the richer Fleet
+  workload animation and branded App Store identity.
 
 ## Legacy Apple identity
 
