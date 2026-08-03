@@ -108,13 +108,14 @@ or developer-operated service.
 ## Current distribution state
 
 - App Store Connect record `6797375745` exists as `OPL Cockpit`.
-- Signed archive `1.0.0 (1)` uses Apple Distribution identity `SVVC4TA784`
-  and the two App Store profiles above.
+- Signed archives use Apple Distribution identity `SVVC4TA784` and the two App
+  Store profiles above.
 - Build `1.0.0 (1)` has been uploaded and processed by App Store Connect.
-- The internal `Automatic Testers` group contains build 1 and the account
-  holder as its first tester.
-- Build `1.0.0 (2)` is the pending TestFlight release for the richer Fleet
-  workload animation and branded App Store identity.
+- Build `1.0.0 (2)` has been uploaded, processed, and assigned to the internal
+  `Automatic Testers` group for the richer Fleet workload animation and branded
+  App Store identity.
+- The internal group contains builds 1 and 2 and the account holder as its first
+  tester.
 
 ## Legacy Apple identity
 
