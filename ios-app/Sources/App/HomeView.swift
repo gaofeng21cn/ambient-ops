@@ -36,7 +36,7 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 8) {
-                        Text(largeCanvas ? store.providerLabel : (store.isFleet ? "FLEET" : "DIRECT"))
+                        Text(largeCanvas ? store.providerLabel : compactProviderLabel)
                             .font((largeCanvas ? Font.caption : .caption2).weight(.semibold))
                             .foregroundStyle(AmbientTheme.muted)
                             .lineLimit(1)
@@ -95,13 +95,12 @@ struct HomeView: View {
     }
 
     private var landscapeAttention: some View {
-        let machine = store.selectedMachine
-        let visual = machine?.loadVisualState
+        let visual = attentionVisual
         return Button(action: openDisplay) {
             LandscapeHomePanel(large: largeCanvas) {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(machine?.machineName ?? "No machine")
+                        Text(attentionTitle)
                             .font((largeCanvas ? Font.subheadline : .caption).weight(.semibold))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
@@ -110,7 +109,7 @@ struct HomeView: View {
                             .foregroundStyle(AmbientTheme.statusColor(visual?.state ?? "error"))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
-                        Text(attentionDescription(machine))
+                        Text(attentionDescription)
                             .font(largeCanvas ? .subheadline : .caption2)
                             .foregroundStyle(AmbientTheme.muted)
                             .lineLimit(2)
@@ -123,7 +122,7 @@ struct HomeView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open focused machine load display")
+        .accessibilityLabel(attentionAccessibilityLabel)
     }
 
     private var landscapeCodex: some View {
@@ -306,19 +305,18 @@ struct HomeView: View {
     }
 
     private var attentionPanel: some View {
-        let machine = store.selectedMachine
-        let visual = machine?.loadVisualState
+        let visual = attentionVisual
         return Button(action: openDisplay) {
             OpsPanel {
                 HStack(alignment: .top, spacing: 14) {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text(machine?.machineName ?? "No machine")
+                        Text(attentionTitle)
                             .font(largeCanvas ? .title3 : .headline)
                             .foregroundStyle(.primary)
                         Text(visual.map { LoadStatePalette.label(for: $0.state) } ?? "NO DATA")
                             .font(.system(size: largeCanvas ? 44 : 34, weight: .semibold, design: .rounded))
                             .foregroundStyle(AmbientTheme.statusColor(visual?.state ?? "error"))
-                        Text(attentionDescription(machine))
+                        Text(attentionDescription)
                             .font(largeCanvas ? .body : .subheadline)
                             .foregroundStyle(AmbientTheme.muted)
                     }
@@ -330,7 +328,7 @@ struct HomeView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open focused machine load display")
+        .accessibilityLabel(attentionAccessibilityLabel)
     }
 
     private var codexMetrics: some View {
@@ -418,8 +416,36 @@ struct HomeView: View {
         }
     }
 
-    private func attentionDescription(_ machine: MachineStatus?) -> String {
-        guard let machine else {
+    private var compactProviderLabel: String {
+        guard store.isFleet else { return "DIRECT" }
+        return store.displayScope == .fleet ? "FLEET" : "HOST"
+    }
+
+    private var attentionTitle: String {
+        if store.isFleet, store.displayScope == .fleet {
+            return String(localized: "Fleet activity")
+        }
+        return store.selectedMachine?.machineName ?? String(localized: "No machine")
+    }
+
+    private var attentionVisual: LoadVisualState? {
+        if store.isFleet, store.displayScope == .fleet {
+            return store.fleetLoadPresentation.visual
+        }
+        return store.selectedMachine?.loadVisualState
+    }
+
+    private var attentionDescription: String {
+        if store.isFleet, store.displayScope == .fleet {
+            return switch store.fleetLoadPresentation.visual.state {
+            case "quiet": String(localized: "Fleet standing by")
+            case "active": String(localized: "Nodes in motion")
+            case "heavy": String(localized: "Parallel fleet work")
+            case "constrained": String(localized: "Host pressure detected")
+            default: String(localized: "Fleet activity")
+            }
+        }
+        guard let machine = store.selectedMachine else {
             return String(localized: "Connect a server or use Demo Mode.")
         }
         return switch machine.loadVisualState.state {
@@ -429,6 +455,12 @@ struct HomeView: View {
         case "constrained": String(localized: "Host pressure is limiting active work.")
         default: String(localized: "Current development load.")
         }
+    }
+
+    private var attentionAccessibilityLabel: String {
+        store.isFleet && store.displayScope == .fleet
+            ? String(localized: "Open Fleet load display")
+            : String(localized: "Open focused machine load display")
     }
 
     private func cpuColor(_ cpu: Double?) -> Color {

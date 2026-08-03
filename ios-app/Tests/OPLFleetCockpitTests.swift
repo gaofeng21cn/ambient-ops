@@ -160,6 +160,15 @@ final class OPLFleetCockpitTests: XCTestCase {
             "Search Again",
             "Manual Connection",
             "Preview",
+            "Fleet activity",
+            "Display scope",
+            "Fleet",
+            "Fleet standing by",
+            "Host",
+            "Host pressure detected",
+            "Nodes in motion",
+            "Open Fleet load display",
+            "Parallel fleet work",
         ]
 
         for key in requiredInteractions {
@@ -195,6 +204,191 @@ final class OPLFleetCockpitTests: XCTestCase {
         XCTAssertEqual(states, Set(["quiet", "active", "heavy", "constrained"]))
         XCTAssertNil(status.machines.first(where: { $0.machineId == "notebook" })?.cpuPercent)
         XCTAssertEqual(status.network.history.count, 60)
+    }
+
+    @MainActor
+    func testDemoFleetScopeAndPresentationMatchAggregateStatus() {
+        let suiteName = "OPLFleetCockpitTests.fleet-scope.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(true, forKey: "opl-fleet-cockpit.demo-mode")
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = OPLFleetCockpitStore(defaults: defaults)
+        let fleet = store.fleetLoadPresentation
+
+        XCTAssertEqual(store.displayScope, .fleet)
+        XCTAssertEqual(fleet.totalNodeCount, 4)
+        XCTAssertEqual(fleet.liveNodeCount, 3)
+        XCTAssertEqual(fleet.workingNodeCount, 3)
+        XCTAssertEqual(fleet.oneMinuteTps, 100_840)
+        XCTAssertEqual(fleet.activeSessions, 21)
+        XCTAssertEqual(fleet.cpuPercent, 83)
+        XCTAssertEqual(fleet.cpuReportedNodeCount, 3)
+        XCTAssertEqual(fleet.visual.state, "constrained")
+        XCTAssertTrue(fleet.visual.constrained)
+        XCTAssertEqual(fleet.nodes.map(\.id), ["notebook", "studio", "workstation", "lab-mini"])
+        XCTAssertLessThanOrEqual(fleet.nodes.count, 6)
+    }
+
+    @MainActor
+    func testFleetHostScopePersistsAndMachineSelectionOpensHost() throws {
+        let suiteName = "OPLFleetCockpitTests.scope-persistence.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(true, forKey: "opl-fleet-cockpit.demo-mode")
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = OPLFleetCockpitStore(defaults: defaults)
+        XCTAssertEqual(store.displayScope, .fleet)
+
+        store.selectMachine("workstation")
+        XCTAssertEqual(store.displayScope, .host)
+        XCTAssertEqual(store.selectedMachine?.machineId, "workstation")
+        XCTAssertEqual(defaults.string(forKey: "opl-fleet-cockpit.display-scope"), "host")
+
+        store.displayScope = .fleet
+        XCTAssertEqual(store.displayScope, .fleet)
+        XCTAssertEqual(defaults.string(forKey: "opl-fleet-cockpit.display-scope"), "fleet")
+
+        let restored = OPLFleetCockpitStore(defaults: defaults)
+        XCTAssertEqual(restored.displayScope, .fleet)
+        XCTAssertEqual(restored.selectedMachine?.machineId, "workstation")
+    }
+
+    func testFleetHistoryAggregatesMatchingTimeBuckets() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let history = LoadHistorySeries.fleetHistory([
+            "studio": [
+                LoadHistoryPoint(at: start, tps: 30),
+                LoadHistoryPoint(at: start.addingTimeInterval(4), tps: 40),
+            ],
+            "workstation": [
+                LoadHistoryPoint(at: start.addingTimeInterval(1), tps: 12),
+                LoadHistoryPoint(at: start.addingTimeInterval(5), tps: 18),
+            ],
+        ])
+
+        XCTAssertEqual(history.map(\.at), [start, start.addingTimeInterval(4)])
+        XCTAssertEqual(history.map(\.tps), [42, 58])
+    }
+
+    func testFleetVisualNodesAreStableAndCappedAtSix() throws {
+        let encoded = try JSONEncoder().encode(DemoFixtures.status())
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        var machines = try XCTUnwrap(object["machines"] as? [[String: Any]])
+        let template = try XCTUnwrap(machines.first)
+        for (id, name) in [("alpha", "Alpha"), ("beta", "Beta"), ("zulu", "Zulu")] {
+            var machine = template
+            machine["machineId"] = id
+            machine["machineName"] = name
+            machines.append(machine)
+        }
+        object["machines"] = machines
+
+        let status = try JSONDecoder().decode(
+            AmbientStatus.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        let nodes = FleetLoadPresentation(status: status).nodes
+
+        XCTAssertEqual(nodes.count, 6)
+        XCTAssertEqual(
+            nodes.map(\.id),
+            ["alpha", "beta", "notebook", "studio", "workstation", "zulu"]
+        )
+    }
+
+    func testFleetConstraintRequiresAggregateLoadInsteadOfOneHotNode() throws {
+        let encoded = try JSONEncoder().encode(DemoFixtures.status())
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        var codex = try XCTUnwrap(object["codex"] as? [String: Any])
+        codex["oneMinuteTps"] = 10
+        codex["fiveMinuteTps"] = 10
+        codex["activeSessions"] = 0
+        codex["cpuPercent"] = 90
+        codex["cpuReportedMachineCount"] = 1
+        codex["machineCount"] = 1
+        codex["liveMachineCount"] = 1
+        codex["staleMachineCount"] = 0
+        object["codex"] = codex
+
+        var machine = try XCTUnwrap(
+            (object["machines"] as? [[String: Any]])?.first
+        )
+        var oneMinute = try XCTUnwrap(machine["oneMinute"] as? [String: Any])
+        oneMinute["tps"] = 10
+        machine["oneMinute"] = oneMinute
+        var fiveMinutes = try XCTUnwrap(machine["fiveMinutes"] as? [String: Any])
+        fiveMinutes["tps"] = 10
+        machine["fiveMinutes"] = fiveMinutes
+        machine["activeSessions"] = 0
+        machine["cpuPercent"] = 90
+        machine["status"] = "live"
+        object["machines"] = [machine]
+
+        let status = try JSONDecoder().decode(
+            AmbientStatus.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        let fleet = FleetLoadPresentation(status: status)
+
+        XCTAssertFalse(fleet.visual.constrained)
+        XCTAssertEqual(fleet.visual.state, "active")
+        XCTAssertTrue(try XCTUnwrap(fleet.nodes.first).isPressured)
+    }
+
+    func testFleetNodePressureStartsAtWebHighPressureThreshold() {
+        let node = FleetLoadNode(
+            id: "node",
+            name: "Node",
+            platform: "macOS",
+            status: "live",
+            tps: 0,
+            sessions: 0,
+            cpuPercent: 82,
+            intensity: 0.1,
+            travelMs: 3_000
+        )
+
+        XCTAssertTrue(node.isPressured)
+        XCTAssertFalse(node.isWorking)
+    }
+
+    func testFleetNormalizationUsesReportedLiveCapacity() throws {
+        let encoded = try JSONEncoder().encode(DemoFixtures.status())
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        var codex = try XCTUnwrap(object["codex"] as? [String: Any])
+        codex["oneMinuteTps"] = 120_000
+        codex["fiveMinuteTps"] = 100_000
+        codex["activeSessions"] = 12
+        codex["cpuPercent"] = NSNull()
+        codex["cpuReportedMachineCount"] = 0
+        codex["machineCount"] = 4
+        codex["liveMachineCount"] = 4
+        codex["staleMachineCount"] = 0
+        object["codex"] = codex
+        object["machines"] = Array(
+            try XCTUnwrap(object["machines"] as? [[String: Any]]).prefix(1)
+        )
+
+        let status = try JSONDecoder().decode(
+            AmbientStatus.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        let fleet = FleetLoadPresentation(status: status)
+        let expectedBaseScore = sqrt(30_000 / 60_000) * 0.72 + (3.0 / 12.0) * 0.28
+        let expectedScore = expectedBaseScore * 0.78 + (1.0 / 4.0) * 0.22
+
+        XCTAssertEqual(fleet.liveNodeCount, 4)
+        XCTAssertEqual(fleet.oneMinuteTps, 120_000)
+        XCTAssertEqual(fleet.visual.score, expectedScore, accuracy: 0.000_001)
     }
 
     func testLiveActivityCarriesTheProviderVisualStateIntoStandBy() throws {
@@ -469,5 +663,9 @@ final class OPLFleetCockpitTests: XCTestCase {
         XCTAssertTrue(direct.capabilities.supportsNetwork)
         XCTAssertTrue(store.availableDisplayModes.contains(.network))
         XCTAssertEqual(store.providerLabel, "AGENT · Studio")
+        XCTAssertEqual(store.displayScope, .host)
+
+        store.displayScope = .fleet
+        XCTAssertEqual(store.displayScope, .host)
     }
 }

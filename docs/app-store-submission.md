@@ -33,7 +33,8 @@ Description:
 >
 > See the operational state that matters at a glance:
 >
-> • Focused-host Codex load expressed as a live pixel work field
+> • Fleet-wide Codex load expressed as a live multi-node activity field
+> • Switchable focused-host load with a dedicated workstation animation
 > • Aggregate tokens per second and active sessions
 > • Optional host CPU and memory pressure
 > • Network download, upload, latency, clients, and recent trends
@@ -73,8 +74,9 @@ canonical branch.
 >
 > 1. Home shows live aggregate Codex and network status.
 > 2. Machines contains quiet, active, heavy, constrained, and stale examples.
-> 3. Display contains Overview, Network, Load, and Pet. Load uses a native SpriteKit
->    animation; it is not a web view.
+> 3. Display contains Overview, Network, Load, and Pet. Load opens in Fleet scope
+>    with a native SpriteKit multi-node animation. The Host scope keeps the focused
+>    machine workstation animation. Neither view is a web view.
 > 4. Settings can start a local Live Activity for the focused demo host.
 >
 > Local-network discovery is optional and is invoked only when the reviewer chooses
@@ -95,7 +97,8 @@ or developer-operated service.
 ## Remaining submission inputs
 
 - create the new App Store Connect record for `cn.gaofeng.oplfleetcockpit`;
-- final iPhone and iPad screenshots captured from signed build 1;
+- final iPhone and iPad screenshots captured from the signed submission build,
+  including the Fleet Load multi-node activity field and the Fleet/Host switch;
 - signed build 1 archive validation and upload;
 - TestFlight processing and Automatic Testers assignment;
 - export-compliance answers;

@@ -37,6 +37,27 @@ enum DisplayMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum DisplayScope: String, CaseIterable, Identifiable {
+    case fleet
+    case host
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .fleet: "Fleet"
+        case .host: "Host"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .fleet: "network"
+        case .host: "desktopcomputer"
+        }
+    }
+}
+
 struct LoadHistoryPoint: Identifiable, Hashable {
     let at: Date
     let tps: Double
@@ -92,6 +113,159 @@ enum LoadHistorySeries {
         return min(30, max(1, Int(ceil(last.timeIntervalSince(first) / 60))))
     }
 
+    static func fleetHistory(_ histories: [String: [LoadHistoryPoint]]) -> [LoadHistoryPoint] {
+        var totalsByBucket: [Date: Double] = [:]
+        for point in histories.values.flatMap({ $0 }) {
+            let bucket = Date(
+                timeIntervalSince1970: floor(point.at.timeIntervalSince1970 / sampleInterval) * sampleInterval
+            )
+            totalsByBucket[bucket, default: 0] += max(0, point.tps)
+        }
+        return Array(
+            totalsByBucket
+                .map { LoadHistoryPoint(at: $0.key, tps: $0.value) }
+                .sorted { $0.at < $1.at }
+                .suffix(maximumPointCount)
+        )
+    }
+
+}
+
+struct FleetLoadNode: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let platform: String
+    let status: String
+    let tps: Double
+    let sessions: Double
+    let cpuPercent: Double?
+    let intensity: Double
+    let travelMs: Double
+
+    var isWorking: Bool { status == "live" && (tps > 0 || sessions > 0) }
+    var isPressured: Bool { status == "live" && (cpuPercent ?? 0) >= 82 }
+}
+
+struct FleetLoadPresentation: Hashable {
+    let visual: LoadVisualState
+    let oneMinuteTps: Double
+    let fiveMinuteTps: Double
+    let activeSessions: Double
+    let cpuPercent: Double?
+    let cpuReportedNodeCount: Int
+    let totalNodeCount: Int
+    let liveNodeCount: Int
+    let workingNodeCount: Int
+    let nodes: [FleetLoadNode]
+
+    init(status: AmbientStatus) {
+        let liveMachines = status.machines.filter { $0.status == "live" }
+        let liveCount = liveMachines.count
+        let reportedLiveCount = max(liveCount, Int(status.codex.liveMachineCount))
+        let liveDivisor = Double(max(1, reportedLiveCount))
+        let workingCount = liveMachines.filter {
+            $0.oneMinute.tps > 0 || $0.activeSessions > 0
+        }.count
+        let averageTPS = max(0, status.codex.oneMinuteTps) / liveDivisor
+        let averageSessions = max(0, status.codex.activeSessions) / liveDivisor
+        let cpu = status.codex.cpuPercent
+        let tpsIntensity = sqrt(averageTPS / 60_000).clamped(to: 0...1)
+        let sessionIntensity = (averageSessions / 12).clamped(to: 0...1)
+        let cpuIntensity = cpu.map { ($0 / 100).clamped(to: 0...1) }
+        let baseScore = cpuIntensity.map {
+            tpsIntensity * 0.56 + sessionIntensity * 0.22 + $0 * 0.22
+        } ?? (tpsIntensity * 0.72 + sessionIntensity * 0.28)
+        let engagement = (Double(workingCount) / liveDivisor).clamped(to: 0...1)
+        let score = (baseScore * 0.78 + engagement * 0.22).clamped(to: 0...1)
+        let hasWork = status.codex.oneMinuteTps > 0 || status.codex.activeSessions > 0
+        let constrained = hasWork && (cpu ?? 0) >= 88 && baseScore >= 0.35
+        let pressure = cpu.map { (($0 - 68) / 32).clamped(to: 0...1) } ?? 0
+        let parallel = hasWork ? sqrt(max(0, status.codex.activeSessions) / 18).clamped(to: 0...1) : 0
+        let tempo = hasWork
+            ? (0.45 + score * 1.35 + sqrt(max(0, status.codex.oneMinuteTps) / 90_000) * 0.7)
+                .clamped(to: 0.45...2.5)
+            : 0.2
+        let travelMs = hasWork
+            ? ((3.1 - tpsIntensity * 1.8 - sessionIntensity * 0.35) * 1_000)
+                .clamped(to: 800...3_100)
+            : 4_800
+        let activity = hasWork ? (score * 0.72 + parallel * 0.28).clamped(to: 0...1) : 0
+        let queueDepth = constrained
+            ? (0.24 + pressure * 0.76).clamped(to: 0.24...1)
+            : (max(0, score - 0.68) * 0.7).clamped(to: 0...0.25)
+        let state = constrained ? "constrained" : score >= 0.45 ? "heavy" : score >= 0.18 ? "active" : "quiet"
+
+        visual = LoadVisualState(
+            state: state,
+            label: LoadStatePalette.label(for: state),
+            score: score,
+            constrained: constrained,
+            activity: activity,
+            parallel: parallel,
+            tempo: tempo,
+            travelMs: travelMs,
+            clusterCount: hasWork ? max(1, min(4, Int((1 + parallel * 3).rounded()))) : 0,
+            taskDensity: hasWork
+                ? (0.16 + activity * 0.68 + parallel * 0.16).clamped(to: 0.16...1)
+                : 0,
+            pressure: pressure,
+            queueDepth: queueDepth,
+            heat: (pressure * 0.9 + activity * 0.12).clamped(to: 0...1)
+        )
+        oneMinuteTps = max(0, status.codex.oneMinuteTps)
+        fiveMinuteTps = max(0, status.codex.fiveMinuteTps)
+        activeSessions = max(0, status.codex.activeSessions)
+        cpuPercent = cpu
+        cpuReportedNodeCount = Int(status.codex.cpuReportedMachineCount ?? 0)
+        totalNodeCount = max(status.machines.count, Int(status.codex.machineCount))
+        liveNodeCount = reportedLiveCount
+        workingNodeCount = workingCount
+        nodes = Self.visualNodes(status.machines)
+    }
+
+    private static func visualNodes(_ machines: [MachineStatus]) -> [FleetLoadNode] {
+        machines
+            .sorted {
+                let leftRank = statusRank($0.status)
+                let rightRank = statusRank($1.status)
+                if leftRank != rightRank { return leftRank < rightRank }
+                let nameOrder = $0.machineName.localizedCaseInsensitiveCompare($1.machineName)
+                if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+                return $0.machineId < $1.machineId
+            }
+            .prefix(6)
+            .map { machine in
+                let tps = max(0, machine.oneMinute.tps)
+                let sessions = max(0, machine.activeSessions)
+                let tpsIntensity = sqrt(tps / 60_000).clamped(to: 0...1)
+                let sessionIntensity = (sessions / 8).clamped(to: 0...1)
+                let hasWork = machine.status == "live" && (tps > 0 || sessions > 0)
+                return FleetLoadNode(
+                    id: machine.machineId,
+                    name: machine.machineName,
+                    platform: machine.platform,
+                    status: machine.status,
+                    tps: tps,
+                    sessions: sessions,
+                    cpuPercent: machine.cpuPercent,
+                    intensity: hasWork
+                        ? (tpsIntensity * 0.75 + sessionIntensity * 0.25).clamped(to: 0...1)
+                        : 0,
+                    travelMs: hasWork
+                        ? (3_200 - tpsIntensity * 2_400).clamped(to: 800...3_200)
+                        : 4_800
+                )
+            }
+    }
+
+    private static func statusRank(_ status: String) -> Int {
+        switch status {
+        case "live": 0
+        case "stale": 1
+        case "error": 2
+        default: 3
+        }
+    }
 }
 
 @MainActor
@@ -102,12 +276,14 @@ final class OPLFleetCockpitStore {
         static let serverURL = "opl-fleet-cockpit.server-url"
         static let selectedMachineID = "opl-fleet-cockpit.selected-machine"
         static let selectedSourceID = "opl-fleet-cockpit.selected-source"
+        static let displayScope = "opl-fleet-cockpit.display-scope"
     }
 
     var status: AmbientStatus
     var connectionState: AppConnectionState = .demo
     var serverAddress: String
     var selectedMachineID: String?
+    private var preferredDisplayScope: DisplayScope
     var displayMode: DisplayMode = .load
     var discoveredServers: [DiscoveredServer] = []
     var isDiscovering = false
@@ -132,6 +308,8 @@ final class OPLFleetCockpitStore {
         let initialDemo = defaults.object(forKey: Keys.demoMode) as? Bool ?? false
         serverAddress = defaults.string(forKey: Keys.serverURL) ?? ""
         selectedMachineID = defaults.string(forKey: Keys.selectedMachineID)
+        preferredDisplayScope = defaults.string(forKey: Keys.displayScope)
+            .flatMap(DisplayScope.init(rawValue:)) ?? .fleet
         status = initialDemo ? DemoFixtures.status() : .unavailable()
 
         self.discovery.onChange = { [weak self] servers in
@@ -164,6 +342,22 @@ final class OPLFleetCockpitStore {
 
     var isFleet: Bool {
         status.effectiveProvider.isFleet
+    }
+
+    var displayScope: DisplayScope {
+        get { isFleet ? preferredDisplayScope : .host }
+        set {
+            preferredDisplayScope = isFleet ? newValue : .host
+            defaults.set(preferredDisplayScope.rawValue, forKey: Keys.displayScope)
+        }
+    }
+
+    var fleetLoadPresentation: FleetLoadPresentation {
+        FleetLoadPresentation(status: status)
+    }
+
+    var fleetLoadHistory: [LoadHistoryPoint] {
+        LoadHistorySeries.fleetHistory(loadHistory)
     }
 
     var providerLabel: String {
@@ -295,6 +489,9 @@ final class OPLFleetCockpitStore {
 
     func selectMachine(_ id: String?) {
         selectedMachineID = id
+        if id != nil, isFleet {
+            displayScope = .host
+        }
         persistSelection()
         SharedSnapshotStore.save(status, focusedMachineID: selectedMachine?.machineId)
     }

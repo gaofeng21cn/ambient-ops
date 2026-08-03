@@ -12,7 +12,7 @@ struct DisplayView: View {
             let landscape = proxy.size.width > proxy.size.height
             let compactHeader = proxy.size.width < 900
             VStack(spacing: 0) {
-                displayHeader(compact: compactHeader)
+                displayHeader(compact: compactHeader, availableWidth: proxy.size.width)
                 Divider().overlay(AmbientTheme.line)
                 Group {
                     switch store.displayMode {
@@ -25,8 +25,14 @@ struct DisplayView: View {
                     case .network:
                         NetworkDisplay(network: store.displayNetwork, landscape: landscape)
                     case .load:
-                        if let machine = store.selectedMachine {
-                            LoadDisplay(
+                        if store.displayScope == .fleet, store.isFleet {
+                            FleetLoadDisplay(
+                                presentation: store.fleetLoadPresentation,
+                                history: store.fleetLoadHistory,
+                                landscape: landscape
+                            )
+                        } else if let machine = store.selectedMachine {
+                            HostLoadDisplay(
                                 machine: machine,
                                 history: store.loadHistory[machine.machineId] ?? [],
                                 landscape: landscape
@@ -52,12 +58,77 @@ struct DisplayView: View {
         }
     }
 
-    private func displayHeader(compact: Bool) -> some View {
-        HStack(spacing: compact ? 10 : 12) {
+    @ViewBuilder
+    private func displayHeader(compact: Bool, availableWidth: CGFloat) -> some View {
+        if availableWidth < 620 {
+            VStack(spacing: 6) {
+                HStack(spacing: 10) {
+                    scopeControl(compact: true)
+                    displayIdentity
+                    Spacer(minLength: 4)
+                    StatusPill(status: store.status.overallStatus)
+                }
+                displayModePicker(compact: true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .frame(height: 84)
+        } else {
+            HStack(spacing: compact ? 10 : 12) {
+                scopeControl(compact: compact)
+                displayIdentity
+                Spacer(minLength: 6)
+                displayModePicker(compact: compact)
+                    .frame(maxWidth: compact ? 280 : 360)
+                Spacer(minLength: 6)
+                StatusPill(status: store.status.overallStatus)
+            }
+            .padding(.horizontal, largeCanvas ? 16 : compact ? 12 : 16)
+            .frame(height: largeCanvas ? 54 : compact ? 44 : 54)
+        }
+    }
+
+    @ViewBuilder
+    private func scopeControl(compact: Bool) -> some View {
+        if store.isFleet, store.displayMode == .load {
+            Picker(
+                "Display scope",
+                selection: Binding(
+                    get: { store.displayScope },
+                    set: { store.displayScope = $0 }
+                )
+            ) {
+                ForEach(DisplayScope.allCases) { scope in
+                    if compact {
+                        Label(scope.label, systemImage: scope.systemImage)
+                            .labelStyle(.iconOnly)
+                            .tag(scope)
+                    } else {
+                        Label(scope.label, systemImage: scope.systemImage)
+                            .tag(scope)
+                    }
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: compact ? 104 : 172)
+        } else {
             Text(store.isFleet ? "FLEET" : "DIRECT")
                 .font((largeCanvas ? Font.caption : .caption2).weight(.bold))
                 .foregroundStyle(store.isFleet ? AmbientTheme.blue : AmbientTheme.green)
+        }
+    }
 
+    @ViewBuilder
+    private var displayIdentity: some View {
+        if store.isFleet, store.displayScope == .fleet, store.displayMode == .load {
+            HStack(spacing: 6) {
+                Image(systemName: "network")
+                Text("\(store.fleetLoadPresentation.liveNodeCount)/\(store.fleetLoadPresentation.totalNodeCount) nodes")
+                    .lineLimit(1)
+            }
+            .font((largeCanvas ? Font.headline : .subheadline).weight(.semibold))
+            .foregroundStyle(AmbientTheme.blue)
+        } else {
             Menu {
                 ForEach(store.status.machines) { machine in
                     Button {
@@ -76,29 +147,23 @@ struct DisplayView: View {
                 }
                 .font((largeCanvas ? Font.headline : .subheadline).weight(.semibold))
             }
+        }
+    }
 
-            Spacer(minLength: 6)
-
-            Picker("Display mode", selection: $store.displayMode) {
-                ForEach(store.availableDisplayModes) { mode in
-                    if compact {
-                        localizedModeLabel(mode)
-                            .labelStyle(.iconOnly)
-                            .tag(mode)
-                    } else {
-                        localizedModeLabel(mode)
-                            .tag(mode)
-                    }
+    private func displayModePicker(compact: Bool) -> some View {
+        Picker("Display mode", selection: $store.displayMode) {
+            ForEach(store.availableDisplayModes) { mode in
+                if compact {
+                    localizedModeLabel(mode)
+                        .labelStyle(.iconOnly)
+                        .tag(mode)
+                } else {
+                    localizedModeLabel(mode)
+                        .tag(mode)
                 }
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: compact ? 280 : 360)
-
-            Spacer(minLength: 6)
-            StatusPill(status: store.status.overallStatus)
         }
-        .padding(.horizontal, largeCanvas ? 16 : compact ? 12 : 16)
-        .frame(height: largeCanvas ? 54 : compact ? 44 : 54)
+        .pickerStyle(.segmented)
     }
 
     private var unavailable: some View {
@@ -118,7 +183,257 @@ struct DisplayView: View {
     }
 }
 
-private struct LoadDisplay: View {
+private struct FleetLoadDisplay: View {
+    let presentation: FleetLoadPresentation
+    let history: [LoadHistoryPoint]
+    let landscape: Bool
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var largeCanvas: Bool { horizontalSizeClass == .regular }
+
+    var body: some View {
+        Group {
+            if landscape {
+                HStack(spacing: 0) {
+                    stage
+                    metrics
+                        .frame(width: largeCanvas ? 320 : 268)
+                }
+            } else {
+                GeometryReader { proxy in
+                    VStack(spacing: 0) {
+                        stage
+                            .frame(
+                                width: proxy.size.width,
+                                height: min(proxy.size.width * 0.68, proxy.size.height * 0.54)
+                            )
+                        metrics
+                            .frame(
+                                maxWidth: .infinity,
+                                maxHeight: .infinity,
+                                alignment: .top
+                            )
+                    }
+                }
+            }
+        }
+        .background(AmbientTheme.background)
+    }
+
+    private var stage: some View {
+        VStack(spacing: 0) {
+            stageHeader
+            FleetLoadSceneView(presentation: presentation)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(AmbientTheme.background)
+        .clipped()
+    }
+
+    private var stageHeader: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "network")
+                .foregroundStyle(AmbientTheme.blue)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("FLEET ACTIVITY")
+                    .font((largeCanvas ? Font.caption : .caption2).weight(.semibold))
+                    .foregroundStyle(AmbientTheme.muted)
+                Text("\(presentation.workingNodeCount) working · \(presentation.liveNodeCount) connected")
+                    .font(.system(size: largeCanvas ? 10 : 8, weight: .medium))
+                    .foregroundStyle(AmbientTheme.muted)
+            }
+            Spacer(minLength: 10)
+            Circle()
+                .fill(AmbientTheme.statusColor(presentation.visual.state))
+                .frame(width: largeCanvas ? 8 : 7, height: largeCanvas ? 8 : 7)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(LoadStatePalette.label(for: presentation.visual.state))
+                    .font(
+                        .system(
+                            size: largeCanvas ? 24 : landscape ? 19 : 17,
+                            weight: .bold,
+                            design: .rounded
+                        )
+                    )
+                    .foregroundStyle(AmbientTheme.statusColor(presentation.visual.state))
+                    .lineLimit(1)
+                Text(fleetDescription)
+                    .font(.system(size: largeCanvas ? 10 : 8, weight: .medium))
+                    .foregroundStyle(AmbientTheme.muted)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, largeCanvas ? 18 : 14)
+        .frame(height: largeCanvas ? 62 : landscape ? 50 : 48)
+        .background(AmbientTheme.surface.opacity(0.72))
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(AmbientTheme.line).frame(height: 1)
+        }
+    }
+
+    private var metrics: some View {
+        VStack(spacing: 0) {
+            sideMetric(
+                "1 MINUTE",
+                value: MetricFormat.tps(presentation.oneMinuteTps),
+                unit: "TPS",
+                color: AmbientTheme.statusColor(presentation.visual.state)
+            )
+            Divider().overlay(AmbientTheme.line)
+            HStack(spacing: 14) {
+                compactMetric("ACTIVE", MetricFormat.integer(presentation.activeSessions), "SESSIONS")
+                compactMetric(
+                    "NODES",
+                    "\(presentation.liveNodeCount)/\(presentation.totalNodeCount)",
+                    "LIVE / TOTAL"
+                )
+                compactMetric(
+                    "CPU",
+                    MetricFormat.percent(presentation.cpuPercent),
+                    presentation.cpuReportedNodeCount > 0
+                        ? "\(presentation.cpuReportedNodeCount) HOSTS"
+                        : "NO REPORTS"
+                )
+            }
+            .padding(14)
+            Divider().overlay(AmbientTheme.line)
+            trend
+            Divider().overlay(AmbientTheme.line)
+            loadScale
+        }
+        .background(AmbientTheme.surface)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(AmbientTheme.line).frame(width: 1)
+        }
+    }
+
+    private func sideMetric(_ label: String, value: String, unit: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label)
+                .font((largeCanvas ? Font.caption : .caption2).weight(.semibold))
+                .foregroundStyle(AmbientTheme.muted)
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text(value)
+                    .font(.system(size: largeCanvas ? 48 : 38, weight: .semibold, design: .rounded))
+                    .foregroundStyle(color)
+                    .minimumScaleFactor(0.65)
+                    .lineLimit(1)
+                Text(unit)
+                    .font(largeCanvas ? .caption : .caption2)
+                    .foregroundStyle(AmbientTheme.muted)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func compactMetric(_ label: String, _ value: String, _ unit: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.system(size: largeCanvas ? 10 : 8, weight: .semibold))
+                .foregroundStyle(AmbientTheme.muted)
+            Text(value)
+                .font(.system(size: largeCanvas ? 21 : 17, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(value == "N/A" ? AmbientTheme.muted : .primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(unit)
+                .font(.system(size: largeCanvas ? 9 : 7))
+                .foregroundStyle(AmbientTheme.muted)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var trend: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text(trendTitle)
+                Spacer()
+                Text(trendSummary)
+            }
+            .font(.system(size: largeCanvas ? 11 : 9, weight: .semibold))
+            .foregroundStyle(AmbientTheme.muted)
+
+            Chart(history) { point in
+                LineMark(
+                    x: .value("Time", point.at),
+                    y: .value("TPS", point.tps)
+                )
+                .foregroundStyle(AmbientTheme.blue)
+                .lineStyle(StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+            }
+            .chartYScale(domain: 0...trendScale)
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .frame(height: largeCanvas ? 80 : landscape ? 58 : 46)
+
+            HStack {
+                Text(coveredMinutes > 0 ? "-\(coveredMinutes)M" : "NOW")
+                Spacer()
+                Text("NOW")
+            }
+            .font(.system(size: largeCanvas ? 9 : 7, weight: .medium))
+            .foregroundStyle(AmbientTheme.muted)
+        }
+        .padding(14)
+    }
+
+    private var loadScale: some View {
+        VStack(spacing: 6) {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(AmbientTheme.line)
+                    Rectangle()
+                        .fill(AmbientTheme.statusColor(presentation.visual.state))
+                        .frame(width: max(3, proxy.size.width * presentation.visual.normalizedScore))
+                }
+            }
+            .frame(height: 6)
+            HStack {
+                Text("QUIET")
+                Spacer()
+                Text("ACTIVE")
+                Spacer()
+                Text("HEAVY")
+                Spacer()
+                Text("LIMIT")
+            }
+            .font(.system(size: largeCanvas ? 9 : 7, weight: .semibold))
+            .foregroundStyle(AmbientTheme.muted)
+        }
+        .padding(14)
+    }
+
+    private var coveredMinutes: Int { LoadHistorySeries.coveredMinutes(history) }
+
+    private var trendTitle: String {
+        coveredMinutes >= 30 ? "30 MIN TREND" : coveredMinutes > 0 ? "\(coveredMinutes) MIN TREND" : "LIVE TREND"
+    }
+
+    private var trendSummary: String {
+        guard history.count > 1 else { return "COLLECTING" }
+        let average = history.map(\.tps).reduce(0, +) / Double(history.count)
+        return "\(MetricFormat.tps(average)) TPS AVG"
+    }
+
+    private var trendScale: Double {
+        max(1, history.map(\.tps).max() ?? 1) / 0.92
+    }
+
+    private var fleetDescription: String {
+        switch presentation.visual.state {
+        case "quiet": String(localized: "Fleet standing by")
+        case "active": String(localized: "Nodes in motion")
+        case "heavy": String(localized: "Parallel fleet work")
+        case "constrained": String(localized: "Host pressure detected")
+        default: String(localized: "Fleet activity")
+        }
+    }
+}
+
+private struct HostLoadDisplay: View {
     let machine: MachineStatus
     let history: [LoadHistoryPoint]
     let landscape: Bool
@@ -168,7 +483,7 @@ private struct LoadDisplay: View {
 
     private var stageHeader: some View {
         HStack(spacing: 8) {
-            Text("DEVELOPMENT LOAD")
+            Text("HOST LOAD")
                 .font((largeCanvas ? Font.caption : .caption2).weight(.semibold))
                 .foregroundStyle(AmbientTheme.muted)
             Spacer(minLength: 12)

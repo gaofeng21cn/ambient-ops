@@ -295,3 +295,335 @@ struct LoadSceneView: View {
             )
     }
 }
+
+@MainActor
+final class FleetLoadScene: SKScene {
+    private struct NodeSurface {
+        let container: SKNode
+        let card: SKShapeNode
+        let statusDot: SKShapeNode
+        let name: SKLabelNode
+        let detail: SKLabelNode
+        let path: SKShapeNode
+        let particles: [SKSpriteNode]
+    }
+
+    private let logicalSize = CGSize(width: 960, height: 540)
+    private let corePoint = CGPoint(x: 480, y: 270)
+    private let slotPositions = [
+        CGPoint(x: 166, y: 405),
+        CGPoint(x: 480, y: 434),
+        CGPoint(x: 794, y: 405),
+        CGPoint(x: 166, y: 135),
+        CGPoint(x: 480, y: 106),
+        CGPoint(x: 794, y: 135),
+    ]
+    private var presentation = FleetLoadPresentation(status: .unavailable())
+    private var surfaces: [NodeSurface] = []
+    private var coreRings: [SKShapeNode] = []
+    private var startTime: TimeInterval?
+    private var reduceMotion = false
+
+    override init() {
+        super.init(size: logicalSize)
+        scaleMode = .aspectFit
+        backgroundColor = UIColor(red: 0.02, green: 0.03, blue: 0.04, alpha: 1)
+        anchorPoint = .zero
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func didMove(to view: SKView) {
+        guard children.isEmpty else { return }
+        view.ignoresSiblingOrder = true
+        view.preferredFramesPerSecond = reduceMotion ? 15 : 30
+        buildGrid()
+        buildCore()
+        buildNodeSurfaces()
+        updateSurfaces()
+    }
+
+    func apply(_ next: FleetLoadPresentation, reduceMotion: Bool) {
+        presentation = next
+        self.reduceMotion = reduceMotion
+        view?.preferredFramesPerSecond = reduceMotion ? 15 : 30
+        updateSurfaces()
+    }
+
+    override func update(_ currentTime: TimeInterval) {
+        if startTime == nil { startTime = currentTime }
+        let elapsed = max(0, currentTime - (startTime ?? currentTime))
+        animateCore(elapsed)
+        animateFlows(elapsed)
+    }
+
+    private func buildGrid() {
+        let grid = SKNode()
+        grid.zPosition = -30
+        for x in stride(from: 0, through: Int(logicalSize.width), by: 40) {
+            let line = SKSpriteNode(
+                color: UIColor(red: 0.14, green: 0.21, blue: 0.24, alpha: 0.18),
+                size: CGSize(width: 1, height: logicalSize.height)
+            )
+            line.position = CGPoint(x: CGFloat(x), y: logicalSize.height / 2)
+            grid.addChild(line)
+        }
+        for y in stride(from: 0, through: Int(logicalSize.height), by: 40) {
+            let line = SKSpriteNode(
+                color: UIColor(red: 0.14, green: 0.21, blue: 0.24, alpha: 0.18),
+                size: CGSize(width: logicalSize.width, height: 1)
+            )
+            line.position = CGPoint(x: logicalSize.width / 2, y: CGFloat(y))
+            grid.addChild(line)
+        }
+        addChild(grid)
+    }
+
+    private func buildCore() {
+        for radius in [88.0, 66.0, 43.0] {
+            let ring = SKShapeNode(circleOfRadius: radius)
+            ring.position = corePoint
+            ring.fillColor = radius == 43 ? UIColor(red: 0.03, green: 0.11, blue: 0.12, alpha: 0.95) : .clear
+            ring.strokeColor = radius == 88
+                ? UIColor(AmbientTheme.blue).withAlphaComponent(0.22)
+                : UIColor(AmbientTheme.green).withAlphaComponent(0.58)
+            ring.lineWidth = radius == 43 ? 3 : 2
+            ring.zPosition = radius == 43 ? 4 : 1
+            coreRings.append(ring)
+            addChild(ring)
+        }
+
+        let icon = SKLabelNode(fontNamed: "Menlo-Bold")
+        icon.text = "OPL"
+        icon.fontSize = 21
+        icon.fontColor = UIColor(AmbientTheme.green)
+        icon.verticalAlignmentMode = .center
+        icon.horizontalAlignmentMode = .center
+        icon.position = CGPoint(x: corePoint.x, y: corePoint.y + 5)
+        icon.zPosition = 7
+        addChild(icon)
+
+        let label = SKLabelNode(fontNamed: "Menlo")
+        label.text = "FLEET"
+        label.fontSize = 10
+        label.fontColor = UIColor(AmbientTheme.muted)
+        label.verticalAlignmentMode = .center
+        label.horizontalAlignmentMode = .center
+        label.position = CGPoint(x: corePoint.x, y: corePoint.y - 17)
+        label.zPosition = 7
+        addChild(label)
+    }
+
+    private func buildNodeSurfaces() {
+        for (index, position) in slotPositions.enumerated() {
+            let path = SKShapeNode()
+            path.strokeColor = UIColor(AmbientTheme.line)
+            path.lineWidth = 2
+            path.zPosition = -2
+            addChild(path)
+
+            let container = SKNode()
+            container.position = position
+            container.zPosition = 8
+            addChild(container)
+
+            let card = SKShapeNode(rectOf: CGSize(width: 170, height: 78), cornerRadius: 5)
+            card.fillColor = UIColor(red: 0.035, green: 0.055, blue: 0.064, alpha: 0.94)
+            card.strokeColor = UIColor(AmbientTheme.line)
+            card.lineWidth = 2
+            container.addChild(card)
+
+            let statusDot = SKShapeNode(circleOfRadius: 5)
+            statusDot.position = CGPoint(x: -67, y: 20)
+            statusDot.fillColor = UIColor(AmbientTheme.muted)
+            statusDot.strokeColor = .clear
+            statusDot.zPosition = 2
+            container.addChild(statusDot)
+
+            let name = SKLabelNode(fontNamed: "Menlo-Bold")
+            name.fontSize = 15
+            name.fontColor = .white
+            name.horizontalAlignmentMode = .left
+            name.verticalAlignmentMode = .center
+            name.position = CGPoint(x: -56, y: 20)
+            name.zPosition = 2
+            container.addChild(name)
+
+            let detail = SKLabelNode(fontNamed: "Menlo")
+            detail.fontSize = 11
+            detail.fontColor = UIColor(AmbientTheme.muted)
+            detail.horizontalAlignmentMode = .left
+            detail.verticalAlignmentMode = .center
+            detail.position = CGPoint(x: -68, y: -16)
+            detail.zPosition = 2
+            container.addChild(detail)
+
+            var particles: [SKSpriteNode] = []
+            for particleIndex in 0..<18 {
+                let particle = SKSpriteNode(
+                    color: particleIndex.isMultiple(of: 5)
+                        ? UIColor(AmbientTheme.blue)
+                        : UIColor(AmbientTheme.green),
+                    size: CGSize(width: particleIndex.isMultiple(of: 7) ? 12 : 7, height: 4)
+                )
+                particle.zPosition = 3
+                particle.isHidden = true
+                particles.append(particle)
+                addChild(particle)
+            }
+
+            surfaces.append(
+                NodeSurface(
+                    container: container,
+                    card: card,
+                    statusDot: statusDot,
+                    name: name,
+                    detail: detail,
+                    path: path,
+                    particles: particles
+                )
+            )
+            updatePath(path, from: position, slotIndex: index)
+        }
+    }
+
+    private func updatePath(_ node: SKShapeNode, from point: CGPoint, slotIndex: Int) {
+        let path = CGMutablePath()
+        path.move(to: point)
+        let bend = CGPoint(
+            x: (point.x + corePoint.x) / 2 + CGFloat(slotIndex.isMultiple(of: 2) ? 22 : -22),
+            y: (point.y + corePoint.y) / 2 + CGFloat(slotIndex < 3 ? -12 : 12)
+        )
+        path.addQuadCurve(to: corePoint, control: bend)
+        node.path = path
+    }
+
+    private func updateSurfaces() {
+        let stateColor = UIColor(AmbientTheme.statusColor(presentation.visual.state))
+        coreRings.last?.strokeColor = stateColor
+        for (index, surface) in surfaces.enumerated() {
+            guard index < presentation.nodes.count else {
+                surface.container.isHidden = true
+                surface.path.isHidden = true
+                surface.particles.forEach { $0.isHidden = true }
+                continue
+            }
+            let node = presentation.nodes[index]
+            surface.container.isHidden = false
+            surface.path.isHidden = false
+            surface.name.text = displayName(node.name)
+            surface.name.fontSize = node.name.count > 16 ? 11 : node.name.count > 12 ? 13 : 15
+            surface.detail.text = node.status == "live"
+                ? "\(MetricFormat.tps(node.tps)) TPS  ·  \(MetricFormat.integer(node.sessions)) ACTIVE"
+                : node.status.uppercased()
+            let color = nodeColor(node)
+            surface.statusDot.fillColor = color
+            surface.card.strokeColor = color.withAlphaComponent(node.status == "live" ? 0.68 : 0.32)
+            surface.path.strokeColor = color.withAlphaComponent(node.isWorking ? 0.38 : 0.16)
+            surface.name.fontColor = node.status == "live" ? .white : UIColor(AmbientTheme.muted)
+            surface.detail.fontColor = node.isWorking ? color : UIColor(AmbientTheme.muted)
+        }
+    }
+
+    private func animateCore(_ elapsed: TimeInterval) {
+        let speed = reduceMotion ? 0.32 : max(0.45, presentation.visual.tempo)
+        for (index, ring) in coreRings.enumerated() {
+            let pulse = 0.5 + 0.5 * sin(elapsed * speed * (1.1 + Double(index) * 0.22) + Double(index))
+            ring.alpha = 0.42 + CGFloat(pulse) * 0.48
+            if index < 2 {
+                let scale = 0.98 + CGFloat(pulse) * 0.045
+                ring.setScale(scale)
+            }
+        }
+    }
+
+    private func animateFlows(_ elapsed: TimeInterval) {
+        for (surfaceIndex, surface) in surfaces.enumerated() {
+            guard surfaceIndex < presentation.nodes.count else { continue }
+            let nodeModel = presentation.nodes[surfaceIndex]
+            let visibleCount = nodeModel.isWorking
+                ? min(surface.particles.count, max(3, Int(3 + nodeModel.intensity * 15)))
+                : 0
+            let origin = slotPositions[surfaceIndex]
+            let delta = CGPoint(x: corePoint.x - origin.x, y: corePoint.y - origin.y)
+            let distance = max(1, hypot(delta.x, delta.y))
+            let perpendicular = CGPoint(x: -delta.y / distance, y: delta.x / distance)
+            let speedScale = reduceMotion ? 0.3 : 1.0
+
+            for (particleIndex, particle) in surface.particles.enumerated() {
+                guard particleIndex < visibleCount else {
+                    particle.isHidden = true
+                    continue
+                }
+                particle.isHidden = false
+                let duration = max(0.8, nodeModel.travelMs / 1_000) * (0.86 + Double(particleIndex % 5) * 0.06)
+                let seed = noise(Double(surfaceIndex * 29 + particleIndex) + 2.7)
+                let phase = fmod(elapsed * speedScale / duration + seed + Double(particleIndex) / Double(visibleCount), 1)
+                let bend = sin(phase * .pi) * sin(Double(surfaceIndex + 1) * 1.37) * 32
+                let wave = sin(elapsed * 2.2 + Double(particleIndex)) * 3.5
+                particle.position = CGPoint(
+                    x: origin.x + delta.x * phase + perpendicular.x * CGFloat(bend + wave),
+                    y: origin.y + delta.y * phase + perpendicular.y * CGFloat(bend + wave)
+                )
+                let envelope = min(1, phase / 0.08, (1 - phase) / 0.12)
+                particle.alpha = CGFloat(max(0, envelope) * (0.45 + nodeModel.intensity * 0.5))
+                particle.color = nodeModel.isPressured
+                    ? (nodeModel.cpuPercent ?? 0) >= 90 ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.amber)
+                    : particleIndex.isMultiple(of: 5) ? UIColor(AmbientTheme.blue) : UIColor(AmbientTheme.green)
+                particle.zRotation = atan2(delta.y, delta.x)
+                particle.xScale = CGFloat(0.85 + nodeModel.intensity * 0.55)
+            }
+        }
+    }
+
+    private func nodeColor(_ node: FleetLoadNode) -> UIColor {
+        guard node.status == "live" else {
+            return node.status == "error" ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.muted)
+        }
+        if node.isPressured {
+            return (node.cpuPercent ?? 0) >= 90 ? UIColor(AmbientTheme.red) : UIColor(AmbientTheme.amber)
+        }
+        if node.intensity >= 0.62 { return UIColor(AmbientTheme.blue) }
+        return UIColor(AmbientTheme.green)
+    }
+
+    private func displayName(_ name: String) -> String {
+        guard name.count > 20 else { return name }
+        return "\(name.prefix(19))…"
+    }
+
+    private func noise(_ seed: Double) -> Double {
+        let value = sin(seed * 12.9898) * 43_758.5453
+        return value - floor(value)
+    }
+}
+
+struct FleetLoadSceneView: View {
+    let presentation: FleetLoadPresentation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var scene = FleetLoadScene()
+
+    var body: some View {
+        SpriteView(scene: scene, options: [.allowsTransparency])
+            .background(AmbientTheme.background)
+            .onAppear {
+                scene.isPaused = false
+                scene.apply(presentation, reduceMotion: reduceMotion)
+            }
+            .onDisappear { scene.isPaused = true }
+            .onChange(of: presentation) { _, next in
+                scene.apply(next, reduceMotion: reduceMotion)
+            }
+            .onChange(of: reduceMotion) { _, next in
+                scene.apply(presentation, reduceMotion: next)
+            }
+            .accessibilityLabel(
+                String(
+                    localized: "\(presentation.visual.label) Fleet activity across \(presentation.totalNodeCount) nodes",
+                    comment: "VoiceOver description for the Fleet activity animation."
+                )
+            )
+    }
+}

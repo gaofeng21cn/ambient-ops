@@ -761,6 +761,96 @@
         }
       }
     },
+    "Fleet activity" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fleet 活动"
+          }
+        }
+      }
+    },
+    "Display scope" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示范围"
+          }
+        }
+      }
+    },
+    "Fleet" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fleet"
+          }
+        }
+      }
+    },
+    "Fleet standing by" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fleet 正在待命"
+          }
+        }
+      }
+    },
+    "Host pressure detected" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检测到主机压力"
+          }
+        }
+      }
+    },
+    "Host" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主机"
+          }
+        }
+      }
+    },
+    "Nodes in motion" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "节点正在运行"
+          }
+        }
+      }
+    },
+    "Open Fleet load display" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 Fleet 负载显示"
+          }
+        }
+      }
+    },
+    "Parallel fleet work" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fleet 正在并行工作"
+          }
+        }
+      }
+    },
     "Manual Connection" : {
       "localizations" : {
         "zh-Hans" : {
