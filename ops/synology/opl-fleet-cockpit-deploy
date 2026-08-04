@@ -68,7 +68,7 @@ Usage:
   opl-fleet-cockpit-deploy deploy <version> <sha256:index-digest>
 
 Example:
-  sudo -n opl-fleet-cockpit-deploy deploy 0.1.41 sha256:a3a34a6ebb43ea94e3498c22f87e5c876f62093cc14859984135ab8cf9c67453
+  sudo -n opl-fleet-cockpit-deploy deploy 0.1.42 sha256:a3a34a6ebb43ea94e3498c22f87e5c876f62093cc14859984135ab8cf9c67453
 EOF
 }
 

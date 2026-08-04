@@ -1468,18 +1468,16 @@ function DeviceFleetMachinesView({ machines, onFocus }) {
     const statusDifference = (rank[left.status] ?? 3) - (rank[right.status] ?? 3);
     return statusDifference || Number(right.oneMinute?.tps || 0) - Number(left.oneMinute?.tps || 0);
   });
-  const visible = ordered.slice(0, 4);
   const working = machines.filter(isMachineWorking).length;
-  if (!visible.length) return <section className="device-fleet-machines-view"><EmptyState /></section>;
+  if (!ordered.length) return <section className="device-fleet-machines-view"><EmptyState /></section>;
   return (
     <section className="device-fleet-machines-view">
       <div className="fleet-machine-directory-head">
         <span>{machines.length} NODES</span>
         <strong>{working} WORKING</strong>
-        {machines.length > visible.length ? <small>+{machines.length - visible.length} MORE</small> : null}
       </div>
       <div className="fleet-machine-directory">
-        {visible.map((machine) => {
+        {ordered.map((machine) => {
           const Icon = machineIcon(machine.platform);
           const activity = machineActivity(machine);
           const cpu = finiteMetric(machine.cpuPercent);
