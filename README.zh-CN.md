@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/gaofeng21cn/opl-fleet-cockpit/releases/latest"><img src="https://img.shields.io/github/v/release/gaofeng21cn/opl-fleet-cockpit" alt="最新版本"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT 许可证"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0 许可证"></a>
   <img src="https://img.shields.io/badge/deployment-Docker-blue.svg" alt="Docker 部署">
 </p>
 
@@ -282,4 +282,4 @@ docker compose -f compose.yaml -f compose.host-network.yaml config
 python3 ops/public-readiness-check.py
 ```
 
-项目采用 [MIT License](LICENSE)。
+项目采用 [Apache License 2.0](LICENSE)。

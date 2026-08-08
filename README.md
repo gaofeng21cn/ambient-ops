@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/gaofeng21cn/opl-fleet-cockpit/releases/latest"><img src="https://img.shields.io/github/v/release/gaofeng21cn/opl-fleet-cockpit" alt="Latest release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0 License"></a>
   <img src="https://img.shields.io/badge/deployment-Docker-blue.svg" alt="Docker deployment">
 </p>
 
@@ -303,4 +303,4 @@ docker compose -f compose.yaml -f compose.host-network.yaml config
 python3 ops/public-readiness-check.py
 ```
 
-OPL Fleet Cockpit is available under the [MIT License](LICENSE).
+OPL Fleet Cockpit is available under the [Apache License 2.0](LICENSE).
